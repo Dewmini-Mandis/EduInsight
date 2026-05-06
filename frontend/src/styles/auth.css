@@ -257,3 +257,40 @@ body, .login-root, .login-card, .login-title, .login-label, .login-input, .login
   font-weight: 400;
   letter-spacing: 0.01em;
 }
+
+.logout-card {
+  text-align: left;
+}
+.logout-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #031636;
+  margin-bottom: 0.5rem;
+}
+.logout-desc {
+  font-size: 1rem;
+  color: #5a6b86;
+  margin-bottom: 1.2rem;
+  line-height: 1.5;
+}
+.logout-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.logout-secondary {
+  width: 100%;
+  padding: 0.85rem 0;
+  background: #f7f9fb;
+  color: #031636;
+  font-size: 1.05rem;
+  font-weight: 700;
+  border: 1.2px solid #dbe2ef;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s;
+}
+.logout-secondary:hover {
+  background: #eef2f7;
+  border-color: #cbd5e1;
+}

@@ -1,6 +1,7 @@
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./auth/Login";
+import Logout from "./auth/Logout";
 // import Register from "./auth/Register";
 import "./styles/auth.css";
 
@@ -9,6 +10,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/logout" element={<Logout />} />
         {/* <Route path="/register" element={<Register />} /> */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
