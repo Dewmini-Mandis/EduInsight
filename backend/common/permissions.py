@@ -1,6 +1,6 @@
 from rest_framework.permissions import BasePermission
 
-from apps.accounts.models import User
+from apps.accounts.models import Role
 
 
 class HasRole(BasePermission):
@@ -15,23 +15,23 @@ class HasRole(BasePermission):
 
 
 class IsNationalAdmin(HasRole):
-	allowed_roles = (User.ROLE_NATIONAL_ADMIN,)
+	allowed_roles = (Role.ROLE_NATIONAL_ADMIN,)
 
 
 class IsSchoolAdmin(HasRole):
-	allowed_roles = (User.ROLE_SCHOOL_ADMIN,)
+	allowed_roles = (Role.ROLE_SCHOOL_ADMIN,)
 
 
 class IsTeacher(HasRole):
-	allowed_roles = (User.ROLE_TEACHER,)
+	allowed_roles = (Role.ROLE_TEACHER,)
 
 
 class IsStudent(HasRole):
-	allowed_roles = (User.ROLE_STUDENT,)
+	allowed_roles = (Role.ROLE_STUDENT,)
 
 
 class IsSystemAdmin(HasRole):
-	allowed_roles = (User.ROLE_SYSTEM_ADMIN,)
+	allowed_roles = (Role.ROLE_SYSTEM_ADMIN,)
 
 
 class IsStaffOrSystemAdmin(BasePermission):
@@ -39,5 +39,5 @@ class IsStaffOrSystemAdmin(BasePermission):
 		return (
 			request.user
 			and request.user.is_authenticated
-			and (request.user.is_staff or request.user.is_role(User.ROLE_SYSTEM_ADMIN))
+			and (request.user.is_staff or request.user.is_role(Role.ROLE_SYSTEM_ADMIN))
 		)

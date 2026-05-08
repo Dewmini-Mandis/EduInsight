@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -16,6 +19,12 @@ INSTALLED_APPS = [
 	"rest_framework",
 	"rest_framework.authtoken",
 	"apps.accounts",
+	"apps.schools",
+	"apps.classes",
+	"apps.quizzes",
+	"apps.attempts",
+	"apps.analytics",
+	"apps.recommendations",
 ]
 
 MIDDLEWARE = [
