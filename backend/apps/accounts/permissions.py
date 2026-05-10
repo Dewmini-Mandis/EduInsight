@@ -1,6 +1,6 @@
 from rest_framework.permissions import BasePermission
 
-from .models import User
+from .models import Role
 
 
 class IsSystemAdmin(BasePermission):
@@ -8,5 +8,5 @@ class IsSystemAdmin(BasePermission):
 		return (
 			request.user
 			and request.user.is_authenticated
-			and request.user.is_role(User.ROLE_SYSTEM_ADMIN)
+			and request.user.is_role(Role.ROLE_SYSTEM_ADMIN)
 		)

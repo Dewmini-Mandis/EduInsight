@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "../styles/auth.css";
+import { logout } from "./authUtils";
 
 const Logout = () => {
   const [status, setStatus] = useState<"idle" | "working" | "done" | "error">(
@@ -26,10 +27,10 @@ const Logout = () => {
           throw new Error("Logout failed");
         }
       }
-      localStorage.removeItem("token");
+      logout();
       setStatus("done");
     } catch (err: any) {
-      localStorage.removeItem("token");
+      logout();
       setStatus("error");
       setMessage(err.message || "Logout failed");
     }

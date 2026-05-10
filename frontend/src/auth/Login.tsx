@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "../styles/auth.css";
+import { setUser } from "./authUtils";
 
 const Login = () => {
   const [username, setUsername] = useState("");
@@ -22,6 +23,7 @@ const Login = () => {
       if (!res.ok) throw new Error("Invalid credentials");
       const data = await res.json();
       localStorage.setItem("token", data.token);
+      setUser(data.user);
       navigate("/dashboard");
     } catch (err: any) {
       setError(err.message || "Login failed");
