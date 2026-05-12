@@ -89,6 +89,25 @@ const SchoolAdminDashboard = () => {
   const navigate = useNavigate();
   const currentUser = useCurrentUser();
 
+  const currentDisplayName = useMemo(() => {
+    if (!currentUser) return "School Admin";
+    const fullName = `${currentUser.first_name || ""} ${currentUser.last_name || ""}`.trim();
+    return fullName || "School Admin";
+  }, [currentUser]);
+
+  const currentInitials = useMemo(() => {
+    const fullName = `${currentUser?.first_name || ""} ${currentUser?.last_name || ""}`.trim();
+    if (fullName) {
+      return fullName
+        .split(" ")
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part.charAt(0).toUpperCase())
+        .join("");
+    }
+    return "SA";
+  }, [currentUser]);
+
   const fetchStaff = async () => {
     setLoading(true);
     setError("");
@@ -459,7 +478,6 @@ const SchoolAdminDashboard = () => {
     <div className="admin-root">
       <aside className="admin-sidebar">
         <div className="admin-brand">
-          <div className="admin-logo" />
           <div>
             <div className="admin-brand-title">EduInsight</div>
             <div className="admin-brand-sub">SCHOOL ADMIN</div>
@@ -490,13 +508,11 @@ const SchoolAdminDashboard = () => {
         </nav>
         <div className="admin-sidebar-footer">
           <div className="admin-user-card">
-            <div className="admin-user-avatar">SA</div>
+            <div className="admin-user-avatar">{currentInitials}</div>
             <div>
-              <div className="admin-user-name">
-                {currentUser?.first_name || "School Admin"}
-              </div>
+              <div className="admin-user-name">{currentDisplayName}</div>
               <div className="admin-user-email">
-                {currentUser?.email || currentUser?.username || ""}
+                {currentUser?.email || ""}
               </div>
             </div>
           </div>
@@ -667,21 +683,21 @@ const SchoolAdminDashboard = () => {
                     <div className="user-meta">{teacher.email}</div>
                     <div className="admin-actions">
                       <button
-                        className="admin-link-btn"
+                        className="admin-action-btn"
                         type="button"
                         onClick={() => openEditTeacher(teacher)}
                       >
                         Edit
                       </button>
                       <button
-                        className="admin-link-btn"
+                        className="admin-action-btn warning"
                         type="button"
                         onClick={() => toggleStatus(teacher)}
                       >
                         {teacher.is_active ? "Deactivate" : "Activate"}
                       </button>
                       <button
-                        className="admin-link-btn danger"
+                        className="admin-action-btn danger"
                         type="button"
                         onClick={() => removeUser(teacher.id)}
                       >
@@ -738,21 +754,21 @@ const SchoolAdminDashboard = () => {
                     <div className="user-meta">@{student.username}</div>
                     <div className="admin-actions">
                       <button
-                        className="admin-link-btn"
+                        className="admin-action-btn"
                         type="button"
                         onClick={() => openEditStudent(student)}
                       >
                         Edit
                       </button>
                       <button
-                        className="admin-link-btn"
+                        className="admin-action-btn warning"
                         type="button"
                         onClick={() => toggleStatus(student)}
                       >
                         {student.is_active ? "Deactivate" : "Activate"}
                       </button>
                       <button
-                        className="admin-link-btn danger"
+                        className="admin-action-btn danger"
                         type="button"
                         onClick={() => removeUser(student.id)}
                       >

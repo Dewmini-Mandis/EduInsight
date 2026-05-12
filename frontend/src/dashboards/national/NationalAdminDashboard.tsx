@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getToken } from "../../auth/authUtils";
+import { getToken, getUser } from "../../auth/authUtils";
 import "../../styles/admin.css";
 
 type School = {
@@ -20,7 +20,14 @@ type SchoolAdmin = {
   is_active: boolean;
 };
 
+type CurrentUser = {
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+};
+
 const NationalAdminDashboard = () => {
+  const currentUser = getUser() as CurrentUser | null;
   const [schools, setSchools] = useState<School[]>([]);
   const [admins, setAdmins] = useState<SchoolAdmin[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,6 +48,25 @@ const NationalAdminDashboard = () => {
   const [adminErrors, setAdminErrors] = useState<Record<string, string>>({});
   const [editSchoolErrors, setEditSchoolErrors] = useState<Record<string, string>>({});
   const navigate = useNavigate();
+
+  const currentDisplayName = useMemo(() => {
+    if (!currentUser) return "National Admin";
+    const fullName = `${currentUser.first_name || ""} ${currentUser.last_name || ""}`.trim();
+    return fullName || "National Admin";
+  }, [currentUser]);
+
+  const currentInitials = useMemo(() => {
+    const fullName = `${currentUser?.first_name || ""} ${currentUser?.last_name || ""}`.trim();
+    if (fullName) {
+      return fullName
+        .split(" ")
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part.charAt(0).toUpperCase())
+        .join("");
+    }
+    return "NA";
+  }, [currentUser]);
 
   const [schoolForm, setSchoolForm] = useState({
     name: "",
@@ -463,7 +489,6 @@ const NationalAdminDashboard = () => {
     <div className="admin-root">
       <aside className="admin-sidebar">
         <div className="admin-brand">
-          <div className="admin-logo" />
           <div>
             <div className="admin-brand-title">EduInsight</div>
             <div className="admin-brand-sub">NATIONAL ADMIN</div>
@@ -490,10 +515,10 @@ const NationalAdminDashboard = () => {
         </nav>
         <div className="admin-sidebar-footer">
           <div className="admin-user-card">
-            <div className="admin-user-avatar">NA</div>
+            <div className="admin-user-avatar">{currentInitials}</div>
             <div>
-              <div className="admin-user-name">National Admin</div>
-              <div className="admin-user-email">admin@moe.gov.lk</div>
+              <div className="admin-user-name">{currentDisplayName}</div>
+              <div className="admin-user-email">{currentUser?.email || "admin@moe.gov.lk"}</div>
             </div>
           </div>
           <button

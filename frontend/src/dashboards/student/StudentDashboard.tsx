@@ -1,15 +1,32 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import { getUser } from "../../auth/authUtils";
 import "../../styles/admin.css";
+
+type CurrentUser = {
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+};
 
 const StudentDashboard = () => {
   const navigate = useNavigate();
+  const currentUser = getUser() as CurrentUser | null;
+  const fullName = `${currentUser?.first_name || ""} ${currentUser?.last_name || ""}`.trim();
+  const displayName = fullName || "Student";
+  const initials = fullName
+    ? fullName
+        .split(" ")
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part.charAt(0).toUpperCase())
+        .join("")
+    : "ST";
 
   return (
     <div className="admin-root">
       <aside className="admin-sidebar">
         <div className="admin-brand">
-          <div className="admin-logo" />
           <div>
             <div className="admin-brand-title">EduInsight</div>
             <div className="admin-brand-sub">STUDENT</div>
@@ -28,10 +45,12 @@ const StudentDashboard = () => {
         </nav>
         <div className="admin-sidebar-footer">
           <div className="admin-user-card">
-            <div className="admin-user-avatar">ST</div>
+            <div className="admin-user-avatar">{initials}</div>
             <div>
-              <div className="admin-user-name">Student Portal</div>
-              <div className="admin-user-email">student@school.edu.lk</div>
+              <div className="admin-user-name">{displayName}</div>
+              <div className="admin-user-email">
+                {currentUser?.email || "student@school.edu.lk"}
+              </div>
             </div>
           </div>
           <button

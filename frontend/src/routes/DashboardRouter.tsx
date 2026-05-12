@@ -4,7 +4,7 @@ import { getToken, getUser, setUser } from "../auth/authUtils";
 import NationalAdminDashboard from "../dashboards/national/NationalAdminDashboard";
 import SchoolAdminDashboard from "../dashboards/school/SchoolAdminDashboard";
 import StudentDashboard from "../dashboards/student/StudentDashboard";
-import SystemAdminDashboard from "../dashboard/SystemAdminDashboard";
+import SystemAdminDashboard from "../dashboards/system/SystemAdminDashboard";
 import TeacherDashboard from "../dashboards/teacher/TeacherDashboard";
 
 type UserProfile = {
