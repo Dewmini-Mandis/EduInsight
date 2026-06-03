@@ -63,6 +63,8 @@ const SchoolAdminDashboard = () => {
     password: "",
     subjects: "",
   });
+  const [showStudentPassword, setShowStudentPassword] = useState(false);
+  const [showTeacherPassword, setShowTeacherPassword] = useState(false);
   const [editStudentForm, setEditStudentForm] = useState({
     firstName: "",
     lastName: "",
@@ -214,6 +216,8 @@ const SchoolAdminDashboard = () => {
     } else if (studentForm.password.length < 8) {
       nextErrors.password = "Password must be at least 8 characters.";
     }
+    if (!studentForm.indexNo.trim())
+      nextErrors.indexNo = "Index number is required.";
     if (!studentForm.grade.trim()) nextErrors.grade = "Grade is required.";
     if (!studentForm.className.trim())
       nextErrors.className = "Class is required.";
@@ -249,6 +253,8 @@ const SchoolAdminDashboard = () => {
       nextErrors.firstName = "First name is required.";
     if (!editStudentForm.lastName.trim())
       nextErrors.lastName = "Last name is required.";
+    if (!editStudentForm.indexNo.trim())
+      nextErrors.indexNo = "Index number is required.";
     if (!editStudentForm.grade.trim())
       nextErrors.grade = "Grade is required.";
     if (!editStudentForm.className.trim())
@@ -816,7 +822,7 @@ const SchoolAdminDashboard = () => {
             <form className="admin-form" onSubmit={createStudent}>
               <div className="admin-form-row">
                 <div className="admin-field">
-                  <label>First Name</label>
+                  <label>First Name *</label>
                   <input
                     name="firstName"
                     value={studentForm.firstName}
@@ -832,7 +838,7 @@ const SchoolAdminDashboard = () => {
                   )}
                 </div>
                 <div className="admin-field">
-                  <label>Last Name</label>
+                  <label>Last Name *</label>
                   <input
                     name="lastName"
                     value={studentForm.lastName}
@@ -849,7 +855,7 @@ const SchoolAdminDashboard = () => {
                 </div>
               </div>
               <div className="admin-field">
-                <label>Email</label>
+                <label>Email *</label>
                 <input
                   name="email"
                   type="email"
@@ -866,7 +872,7 @@ const SchoolAdminDashboard = () => {
                 )}
               </div>
               <div className="admin-field">
-                <label>Username</label>
+                <label>Username *</label>
                 <input
                   name="username"
                   value={studentForm.username}
@@ -882,25 +888,51 @@ const SchoolAdminDashboard = () => {
                 )}
               </div>
               <div className="admin-field">
-                <label>Password</label>
-                <input
-                  name="password"
-                  type="password"
-                  value={studentForm.password}
-                  onChange={(e) =>
-                    setStudentForm((prev) => ({
-                      ...prev,
-                      password: e.target.value,
-                    }))
-                  }
-                />
+                <label>Password *</label>
+                <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                  <input
+                    name="password"
+                    type={showStudentPassword ? "text" : "password"}
+                    value={studentForm.password}
+                    onChange={(e) =>
+                      setStudentForm((prev) => ({
+                        ...prev,
+                        password: e.target.value,
+                      }))
+                    }
+                    style={{ paddingRight: "40px", width: "100%" }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowStudentPassword(!showStudentPassword)}
+                    style={{
+                      position: "absolute",
+                      right: "10px",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      color: "#9ca3af",
+                      padding: "4px",
+                      display: "flex",
+                      alignItems: "center",
+                      zIndex: 10
+                    }}
+                    aria-label={showStudentPassword ? "Hide password" : "Show password"}
+                  >
+                    {showStudentPassword ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0z"/><circle cx="12" cy="12" r="3"/></svg>
+                    )}
+                  </button>
+                </div>
                 {studentErrors.password && (
                   <div className="admin-error">{studentErrors.password}</div>
                 )}
               </div>
               <div className="admin-form-row">
                 <div className="admin-field">
-                  <label>Index No</label>
+                  <label>Index No *</label>
                   <input
                     name="indexNo"
                     value={studentForm.indexNo}
@@ -911,9 +943,12 @@ const SchoolAdminDashboard = () => {
                       }))
                     }
                   />
+                  {studentErrors.indexNo && (
+                    <div className="admin-error">{studentErrors.indexNo}</div>
+                  )}
                 </div>
                 <div className="admin-field">
-                  <label>Grade</label>
+                  <label>Grade *</label>
                   <input
                     name="grade"
                     value={studentForm.grade}
@@ -930,7 +965,7 @@ const SchoolAdminDashboard = () => {
                 </div>
               </div>
               <div className="admin-field">
-                <label>Class</label>
+                <label>Class *</label>
                 <input
                   name="className"
                   value={studentForm.className}
@@ -984,7 +1019,7 @@ const SchoolAdminDashboard = () => {
             <form className="admin-form" onSubmit={createTeacher}>
               <div className="admin-form-row">
                 <div className="admin-field">
-                  <label>First Name</label>
+                  <label>First Name *</label>
                   <input
                     name="firstName"
                     value={teacherForm.firstName}
@@ -1000,7 +1035,7 @@ const SchoolAdminDashboard = () => {
                   )}
                 </div>
                 <div className="admin-field">
-                  <label>Last Name</label>
+                  <label>Last Name *</label>
                   <input
                     name="lastName"
                     value={teacherForm.lastName}
@@ -1017,7 +1052,7 @@ const SchoolAdminDashboard = () => {
                 </div>
               </div>
               <div className="admin-field">
-                <label>Email (login)</label>
+                <label>Email (login) *</label>
                 <input
                   name="email"
                   type="email"
@@ -1034,24 +1069,50 @@ const SchoolAdminDashboard = () => {
                 )}
               </div>
               <div className="admin-field">
-                <label>Password</label>
-                <input
-                  name="password"
-                  type="password"
-                  value={teacherForm.password}
-                  onChange={(e) =>
-                    setTeacherForm((prev) => ({
-                      ...prev,
-                      password: e.target.value,
-                    }))
-                  }
-                />
+                <label>Password *</label>
+                <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                  <input
+                    name="password"
+                    type={showTeacherPassword ? "text" : "password"}
+                    value={teacherForm.password}
+                    onChange={(e) =>
+                      setTeacherForm((prev) => ({
+                        ...prev,
+                        password: e.target.value,
+                      }))
+                    }
+                    style={{ paddingRight: "40px", width: "100%" }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowTeacherPassword(!showTeacherPassword)}
+                    style={{
+                      position: "absolute",
+                      right: "10px",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      color: "#9ca3af",
+                      padding: "4px",
+                      display: "flex",
+                      alignItems: "center",
+                      zIndex: 10
+                    }}
+                    aria-label={showTeacherPassword ? "Hide password" : "Show password"}
+                  >
+                    {showTeacherPassword ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0z"/><circle cx="12" cy="12" r="3"/></svg>
+                    )}
+                  </button>
+                </div>
                 {teacherErrors.password && (
                   <div className="admin-error">{teacherErrors.password}</div>
                 )}
               </div>
               <div className="admin-field">
-                <label>Subjects (comma separated)</label>
+                <label>Subjects (comma separated) *</label>
                 <input
                   name="subjects"
                   value={teacherForm.subjects}
@@ -1105,7 +1166,7 @@ const SchoolAdminDashboard = () => {
             <form className="admin-form" onSubmit={updateStudent}>
               <div className="admin-form-row">
                 <div className="admin-field">
-                  <label>First Name</label>
+                  <label>First Name *</label>
                   <input
                     name="firstName"
                     value={editStudentForm.firstName}
@@ -1121,7 +1182,7 @@ const SchoolAdminDashboard = () => {
                   )}
                 </div>
                 <div className="admin-field">
-                  <label>Last Name</label>
+                  <label>Last Name *</label>
                   <input
                     name="lastName"
                     value={editStudentForm.lastName}
@@ -1139,7 +1200,7 @@ const SchoolAdminDashboard = () => {
               </div>
               <div className="admin-form-row">
                 <div className="admin-field">
-                  <label>Index No</label>
+                  <label>Index No *</label>
                   <input
                     name="indexNo"
                     value={editStudentForm.indexNo}
@@ -1150,9 +1211,12 @@ const SchoolAdminDashboard = () => {
                       }))
                     }
                   />
+                  {editStudentErrors.indexNo && (
+                    <div className="admin-error">{editStudentErrors.indexNo}</div>
+                  )}
                 </div>
                 <div className="admin-field">
-                  <label>Grade</label>
+                  <label>Grade *</label>
                   <input
                     name="grade"
                     value={editStudentForm.grade}
@@ -1169,7 +1233,7 @@ const SchoolAdminDashboard = () => {
                 </div>
               </div>
               <div className="admin-field">
-                <label>Class</label>
+                <label>Class *</label>
                 <input
                   name="className"
                   value={editStudentForm.className}
@@ -1236,7 +1300,7 @@ const SchoolAdminDashboard = () => {
             <form className="admin-form" onSubmit={updateTeacher}>
               <div className="admin-form-row">
                 <div className="admin-field">
-                  <label>First Name</label>
+                  <label>First Name *</label>
                   <input
                     name="firstName"
                     value={editTeacherForm.firstName}
@@ -1252,7 +1316,7 @@ const SchoolAdminDashboard = () => {
                   )}
                 </div>
                 <div className="admin-field">
-                  <label>Last Name</label>
+                  <label>Last Name *</label>
                   <input
                     name="lastName"
                     value={editTeacherForm.lastName}
@@ -1269,7 +1333,7 @@ const SchoolAdminDashboard = () => {
                 </div>
               </div>
               <div className="admin-field">
-                <label>Subjects (comma separated)</label>
+                <label>Subjects (comma separated) *</label>
                 <input
                   name="subjects"
                   value={editTeacherForm.subjects}

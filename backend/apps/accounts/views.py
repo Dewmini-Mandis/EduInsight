@@ -93,20 +93,23 @@ class UserViewSet(viewsets.ModelViewSet):
 
 	def update(self, request, *args, **kwargs):
 		user = self.get_object()
-		if user.is_role(Role.ROLE_SYSTEM_ADMIN):
-			raise PermissionDenied("System admin accounts cannot be modified.")
+		requester = request.user
+		if user.is_role(Role.ROLE_SYSTEM_ADMIN) and not requester.is_role(Role.ROLE_SYSTEM_ADMIN):
+			raise PermissionDenied("System admin accounts cannot be modified by non-system admins.")
 		return super().update(request, *args, **kwargs)
 
 	def partial_update(self, request, *args, **kwargs):
 		user = self.get_object()
-		if user.is_role(Role.ROLE_SYSTEM_ADMIN):
-			raise PermissionDenied("System admin accounts cannot be modified.")
+		requester = request.user
+		if user.is_role(Role.ROLE_SYSTEM_ADMIN) and not requester.is_role(Role.ROLE_SYSTEM_ADMIN):
+			raise PermissionDenied("System admin accounts cannot be modified by non-system admins.")
 		return super().partial_update(request, *args, **kwargs)
 
 	def destroy(self, request, *args, **kwargs):
 		user = self.get_object()
-		if user.is_role(Role.ROLE_SYSTEM_ADMIN):
-			raise PermissionDenied("System admin accounts cannot be deleted.")
+		requester = request.user
+		if user.is_role(Role.ROLE_SYSTEM_ADMIN) and not requester.is_role(Role.ROLE_SYSTEM_ADMIN):
+			raise PermissionDenied("System admin accounts cannot be deleted by non-system admins.")
 		return super().destroy(request, *args, **kwargs)
 
 	def perform_create(self, serializer):
@@ -116,7 +119,7 @@ class UserViewSet(viewsets.ModelViewSet):
 			raise ValidationError({"role": "Role is required."})
 
 		if requester.is_role(Role.ROLE_SYSTEM_ADMIN):
-			allowed_roles = {Role.ROLE_NATIONAL_ADMIN}
+			allowed_roles = {Role.ROLE_SYSTEM_ADMIN, Role.ROLE_NATIONAL_ADMIN, Role.ROLE_SCHOOL_ADMIN, Role.ROLE_TEACHER, Role.ROLE_STUDENT}
 		elif requester.is_role(Role.ROLE_NATIONAL_ADMIN):
 			allowed_roles = {Role.ROLE_SCHOOL_ADMIN}
 		elif requester.is_role(Role.ROLE_SCHOOL_ADMIN):
@@ -127,8 +130,8 @@ class UserViewSet(viewsets.ModelViewSet):
 		if role.role_name not in allowed_roles:
 			raise PermissionDenied("You are not allowed to create this role.")
 
-		if role.role_name == Role.ROLE_SCHOOL_ADMIN:
-			if not serializer.validated_data.get("school"):
+		if role.role_name in (Role.ROLE_SCHOOL_ADMIN, Role.ROLE_TEACHER, Role.ROLE_STUDENT):
+			if not requester.is_role(Role.ROLE_SCHOOL_ADMIN) and not serializer.validated_data.get("school"):
 				raise ValidationError({"school_id": "School is required."})
 
 		if requester.is_role(Role.ROLE_SCHOOL_ADMIN):
