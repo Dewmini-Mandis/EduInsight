@@ -160,7 +160,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 		grade = validated_data.pop("grade", None)
 		class_name = validated_data.pop("class_name", None)
 		subjects = validated_data.pop("subjects", None)
-		role = validated_data.get("role")
+		role = validated_data.get("role") or instance.role
 
 		instance = super().update(instance, validated_data)
 
@@ -179,7 +179,11 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 				teacher.subjects = subjects
 				teacher.save()
 
+		instance.refresh_from_db()
 		return instance
+
+	def to_representation(self, instance):
+		return UserSerializer(instance, context=self.context).data
 
 
 class ProfileUpdateSerializer(serializers.ModelSerializer):

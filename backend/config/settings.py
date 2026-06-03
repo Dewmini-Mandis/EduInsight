@@ -62,8 +62,8 @@ import dj_database_url
 
 DATABASES = {
 	"default": dj_database_url.parse(
-		"postgresql://neondb_owner:npg_NTFYE8qIifC0@ep-cool-shadow-aoob8xsr-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require",
-		conn_max_age=600,
+		"postgresql://neondb_owner:npg_NTFYE8qIifC0@ep-cool-shadow-aoob8xsr.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require",
+		conn_max_age=0,
 		ssl_require=True,
 	)
 }

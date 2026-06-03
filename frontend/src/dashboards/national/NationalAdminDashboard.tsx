@@ -251,6 +251,12 @@ const NationalAdminDashboard = () => {
         throw new Error(payload?.detail || "Unable to update school admin");
       }
 
+      const updatedAdminData = (await res.json().catch(() => null)) as SchoolAdmin | null;
+      if (updatedAdminData) {
+        setAdmins((prev) =>
+          prev.map((item) => (item.id === updatedAdminData.id ? updatedAdminData : item))
+        );
+      }
       setShowEditAdminModal(false);
       setSelectedAdmin(null);
       await fetchData();
@@ -277,6 +283,12 @@ const NationalAdminDashboard = () => {
       });
 
       if (!res.ok) throw new Error("Unable to update admin status");
+      const updatedAdminData = (await res.json().catch(() => null)) as SchoolAdmin | null;
+      if (updatedAdminData) {
+        setAdmins((prev) =>
+          prev.map((item) => (item.id === updatedAdminData.id ? updatedAdminData : item))
+        );
+      }
       await fetchData();
       setSuccessMessage(
         `School admin ${!admin.is_active ? "activated" : "deactivated"} successfully.`

@@ -34,7 +34,9 @@ const SystemAdminDashboard = () => {
   const [filterStatus, setFilterStatus] = useState("all");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<SystemUser | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SystemUser | null>(null);
   const [createForm, setCreateForm] = useState({
     firstName: "",
     lastName: "",
@@ -48,11 +50,42 @@ const SystemAdminDashboard = () => {
   });
   const [editErrors, setEditErrors] = useState<Record<string, string>>({});
 
+  const mapFieldKey = (key: string) => {
+    if (key === "first_name") return "firstName";
+    if (key === "last_name") return "lastName";
+    return key;
+  };
+
+  const extractFieldErrors = (payload: unknown) => {
+    if (!payload || typeof payload !== "object") return {} as Record<string, string>;
+    const nextErrors: Record<string, string> = {};
+    Object.entries(payload as Record<string, unknown>).forEach(([key, value]) => {
+      if (key === "detail" || key === "non_field_errors") return;
+      const mappedKey = mapFieldKey(key);
+      if (Array.isArray(value)) {
+        nextErrors[mappedKey] = value.join(" ");
+      } else if (typeof value === "string") {
+        nextErrors[mappedKey] = value;
+      }
+    });
+    return nextErrors;
+  };
+
+  const extractDetailMessage = (payload: unknown) => {
+    if (!payload || typeof payload !== "object") return "";
+    const record = payload as Record<string, unknown>;
+    if (typeof record.detail === "string") return record.detail;
+    if (Array.isArray(record.non_field_errors)) {
+      return record.non_field_errors.join(" ");
+    }
+    return "";
+  };
+
   const loadUsers = async (token: string) => {
     setLoading(true);
     setError("");
     try {
-      const [usersRes, schoolsRes] = await Promise.all([
+      const [usersResult, schoolsResult] = await Promise.allSettled([
         fetch("/api/accounts/users/", {
           headers: { Authorization: `Token ${token}` },
         }),
@@ -60,12 +93,34 @@ const SystemAdminDashboard = () => {
           headers: { Authorization: `Token ${token}` },
         }),
       ]);
-      if (!usersRes.ok) throw new Error("Failed to load users");
-      if (!schoolsRes.ok) throw new Error("Failed to load schools");
-      const usersData = (await usersRes.json()) as SystemUser[];
-      const schoolsData = (await schoolsRes.json()) as any[];
-      setUsers(usersData);
-      setSchoolsCount(Array.isArray(schoolsData) ? schoolsData.length : 0);
+
+      let nextError = "";
+
+      if (usersResult.status === "fulfilled") {
+        if (!usersResult.value.ok) {
+          nextError = "Failed to load users";
+        } else {
+          const usersData = (await usersResult.value.json()) as SystemUser[];
+          setUsers(usersData);
+        }
+      } else {
+        nextError = "Failed to load users";
+      }
+
+      if (schoolsResult.status === "fulfilled") {
+        if (schoolsResult.value.ok) {
+          const schoolsData = (await schoolsResult.value.json()) as any[];
+          setSchoolsCount(Array.isArray(schoolsData) ? schoolsData.length : 0);
+        } else {
+          setSchoolsCount(0);
+          if (!nextError) nextError = "Failed to load schools";
+        }
+      } else {
+        setSchoolsCount(0);
+        if (!nextError) nextError = "Failed to load schools";
+      }
+
+      if (nextError) setError(nextError);
     } catch (err: any) {
       setError(err?.message || "Unable to load users.");
     } finally {
@@ -197,18 +252,11 @@ const SystemAdminDashboard = () => {
 
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));
-        if (payload && typeof payload === "object") {
-          const nextErrors: Record<string, string> = {};
-          Object.entries(payload).forEach(([key, value]) => {
-            if (Array.isArray(value)) {
-              nextErrors[key] = value.join(" ");
-            } else if (typeof value === "string") {
-              nextErrors[key] = value;
-            }
-          });
+        const nextErrors = extractFieldErrors(payload);
+        if (Object.keys(nextErrors).length > 0) {
           setCreateErrors(nextErrors);
         }
-        throw new Error(payload?.detail || "Unable to create national admin");
+        throw new Error(extractDetailMessage(payload) || "Unable to create national admin");
       }
 
       setShowCreateModal(false);
@@ -225,6 +273,11 @@ const SystemAdminDashboard = () => {
     setEditForm({ firstName: user.first_name || "", lastName: user.last_name || "" });
     setEditErrors({});
     setShowEditModal(true);
+  };
+
+  const handleOpenDeleteModal = (user: SystemUser) => {
+    setDeleteTarget(user);
+    setShowDeleteModal(true);
   };
 
   const handleEditUser = async (event: React.FormEvent) => {
@@ -251,7 +304,20 @@ const SystemAdminDashboard = () => {
         }),
       });
 
-      if (!res.ok) throw new Error("Unable to update user");
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        const nextErrors = extractFieldErrors(payload);
+        if (Object.keys(nextErrors).length > 0) {
+          setEditErrors(nextErrors);
+        }
+        throw new Error(extractDetailMessage(payload) || "Unable to update user");
+      }
+      const updatedUser = (await res.json().catch(() => null)) as SystemUser | null;
+      if (updatedUser) {
+        setUsers((prev) =>
+          prev.map((item) => (item.id === updatedUser.id ? { ...item, ...updatedUser } : item))
+        );
+      }
       setShowEditModal(false);
       setSelectedUser(null);
       await loadUsers(token);
@@ -278,7 +344,15 @@ const SystemAdminDashboard = () => {
         },
         body: JSON.stringify({ is_active: !user.is_active }),
       });
-      if (!res.ok) throw new Error("Unable to update status");
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(extractDetailMessage(payload) || "Unable to update status");
+      }
+      setUsers((prev) =>
+        prev.map((item) =>
+          item.id === user.id ? { ...item, is_active: !item.is_active } : item
+        )
+      );
       await loadUsers(token);
       setSuccessMessage("User status updated successfully.");
     } catch (err: any) {
@@ -287,10 +361,6 @@ const SystemAdminDashboard = () => {
   };
 
   const handleDeleteUser = async (user: SystemUser) => {
-    const confirmed = window.confirm(
-      `Delete ${user.first_name || ""} ${user.last_name || ""}? This cannot be undone.`
-    );
-    if (!confirmed) return;
     setError("");
     setSuccessMessage("");
     const token = getToken();
@@ -303,12 +373,28 @@ const SystemAdminDashboard = () => {
         method: "DELETE",
         headers: { Authorization: `Token ${token}` },
       });
-      if (!res.ok) throw new Error("Unable to delete user");
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(extractDetailMessage(payload) || "Unable to delete user");
+      }
+      setUsers((prev) => prev.filter((item) => item.id !== user.id));
       await loadUsers(token);
       setSuccessMessage("User deleted successfully.");
     } catch (err: any) {
       setError(err.message || "Unable to delete user");
     }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    await handleDeleteUser(deleteTarget);
+    setShowDeleteModal(false);
+    setDeleteTarget(null);
+  };
+
+  const handleCloseDeleteModal = () => {
+    setShowDeleteModal(false);
+    setDeleteTarget(null);
   };
 
   const filteredUsers = useMemo(() => {
@@ -509,7 +595,7 @@ const SystemAdminDashboard = () => {
                       <button
                         className="admin-action-btn danger"
                         type="button"
-                        onClick={() => handleDeleteUser(user)}
+                        onClick={() => handleOpenDeleteModal(user)}
                       >
                         Delete
                       </button>
@@ -562,13 +648,6 @@ const SystemAdminDashboard = () => {
                     Create a national administrator account.
                   </div>
                 </div>
-                <button
-                  className="admin-link-btn"
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                >
-                  Close
-                </button>
               </div>
               <form className="admin-form" onSubmit={handleCreateNationalAdmin}>
                 <div className="admin-form-row">
@@ -622,11 +701,11 @@ const SystemAdminDashboard = () => {
                 {error && <div className="admin-error">{error}</div>}
                 <div className="admin-modal-actions">
                   <button
-                    className="admin-ghost-btn"
+                    className="admin-secondary-btn"
                     type="button"
                     onClick={() => setShowCreateModal(false)}
                   >
-                    Cancel
+                    Close
                   </button>
                   <button className="admin-primary-btn" type="submit">
                     Create National Admin
@@ -647,13 +726,6 @@ const SystemAdminDashboard = () => {
                     Update user details.
                   </div>
                 </div>
-                <button
-                  className="admin-link-btn"
-                  type="button"
-                  onClick={() => setShowEditModal(false)}
-                >
-                  Close
-                </button>
               </div>
               <form className="admin-form" onSubmit={handleEditUser}>
                 <div className="admin-form-row">
@@ -683,7 +755,7 @@ const SystemAdminDashboard = () => {
                 {error && <div className="admin-error">{error}</div>}
                 <div className="admin-modal-actions">
                   <button
-                    className="admin-ghost-btn"
+                    className="admin-secondary-btn"
                     type="button"
                     onClick={() => setShowEditModal(false)}
                   >
@@ -694,6 +766,45 @@ const SystemAdminDashboard = () => {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {showDeleteModal && deleteTarget && (
+          <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
+            <div className="admin-modal">
+              <div className="admin-modal-header">
+                <div>
+                  <div className="admin-card-title">Delete User</div>
+                  <div className="admin-card-subtitle">
+                    This action cannot be undone.
+                  </div>
+                </div>
+              </div>
+              <div className="admin-delete-message">
+                Are you sure you want to delete
+                <strong>
+                  {` ${deleteTarget.first_name || ""} ${deleteTarget.last_name || ""}`.trim() ||
+                    deleteTarget.username}
+                </strong>
+                ?
+              </div>
+              <div className="admin-modal-actions">
+                <button
+                  className="admin-secondary-btn"
+                  type="button"
+                  onClick={handleCloseDeleteModal}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="admin-danger-btn"
+                  type="button"
+                  onClick={handleConfirmDelete}
+                >
+                  Delete User
+                </button>
+              </div>
             </div>
           </div>
         )}

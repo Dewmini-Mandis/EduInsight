@@ -72,16 +72,17 @@ class UserViewSet(viewsets.ModelViewSet):
 
 	def get_queryset(self):
 		user = self.request.user
+		queryset = self.queryset.all()
 		if user.is_role(Role.ROLE_SYSTEM_ADMIN):
-			return self.queryset
+			return queryset
 		if user.is_role(Role.ROLE_NATIONAL_ADMIN):
-			return self.queryset.filter(role__role_name=Role.ROLE_SCHOOL_ADMIN)
+			return queryset.filter(role__role_name=Role.ROLE_SCHOOL_ADMIN)
 		if user.is_role(Role.ROLE_SCHOOL_ADMIN):
-			return self.queryset.filter(
+			return queryset.filter(
 				role__role_name__in=[Role.ROLE_TEACHER, Role.ROLE_STUDENT],
 				school=user.school,
 			)
-		return self.queryset.none()
+		return queryset.none()
 
 	def get_serializer_class(self):
 		if self.action == "create":

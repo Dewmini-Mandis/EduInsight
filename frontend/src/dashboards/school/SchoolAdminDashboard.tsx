@@ -401,6 +401,12 @@ const SchoolAdminDashboard = () => {
         }),
       });
       if (!res.ok) throw new Error("Unable to update student");
+      const updatedStudentData = (await res.json().catch(() => null)) as StaffUser | null;
+      if (updatedStudentData) {
+        setStaff((prev) =>
+          prev.map((item) => (item.id === updatedStudentData.id ? updatedStudentData : item))
+        );
+      }
       setShowEditStudentModal(false);
       await fetchStaff();
       setSuccessMessage("Student updated successfully.");
@@ -430,6 +436,12 @@ const SchoolAdminDashboard = () => {
         }),
       });
       if (!res.ok) throw new Error("Unable to update teacher");
+      const updatedTeacherData = (await res.json().catch(() => null)) as StaffUser | null;
+      if (updatedTeacherData) {
+        setStaff((prev) =>
+          prev.map((item) => (item.id === updatedTeacherData.id ? updatedTeacherData : item))
+        );
+      }
       setShowEditTeacherModal(false);
       await fetchStaff();
       setSuccessMessage("Teacher updated successfully.");
