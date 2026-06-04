@@ -7,6 +7,11 @@ type School = {
   id: number;
   name: string;
   location: string;
+  address: string;
+  province: string;
+  district: string;
+  zone: string;
+  educational_zone: string;
 };
 
 type SchoolAdmin = {
@@ -15,9 +20,17 @@ type SchoolAdmin = {
   last_name: string;
   email: string;
   username: string;
-  role: "SCHOOL_ADMIN";
+  role?: string | null;
   school_id?: number | null;
   is_active: boolean;
+  student_profile?: {
+    index_no?: string;
+    grade?: string;
+    class_name?: string;
+  } | null;
+  teacher_profile?: {
+    subjects?: string[];
+  } | null;
 };
 
 type CurrentUser = {
@@ -33,6 +46,7 @@ const NationalAdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
   const [activeSection, setActiveSection] = useState<"schools" | "admins">(
     "schools"
   );
@@ -68,13 +82,45 @@ const NationalAdminDashboard = () => {
     return "NA";
   }, [currentUser]);
 
+  const formatRole = (role?: string | null) => {
+    if (!role) return "Unknown";
+    return role
+      .toLowerCase()
+      .split("_")
+      .map((chunk) => chunk.charAt(0).toUpperCase() + chunk.slice(1))
+      .join(" ");
+  };
+
+  const getInitials = (user: any) => {
+    const source = `${user.first_name || ""} ${user.last_name || ""}`.trim();
+    if (source) {
+      return source
+        .split(" ")
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part.charAt(0).toUpperCase())
+        .join("");
+    }
+    return (user.username || user.email || "U").slice(0, 2).toUpperCase();
+  };
+
+  const userRoleOptions = ["SCHOOL_ADMIN", "TEACHER", "STUDENT"];
+
   const [schoolForm, setSchoolForm] = useState({
     name: "",
-    location: "",
+    address: "",
+    province: "",
+    district: "",
+    zone: "",
+    educationalZone: "",
   });
   const [editSchoolForm, setEditSchoolForm] = useState({
     name: "",
-    location: "",
+    address: "",
+    province: "",
+    district: "",
+    zone: "",
+    educationalZone: "",
   });
   const [adminForm, setAdminForm] = useState({
     firstName: "",
@@ -83,12 +129,22 @@ const NationalAdminDashboard = () => {
     username: "",
     password: "",
     schoolId: "",
+    role: "SCHOOL_ADMIN",
+    indexNo: "",
+    grade: "",
+    className: "",
+    subjects: "",
   });
   const [showPassword, setShowPassword] = useState(false);
   const [editAdminForm, setEditAdminForm] = useState({
     firstName: "",
     lastName: "",
     schoolId: "",
+    role: "SCHOOL_ADMIN",
+    indexNo: "",
+    grade: "",
+    className: "",
+    subjects: "",
   });
   const [editAdminErrors, setEditAdminErrors] = useState<Record<string, string>>({});
 
@@ -124,13 +180,16 @@ const NationalAdminDashboard = () => {
     fetchData();
   }, []);
 
-  const metrics = useMemo(() => {
-    return {
-      schools: schools.length,
-      admins: admins.length,
-      activeAdmins: admins.filter((admin) => admin.is_active).length,
-    };
-  }, [schools, admins]);
+  useEffect(() => {
+    if (successMessage) {
+      const timer = setTimeout(() => {
+        setSuccessMessage("");
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMessage]);
+
+
 
   const handleSchoolChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -160,20 +219,22 @@ const NationalAdminDashboard = () => {
   const validateSchoolForm = () => {
     const nextErrors: Record<string, string> = {};
     if (!schoolForm.name.trim()) nextErrors.name = "School name is required.";
-    if (!schoolForm.location.trim())
-      nextErrors.location = "Location is required.";
+    if (!schoolForm.address.trim()) nextErrors.address = "Address is required.";
+    if (!schoolForm.province.trim()) nextErrors.province = "Province is required.";
+    if (!schoolForm.district.trim()) nextErrors.district = "District is required.";
+    if (!schoolForm.zone.trim()) nextErrors.zone = "Zone is required.";
+    if (!schoolForm.educationalZone.trim()) nextErrors.educationalZone = "Educational zone is required.";
     setSchoolErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
 
   const validateAdminForm = () => {
     const nextErrors: Record<string, string> = {};
-    if (!adminForm.firstName.trim())
-      nextErrors.firstName = "First name is required.";
-    if (!adminForm.lastName.trim())
-      nextErrors.lastName = "Last name is required.";
-    if (!adminForm.username.trim())
+    if (!adminForm.firstName.trim()) nextErrors.firstName = "First name is required.";
+    if (!adminForm.lastName.trim()) nextErrors.lastName = "Last name is required.";
+    if (adminForm.role === "STUDENT" && !adminForm.username.trim()) {
       nextErrors.username = "Username is required.";
+    }
     if (!adminForm.email.trim()) {
       nextErrors.email = "Email address is required.";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminForm.email)) {
@@ -187,29 +248,48 @@ const NationalAdminDashboard = () => {
     if (!adminForm.schoolId) {
       nextErrors.schoolId = "Select a school to assign.";
     }
+    if (adminForm.role === "STUDENT") {
+      if (!adminForm.indexNo.trim()) nextErrors.indexNo = "Index number is required.";
+      if (!adminForm.grade.trim()) nextErrors.grade = "Grade is required.";
+      if (!adminForm.className.trim()) nextErrors.className = "Class name is required.";
+    }
+    if (adminForm.role === "TEACHER") {
+      if (!adminForm.subjects.trim()) nextErrors.subjects = "Subjects are required.";
+    }
     setAdminErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
 
   const validateEditAdminForm = () => {
     const nextErrors: Record<string, string> = {};
-    if (!editAdminForm.firstName.trim())
-      nextErrors.firstName = "First name is required.";
-    if (!editAdminForm.lastName.trim())
-      nextErrors.lastName = "Last name is required.";
+    if (!editAdminForm.firstName.trim()) nextErrors.firstName = "First name is required.";
+    if (!editAdminForm.lastName.trim()) nextErrors.lastName = "Last name is required.";
     if (!editAdminForm.schoolId) {
       nextErrors.schoolId = "Select a school to assign.";
+    }
+    if (editAdminForm.role === "STUDENT") {
+      if (!editAdminForm.indexNo.trim()) nextErrors.indexNo = "Index number is required.";
+      if (!editAdminForm.grade.trim()) nextErrors.grade = "Grade is required.";
+      if (!editAdminForm.className.trim()) nextErrors.className = "Class name is required.";
+    }
+    if (editAdminForm.role === "TEACHER") {
+      if (!editAdminForm.subjects.trim()) nextErrors.subjects = "Subjects are required.";
     }
     setEditAdminErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
 
-  const handleOpenEditModal = (admin: SchoolAdmin) => {
-    setSelectedAdmin(admin);
+  const handleOpenEditModal = (user: SchoolAdmin) => {
+    setSelectedAdmin(user);
     setEditAdminForm({
-      firstName: admin.first_name,
-      lastName: admin.last_name,
-      schoolId: admin.school_id?.toString() || "",
+      firstName: user.first_name || "",
+      lastName: user.last_name || "",
+      schoolId: user.school_id?.toString() || "",
+      role: user.role || "SCHOOL_ADMIN",
+      indexNo: user.student_profile?.index_no || "",
+      grade: user.student_profile?.grade || "",
+      className: user.student_profile?.class_name || "",
+      subjects: user.teacher_profile?.subjects?.join(", ") || "",
     });
     setEditAdminErrors({});
     setShowEditAdminModal(true);
@@ -221,19 +301,31 @@ const NationalAdminDashboard = () => {
     setSuccessMessage("");
     if (!validateEditAdminForm() || !selectedAdmin) return;
 
+    setActionLoading(true);
     try {
       const token = getToken();
+      const payload: any = {
+        first_name: editAdminForm.firstName.trim(),
+        last_name: editAdminForm.lastName.trim(),
+        school_id: editAdminForm.schoolId ? Number(editAdminForm.schoolId) : null,
+        role: editAdminForm.role,
+      };
+      if (editAdminForm.role === "STUDENT") {
+        payload.index_no = editAdminForm.indexNo.trim();
+        payload.grade = editAdminForm.grade.trim();
+        payload.class_name = editAdminForm.className.trim();
+      }
+      if (editAdminForm.role === "TEACHER") {
+        payload.subjects = editAdminForm.subjects.split(",").map(s => s.trim()).filter(Boolean);
+      }
+
       const res = await fetch(`/api/accounts/users/${selectedAdmin.id}/`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Token ${token}`,
         },
-        body: JSON.stringify({
-          first_name: editAdminForm.firstName.trim(),
-          last_name: editAdminForm.lastName.trim(),
-          school_id: editAdminForm.schoolId ? Number(editAdminForm.schoolId) : null,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -264,12 +356,15 @@ const NationalAdminDashboard = () => {
       setSuccessMessage("School admin updated successfully.");
     } catch (err: any) {
       setError(err.message || "Unable to update school admin");
+    } finally {
+      setActionLoading(false);
     }
   };
 
   const handleToggleAdminStatus = async (admin: SchoolAdmin) => {
     setError("");
     setSuccessMessage("");
+    setActionLoading(true);
     try {
       const token = getToken();
       const res = await fetch(`/api/accounts/users/${admin.id}/`, {
@@ -296,6 +391,8 @@ const NationalAdminDashboard = () => {
       );
     } catch (err: any) {
       setError(err.message || "Unable to update admin status");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -303,6 +400,7 @@ const NationalAdminDashboard = () => {
     if (!selectedAdmin) return;
     setError("");
     setSuccessMessage("");
+    setActionLoading(true);
     try {
       const token = getToken();
       const res = await fetch(`/api/accounts/users/${selectedAdmin.id}/`, {
@@ -317,21 +415,33 @@ const NationalAdminDashboard = () => {
       setSuccessMessage("School admin deleted successfully.");
     } catch (err: any) {
       setError(err.message || "Unable to delete school admin");
+    } finally {
+      setActionLoading(false);
     }
   };
 
   const validateEditSchoolForm = () => {
     const nextErrors: Record<string, string> = {};
     if (!editSchoolForm.name.trim()) nextErrors.name = "School name is required.";
-    if (!editSchoolForm.location.trim())
-      nextErrors.location = "Location is required.";
+    if (!editSchoolForm.address.trim()) nextErrors.address = "Address is required.";
+    if (!editSchoolForm.province.trim()) nextErrors.province = "Province is required.";
+    if (!editSchoolForm.district.trim()) nextErrors.district = "District is required.";
+    if (!editSchoolForm.zone.trim()) nextErrors.zone = "Zone is required.";
+    if (!editSchoolForm.educationalZone.trim()) nextErrors.educationalZone = "Educational zone is required.";
     setEditSchoolErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
 
   const handleOpenEditSchoolModal = (school: School) => {
     setSelectedSchool(school);
-    setEditSchoolForm({ name: school.name, location: school.location });
+    setEditSchoolForm({
+      name: school.name || "",
+      address: school.address || "",
+      province: school.province || "",
+      district: school.district || "",
+      zone: school.zone || "",
+      educationalZone: school.educational_zone || "",
+    });
     setEditSchoolErrors({});
     setShowEditSchoolModal(true);
   };
@@ -342,6 +452,7 @@ const NationalAdminDashboard = () => {
     setSuccessMessage("");
     if (!validateEditSchoolForm() || !selectedSchool) return;
 
+    setActionLoading(true);
     try {
       const token = getToken();
       const res = await fetch(`/api/schools/${selectedSchool.id}/`, {
@@ -352,7 +463,12 @@ const NationalAdminDashboard = () => {
         },
         body: JSON.stringify({
           name: editSchoolForm.name.trim(),
-          location: editSchoolForm.location.trim(),
+          location: editSchoolForm.address.trim(),
+          address: editSchoolForm.address.trim(),
+          province: editSchoolForm.province.trim(),
+          district: editSchoolForm.district.trim(),
+          zone: editSchoolForm.zone.trim(),
+          educational_zone: editSchoolForm.educationalZone.trim(),
         }),
       });
 
@@ -361,7 +477,9 @@ const NationalAdminDashboard = () => {
         if (payload && typeof payload === "object") {
           const nextErrors: Record<string, string> = {};
           Object.entries(payload).forEach(([key, value]) => {
-            if (Array.isArray(value)) {
+            if (key === "educational_zone") {
+              nextErrors["educationalZone"] = Array.isArray(value) ? value.join(" ") : String(value);
+            } else if (Array.isArray(value)) {
               nextErrors[key] = value.join(" ");
             } else if (typeof value === "string") {
               nextErrors[key] = value;
@@ -378,6 +496,8 @@ const NationalAdminDashboard = () => {
       setSuccessMessage("School updated successfully.");
     } catch (err: any) {
       setError(err.message || "Unable to update school");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -385,6 +505,7 @@ const NationalAdminDashboard = () => {
     if (!selectedSchool) return;
     setError("");
     setSuccessMessage("");
+    setActionLoading(true);
     try {
       const token = getToken();
       const res = await fetch(`/api/schools/${selectedSchool.id}/`, {
@@ -399,6 +520,8 @@ const NationalAdminDashboard = () => {
       setSuccessMessage("School deleted successfully.");
     } catch (err: any) {
       setError(err.message || "Unable to delete school");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -407,6 +530,7 @@ const NationalAdminDashboard = () => {
     setError("");
     setSuccessMessage("");
     if (!validateSchoolForm()) return;
+    setActionLoading(true);
     try {
       const token = getToken();
       const res = await fetch("/api/schools/", {
@@ -417,7 +541,12 @@ const NationalAdminDashboard = () => {
         },
         body: JSON.stringify({
           name: schoolForm.name.trim(),
-          location: schoolForm.location.trim(),
+          location: schoolForm.address.trim(),
+          address: schoolForm.address.trim(),
+          province: schoolForm.province.trim(),
+          district: schoolForm.district.trim(),
+          zone: schoolForm.zone.trim(),
+          educational_zone: schoolForm.educationalZone.trim(),
         }),
       });
       if (!res.ok) {
@@ -425,7 +554,9 @@ const NationalAdminDashboard = () => {
         if (payload && typeof payload === "object") {
           const nextErrors: Record<string, string> = {};
           Object.entries(payload).forEach(([key, value]) => {
-            if (Array.isArray(value)) {
+            if (key === "educational_zone") {
+              nextErrors["educationalZone"] = Array.isArray(value) ? value.join(" ") : String(value);
+            } else if (Array.isArray(value)) {
               nextErrors[key] = value.join(" ");
             } else if (typeof value === "string") {
               nextErrors[key] = value;
@@ -435,12 +566,21 @@ const NationalAdminDashboard = () => {
         }
         throw new Error(payload?.detail || "Unable to create school");
       }
-      setSchoolForm({ name: "", location: "" });
+      setSchoolForm({
+        name: "",
+        address: "",
+        province: "",
+        district: "",
+        zone: "",
+        educationalZone: "",
+      });
       await fetchData();
       setShowSchoolModal(false);
       setSuccessMessage("School created successfully.");
     } catch (err: any) {
       setError(err.message || "Unable to create school");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -449,29 +589,40 @@ const NationalAdminDashboard = () => {
     setError("");
     setSuccessMessage("");
     if (!validateAdminForm()) return;
+    setActionLoading(true);
     try {
       const token = getToken();
+      const payload: any = {
+        first_name: adminForm.firstName.trim(),
+        last_name: adminForm.lastName.trim(),
+        email: adminForm.email.trim(),
+        username: adminForm.role === "STUDENT" ? adminForm.username.trim() : adminForm.email.trim(),
+        password: adminForm.password,
+        role: adminForm.role,
+        school_id: adminForm.schoolId ? Number(adminForm.schoolId) : null,
+      };
+      if (adminForm.role === "STUDENT") {
+        payload.index_no = adminForm.indexNo.trim();
+        payload.grade = adminForm.grade.trim();
+        payload.class_name = adminForm.className.trim();
+      }
+      if (adminForm.role === "TEACHER") {
+        payload.subjects = adminForm.subjects.split(",").map(s => s.trim()).filter(Boolean);
+      }
+
       const res = await fetch("/api/accounts/users/", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Token ${token}`,
         },
-        body: JSON.stringify({
-          username: adminForm.username.trim(),
-          email: adminForm.email.trim(),
-          password: adminForm.password,
-          first_name: adminForm.firstName.trim(),
-          last_name: adminForm.lastName.trim(),
-          role: "SCHOOL_ADMIN",
-          school_id: adminForm.schoolId ? Number(adminForm.schoolId) : null,
-        }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
-        const payload = await res.json().catch(() => ({}));
-        if (payload && typeof payload === "object") {
+        const payloadErr = await res.json().catch(() => ({}));
+        if (payloadErr && typeof payloadErr === "object") {
           const nextErrors: Record<string, string> = {};
-          Object.entries(payload).forEach(([key, value]) => {
+          Object.entries(payloadErr).forEach(([key, value]) => {
             if (Array.isArray(value)) {
               nextErrors[key] = value.join(" ");
             } else if (typeof value === "string") {
@@ -480,7 +631,7 @@ const NationalAdminDashboard = () => {
           });
           setAdminErrors(nextErrors);
         }
-        throw new Error(payload?.detail || "Unable to create school admin");
+        throw new Error(payloadErr?.detail || "Unable to create user");
       }
       setAdminForm({
         firstName: "",
@@ -489,43 +640,52 @@ const NationalAdminDashboard = () => {
         username: "",
         password: "",
         schoolId: "",
+        role: "SCHOOL_ADMIN",
+        indexNo: "",
+        grade: "",
+        className: "",
+        subjects: "",
       });
       await fetchData();
       setShowAdminModal(false);
-      setSuccessMessage("School admin created successfully.");
+      setSuccessMessage("User created successfully.");
     } catch (err: any) {
-      setError(err.message || "Unable to create school admin");
+      setError(err.message || "Unable to create user");
+    } finally {
+      setActionLoading(false);
     }
   };
 
   return (
     <div className="admin-root">
       <aside className="admin-sidebar">
-        <div className="admin-brand">
-          <div>
-            <div className="admin-brand-title">EduInsight</div>
-            <div className="admin-brand-sub">NATIONAL ADMIN</div>
+        <div>
+          <div className="admin-brand">
+            <div>
+              <div className="admin-brand-title">EduInsight</div>
+              <div className="admin-brand-sub">NATIONAL ADMIN</div>
+            </div>
           </div>
+          <nav className="admin-nav">
+            <button
+              className={`admin-nav-item ${activeSection === "schools" ? "active" : ""}`}
+              type="button"
+              onClick={() => setActiveSection("schools")}
+            >
+              Schools
+            </button>
+            <button
+              className={`admin-nav-item ${activeSection === "admins" ? "active" : ""}`}
+              type="button"
+              onClick={() => setActiveSection("admins")}
+            >
+              Users
+            </button>
+            <button className="admin-nav-item" type="button">
+              National Reports
+            </button>
+          </nav>
         </div>
-        <nav className="admin-nav">
-          <button
-            className={`admin-nav-item ${activeSection === "schools" ? "active" : ""}`}
-            type="button"
-            onClick={() => setActiveSection("schools")}
-          >
-            Schools
-          </button>
-          <button
-            className={`admin-nav-item ${activeSection === "admins" ? "active" : ""}`}
-            type="button"
-            onClick={() => setActiveSection("admins")}
-          >
-            School Admins
-          </button>
-          <button className="admin-nav-item" type="button">
-            National Reports
-          </button>
-        </nav>
         <div className="admin-sidebar-footer">
           <div className="admin-user-card">
             <div className="admin-user-avatar">{currentInitials}</div>
@@ -545,45 +705,27 @@ const NationalAdminDashboard = () => {
       </aside>
 
       <main className="admin-main">
-        <header className="admin-header">
+        <div className="admin-topbar">
           <div>
             <div className="admin-title">
-              {activeSection === "schools" ? "School Registry" : "School Admins"}
+              {activeSection === "schools" ? "School Registry" : "User Management"}
             </div>
             <div className="admin-subtitle">
               {activeSection === "schools"
                 ? "Review registered schools and add new institutions."
-                : "Assign school administrators and monitor their access."}
+                : "Manage credentials and access levels across school roles."}
             </div>
           </div>
-          <div className="admin-header-actions">
-            {activeSection === "schools" ? (
-              <button
-                className="admin-primary-btn"
-                type="button"
-                onClick={() => {
-                  setShowSchoolModal(true);
-                  setError("");
-                  setSuccessMessage("");
-                }}
-              >
-                Create School
-              </button>
-            ) : (
-              <button
-                className="admin-primary-btn"
-                type="button"
-                onClick={() => {
-                  setShowAdminModal(true);
-                  setError("");
-                  setSuccessMessage("");
-                }}
-              >
-                Create School Admin
-              </button>
-            )}
+          <div className="admin-topbar-actions">
+            <div className="admin-profile">
+              <div className="admin-profile-avatar" />
+              <div>
+                <div className="admin-user-name">{currentDisplayName}</div>
+                <div className="admin-profile-meta">National Administrator</div>
+              </div>
+            </div>
           </div>
-        </header>
+        </div>
 
         {successMessage && (
           <div className="admin-success" role="status">
@@ -592,143 +734,176 @@ const NationalAdminDashboard = () => {
         )}
 
         {activeSection === "schools" && (
-          <section className="admin-content-grid admin-content-grid--single">
-            <div className="admin-card">
-              <div className="admin-card-header">
-                <div>
-                  <div className="admin-card-title">School Directory</div>
-                  <div className="admin-card-subtitle">
-                    Manage registered schools and their locations.
-                  </div>
-                </div>
-              </div>
-              <div className="admin-table admin-table--schools">
-                <div className="admin-table-header admin-table-header--schools">
-                  <span>School</span>
-                  <span>Location</span>
-                  <span>Status</span>
-                  <span>Actions</span>
-                </div>
-                {loading && <div className="admin-empty">Loading schools...</div>}
-                {!loading && schools.length === 0 && (
-                  <div className="admin-empty">No schools registered yet.</div>
-                )}
-                {schools.map((school) => (
-                  <div className="admin-table-row admin-table-row--schools" key={school.id}>
-                    <div>
-                      <div className="user-name">{school.name}</div>
-                      <div className="user-meta">ID {school.id}</div>
-                    </div>
-                    <div className="user-meta">{school.location}</div>
-                    <div>
-                      <span className="status-pill status-active">Active</span>
-                    </div>
-                    <div className="admin-actions">
-                      <button
-                        className="admin-action-btn admin-action-btn--edit"
-                        type="button"
-                        onClick={() => handleOpenEditSchoolModal(school)}
-                        title="Edit school"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className="admin-action-btn admin-action-btn--delete"
-                        type="button"
-                        onClick={() => {
-                          setSelectedSchool(school);
-                          setShowDeleteSchoolConfirm(true);
-                        }}
-                        title="Delete school"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+          <>
+            <div className="admin-user-toolbar" style={{ justifyContent: "flex-end", marginBottom: "20px" }}>
+              <button
+                className="admin-login-btn"
+                type="button"
+                onClick={() => {
+                  setShowSchoolModal(true);
+                  setError("");
+                  setSuccessMessage("");
+                }}
+                disabled={actionLoading}
+                style={{ width: "auto", padding: "10px 24px" }}
+              >
+                Create School
+              </button>
             </div>
-          </section>
+            <section className="admin-content-grid admin-content-grid--single">
+              <div className="admin-card">
+                <div className="admin-card-header">
+                  <div>
+                    <div className="admin-card-title">School Directory</div>
+                    <div className="admin-card-subtitle">
+                      Manage registered schools and their locations.
+                    </div>
+                  </div>
+                </div>
+                <div className="admin-table">
+                  <div className="admin-table-header" style={{ gridTemplateColumns: "1.2fr 1.2fr 0.8fr 0.8fr 1fr 1fr" }}>
+                    <span>School Name</span>
+                    <span>Address</span>
+                    <span>Province</span>
+                    <span>District</span>
+                    <span>Educational Zone</span>
+                    <span>Actions</span>
+                  </div>
+                  {loading && <div className="admin-empty">Loading schools...</div>}
+                  {!loading && schools.length === 0 && (
+                    <div className="admin-empty">No schools registered yet.</div>
+                  )}
+                  {schools.map((school) => (
+                    <div className="admin-table-row" key={school.id} style={{ gridTemplateColumns: "1.2fr 1.2fr 0.8fr 0.8fr 1fr 1fr" }}>
+                      <div>
+                        <strong className="user-name">{school.name}</strong>
+                        <div className="user-meta">ID {school.id}</div>
+                      </div>
+                      <div className="user-meta">{school.address || school.location || "—"}</div>
+                      <div className="user-meta">{school.province || "—"}</div>
+                      <div className="user-meta">{school.district || "—"}</div>
+                      <div className="user-meta">{school.educational_zone || "—"}</div>
+                      <div className="admin-action-group">
+                        <button
+                          className="admin-action-btn"
+                          type="button"
+                          onClick={() => handleOpenEditSchoolModal(school)}
+                          disabled={actionLoading}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="admin-action-btn danger"
+                          type="button"
+                          onClick={() => {
+                            setSelectedSchool(school);
+                            setShowDeleteSchoolConfirm(true);
+                          }}
+                          disabled={actionLoading}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          </>
         )}
 
         {activeSection === "admins" && (
-          <section className="admin-content-grid admin-content-grid--single">
-            <div className="admin-card">
-              <div className="admin-card-header">
-                <div>
-                  <div className="admin-card-title">School Admin Directory</div>
-                  <div className="admin-card-subtitle">
-                    View and monitor school admin accounts.
-                  </div>
-                </div>
-              </div>
-              <div className="admin-table admin-table--admins">
-                <div className="admin-table-header admin-table-header--admins">
-                  <span>Name</span>
-                  <span>School ID</span>
-                  <span>Status</span>
-                  <span>Email</span>
-                  <span>Actions</span>
-                </div>
-                {loading && <div className="admin-empty">Loading admins...</div>}
-                {!loading && admins.length === 0 && (
-                  <div className="admin-empty">No school admins created.</div>
-                )}
-                {admins.map((admin) => (
-                  <div className="admin-table-row admin-table-row--admins" key={admin.id}>
-                    <div>
-                      <div className="user-name">
-                        {admin.first_name} {admin.last_name}
-                      </div>
-                      <div className="user-meta">@{admin.username}</div>
-                    </div>
-                    <div className="user-meta">
-                      {admin.school_id ? `School ${admin.school_id}` : "Unassigned"}
-                    </div>
-                    <div>
-                      <span
-                        className={`status-pill status-${
-                          admin.is_active ? "active" : "inactive"
-                        }`}
-                      >
-                        {admin.is_active ? "Active" : "Inactive"}
-                      </span>
-                    </div>
-                    <div className="user-meta">{admin.email}</div>
-                    <div className="admin-actions">
-                      <button
-                        className="admin-action-btn admin-action-btn--edit"
-                        type="button"
-                        onClick={() => handleOpenEditModal(admin)}
-                        title="Edit admin"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className="admin-action-btn admin-action-btn--toggle"
-                        type="button"
-                        onClick={() => handleToggleAdminStatus(admin)}
-                        title={admin.is_active ? "Deactivate" : "Activate"}
-                      >
-                        {admin.is_active ? "Deactivate" : "Activate"}
-                      </button>
-                      <button
-                        className="admin-action-btn admin-action-btn--delete"
-                        type="button"
-                        onClick={() => {
-                          setSelectedAdmin(admin);
-                          setShowDeleteConfirm(true);
-                        }}
-                        title="Delete admin"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+          <>
+            <div className="admin-user-toolbar" style={{ justifyContent: "flex-end", marginBottom: "20px" }}>
+              <button
+                className="admin-login-btn"
+                type="button"
+                onClick={() => {
+                  setShowAdminModal(true);
+                  setError("");
+                  setSuccessMessage("");
+                }}
+                disabled={actionLoading}
+                style={{ width: "auto", padding: "10px 24px" }}
+              >
+                Create User
+              </button>
             </div>
-          </section>
+            <section className="admin-content-grid admin-content-grid--single">
+              <div className="admin-card">
+                <div className="admin-card-header">
+                  <div>
+                    <div className="admin-card-title">User Directory</div>
+                    <div className="admin-card-subtitle">
+                      View and monitor school admin, teacher, and student accounts.
+                    </div>
+                  </div>
+                </div>
+                <div className="admin-table">
+                  <div className="admin-table-header" style={{ gridTemplateColumns: "1.2fr 0.8fr 0.8fr 1fr 1fr" }}>
+                    <span>User</span>
+                    <span>Role</span>
+                    <span>Status</span>
+                    <span>Email</span>
+                    <span>Actions</span>
+                  </div>
+                  {loading && <div className="admin-empty">Loading users...</div>}
+                  {!loading && admins.length === 0 && (
+                    <div className="admin-empty">No users found.</div>
+                  )}
+                  {admins.map((admin) => (
+                    <div className="admin-table-row" key={admin.id} style={{ gridTemplateColumns: "1.2fr 0.8fr 0.8fr 1fr 1fr" }}>
+                      <div className="admin-user-cell">
+                        <div className="admin-avatar">{getInitials(admin)}</div>
+                        <div>
+                          <div className="user-name">
+                            {`${admin.first_name || ""} ${admin.last_name || ""}`.trim() || admin.username}
+                          </div>
+                          <div className="user-meta">@{admin.username}</div>
+                        </div>
+                      </div>
+                      <div className="user-meta">{formatRole(admin.role)}</div>
+                      <div>
+                        <span className={`status-pill ${admin.is_active ? "status-active" : "status-suspended"}`}>
+                          {admin.is_active ? "ACTIVE" : "INACTIVE"}
+                        </span>
+                      </div>
+                      <div className="user-meta">{admin.email}</div>
+                      <div className="admin-action-group">
+                        <button
+                          className="admin-action-btn"
+                          type="button"
+                          onClick={() => handleOpenEditModal(admin)}
+                          disabled={actionLoading}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="admin-action-btn warning"
+                          type="button"
+                          onClick={() => handleToggleAdminStatus(admin)}
+                          disabled={actionLoading}
+                        >
+                          {admin.is_active ? "Deactivate" : "Activate"}
+                        </button>
+                        <button
+                          className="admin-action-btn danger"
+                          type="button"
+                          onClick={() => {
+                            setSelectedAdmin(admin);
+                            setShowDeleteConfirm(true);
+                          }}
+                          disabled={actionLoading}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          </>
         )}
       </main>
       {showSchoolModal && (
@@ -741,47 +916,95 @@ const NationalAdminDashboard = () => {
                   Add a new school to the national registry.
                 </div>
               </div>
-              <button
-                className="admin-link-btn"
-                type="button"
-                onClick={() => setShowSchoolModal(false)}
-              >
-                Close
-              </button>
+
             </div>
             <form className="admin-form" onSubmit={handleCreateSchool}>
-              <div className="admin-field">
-                <label>School Name</label>
-                <input
-                  name="name"
-                  value={schoolForm.name}
-                  onChange={handleSchoolChange}
-                />
-                {schoolErrors.name && (
-                  <div className="admin-error">{schoolErrors.name}</div>
-                )}
+              <div className="admin-form-row">
+                <div className="admin-field">
+                  <label>School Name *</label>
+                  <input
+                    name="name"
+                    value={schoolForm.name}
+                    onChange={handleSchoolChange}
+                  />
+                  {schoolErrors.name && (
+                    <div className="admin-error">{schoolErrors.name}</div>
+                  )}
+                </div>
+                <div className="admin-field">
+                  <label>Address *</label>
+                  <input
+                    name="address"
+                    value={schoolForm.address}
+                    onChange={handleSchoolChange}
+                  />
+                  {schoolErrors.address && (
+                    <div className="admin-error">{schoolErrors.address}</div>
+                  )}
+                </div>
               </div>
-              <div className="admin-field">
-                <label>Location</label>
-                <input
-                  name="location"
-                  value={schoolForm.location}
-                  onChange={handleSchoolChange}
-                />
-                {schoolErrors.location && (
-                  <div className="admin-error">{schoolErrors.location}</div>
-                )}
+
+              <div className="admin-form-row">
+                <div className="admin-field">
+                  <label>Province *</label>
+                  <input
+                    name="province"
+                    value={schoolForm.province}
+                    onChange={handleSchoolChange}
+                  />
+                  {schoolErrors.province && (
+                    <div className="admin-error">{schoolErrors.province}</div>
+                  )}
+                </div>
+                <div className="admin-field">
+                  <label>District *</label>
+                  <input
+                    name="district"
+                    value={schoolForm.district}
+                    onChange={handleSchoolChange}
+                  />
+                  {schoolErrors.district && (
+                    <div className="admin-error">{schoolErrors.district}</div>
+                  )}
+                </div>
               </div>
+
+              <div className="admin-form-row">
+                <div className="admin-field">
+                  <label>Zone *</label>
+                  <input
+                    name="zone"
+                    value={schoolForm.zone}
+                    onChange={handleSchoolChange}
+                  />
+                  {schoolErrors.zone && (
+                    <div className="admin-error">{schoolErrors.zone}</div>
+                  )}
+                </div>
+                <div className="admin-field">
+                  <label>Educational Zone *</label>
+                  <input
+                    name="educationalZone"
+                    value={schoolForm.educationalZone}
+                    onChange={handleSchoolChange}
+                  />
+                  {schoolErrors.educationalZone && (
+                    <div className="admin-error">{schoolErrors.educationalZone}</div>
+                  )}
+                </div>
+              </div>
+
               {error && <div className="admin-error">{error}</div>}
               <div className="admin-modal-actions">
                 <button
-                  className="admin-ghost-btn"
+                  className="admin-secondary-btn"
                   type="button"
                   onClick={() => setShowSchoolModal(false)}
+                  disabled={actionLoading}
                 >
                   Cancel
                 </button>
-                <button className="admin-primary-btn" type="submit">
+                <button className="admin-primary-btn" type="submit" disabled={actionLoading}>
                   Register School
                 </button>
               </div>
@@ -794,18 +1017,12 @@ const NationalAdminDashboard = () => {
           <div className="admin-modal">
             <div className="admin-modal-header">
               <div>
-                <div className="admin-card-title">Create School Admin</div>
+                <div className="admin-card-title">Create User</div>
                 <div className="admin-card-subtitle">
-                  Assign a school administrator to a registered school.
+                  Assign a user to a registered school.
                 </div>
               </div>
-              <button
-                className="admin-link-btn"
-                type="button"
-                onClick={() => setShowAdminModal(false)}
-              >
-                Close
-              </button>
+
             </div>
             <form className="admin-form" onSubmit={handleCreateSchoolAdmin}>
               <div className="admin-form-row">
@@ -844,17 +1061,19 @@ const NationalAdminDashboard = () => {
                   <div className="admin-error">{adminErrors.email}</div>
                 )}
               </div>
-              <div className="admin-field">
-                <label>Username *</label>
-                <input
-                  name="username"
-                  value={adminForm.username}
-                  onChange={handleAdminChange}
-                />
-                {adminErrors.username && (
-                  <div className="admin-error">{adminErrors.username}</div>
-                )}
-              </div>
+              {adminForm.role === "STUDENT" && (
+                <div className="admin-field">
+                  <label>Username *</label>
+                  <input
+                    name="username"
+                    value={adminForm.username}
+                    onChange={handleAdminChange}
+                  />
+                  {adminErrors.username && (
+                    <div className="admin-error">{adminErrors.username}</div>
+                  )}
+                </div>
+              )}
               <div className="admin-field">
                 <label>Password *</label>
                 <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
@@ -893,35 +1112,108 @@ const NationalAdminDashboard = () => {
                   <div className="admin-error">{adminErrors.password}</div>
                 )}
               </div>
-              <div className="admin-field">
-                <label>Assign School *</label>
-                <select
-                  name="schoolId"
-                  value={adminForm.schoolId}
-                  onChange={handleAdminChange}
-                >
-                  <option value="">Select school</option>
-                  {schools.map((school) => (
-                    <option key={school.id} value={school.id}>
-                      {school.name}
-                    </option>
-                  ))}
-                </select>
-                {adminErrors.schoolId && (
-                  <div className="admin-error">{adminErrors.schoolId}</div>
-                )}
+              <div className="admin-form-row">
+                <div className="admin-field">
+                  <label>Role *</label>
+                  <select
+                    name="role"
+                    className="admin-filter-select"
+                    style={{ width: "100%", height: "42px", padding: "8px 12px" }}
+                    value={adminForm.role}
+                    onChange={handleAdminChange}
+                  >
+                    {userRoleOptions.map((role) => (
+                      <option key={role} value={role}>
+                        {formatRole(role)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="admin-field">
+                  <label>Assign School *</label>
+                  <select
+                    name="schoolId"
+                    value={adminForm.schoolId}
+                    onChange={handleAdminChange}
+                  >
+                    <option value="">Select school</option>
+                    {schools.map((school) => (
+                      <option key={school.id} value={school.id}>
+                        {school.name}
+                      </option>
+                    ))}
+                  </select>
+                  {adminErrors.schoolId && (
+                    <div className="admin-error">{adminErrors.schoolId}</div>
+                  )}
+                </div>
               </div>
+
+              {adminForm.role === "STUDENT" && (
+                <div className="admin-form-row">
+                  <div className="admin-field">
+                    <label>Index No *</label>
+                    <input
+                      name="indexNo"
+                      value={adminForm.indexNo}
+                      onChange={handleAdminChange}
+                    />
+                    {adminErrors.indexNo && (
+                      <div className="admin-error">{adminErrors.indexNo}</div>
+                    )}
+                  </div>
+                  <div className="admin-field">
+                    <label>Grade *</label>
+                    <input
+                      name="grade"
+                      value={adminForm.grade}
+                      onChange={handleAdminChange}
+                    />
+                    {adminErrors.grade && (
+                      <div className="admin-error">{adminErrors.grade}</div>
+                    )}
+                  </div>
+                  <div className="admin-field">
+                    <label>Class *</label>
+                    <input
+                      name="className"
+                      value={adminForm.className}
+                      onChange={handleAdminChange}
+                    />
+                    {adminErrors.className && (
+                      <div className="admin-error">{adminErrors.className}</div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {adminForm.role === "TEACHER" && (
+                <div className="admin-field">
+                  <label>Subjects (comma separated) *</label>
+                  <input
+                    name="subjects"
+                    placeholder="e.g. Mathematics, Science"
+                    value={adminForm.subjects}
+                    onChange={handleAdminChange}
+                  />
+                  {adminErrors.subjects && (
+                    <div className="admin-error">{adminErrors.subjects}</div>
+                  )}
+                </div>
+              )}
+
               {error && <div className="admin-error">{error}</div>}
               <div className="admin-modal-actions">
                 <button
-                  className="admin-ghost-btn"
+                  className="admin-secondary-btn"
                   type="button"
                   onClick={() => setShowAdminModal(false)}
+                  disabled={actionLoading}
                 >
                   Cancel
                 </button>
-                <button className="admin-primary-btn" type="submit">
-                  Create School Admin
+                <button className="admin-primary-btn" type="submit" disabled={actionLoading}>
+                  Create User
                 </button>
               </div>
             </form>
@@ -933,18 +1225,12 @@ const NationalAdminDashboard = () => {
           <div className="admin-modal">
             <div className="admin-modal-header">
               <div>
-                <div className="admin-card-title">Edit School Admin</div>
+                <div className="admin-card-title">Edit User</div>
                 <div className="admin-card-subtitle">
-                  Update school admin information.
+                  Update user information.
                 </div>
               </div>
-              <button
-                className="admin-link-btn"
-                type="button"
-                onClick={() => setShowEditAdminModal(false)}
-              >
-                Close
-              </button>
+
             </div>
             <form className="admin-form" onSubmit={handleEditAdmin}>
               <div className="admin-form-row">
@@ -976,34 +1262,107 @@ const NationalAdminDashboard = () => {
                 <input type="email" value={selectedAdmin.email} disabled />
                 <div className="admin-hint">Email cannot be changed.</div>
               </div>
-              <div className="admin-field">
-                <label>Assign School *</label>
-                <select
-                  name="schoolId"
-                  value={editAdminForm.schoolId}
-                  onChange={handleEditAdminChange}
-                >
-                  <option value="">Select school</option>
-                  {schools.map((school) => (
-                    <option key={school.id} value={school.id}>
-                      {school.name}
-                    </option>
-                  ))}
-                </select>
-                {editAdminErrors.schoolId && (
-                  <div className="admin-error">{editAdminErrors.schoolId}</div>
-                )}
+              <div className="admin-form-row">
+                <div className="admin-field">
+                  <label>Role *</label>
+                  <select
+                    name="role"
+                    className="admin-filter-select"
+                    style={{ width: "100%", height: "42px", padding: "8px 12px" }}
+                    value={editAdminForm.role}
+                    onChange={handleEditAdminChange}
+                  >
+                    {userRoleOptions.map((role) => (
+                      <option key={role} value={role}>
+                        {formatRole(role)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="admin-field">
+                  <label>Assign School *</label>
+                  <select
+                    name="schoolId"
+                    value={editAdminForm.schoolId}
+                    onChange={handleEditAdminChange}
+                  >
+                    <option value="">Select school</option>
+                    {schools.map((school) => (
+                      <option key={school.id} value={school.id}>
+                        {school.name}
+                      </option>
+                    ))}
+                  </select>
+                  {editAdminErrors.schoolId && (
+                    <div className="admin-error">{editAdminErrors.schoolId}</div>
+                  )}
+                </div>
               </div>
+
+              {editAdminForm.role === "STUDENT" && (
+                <div className="admin-form-row">
+                  <div className="admin-field">
+                    <label>Index No *</label>
+                    <input
+                      name="indexNo"
+                      value={editAdminForm.indexNo}
+                      onChange={handleEditAdminChange}
+                    />
+                    {editAdminErrors.indexNo && (
+                      <div className="admin-error">{editAdminErrors.indexNo}</div>
+                    )}
+                  </div>
+                  <div className="admin-field">
+                    <label>Grade *</label>
+                    <input
+                      name="grade"
+                      value={editAdminForm.grade}
+                      onChange={handleEditAdminChange}
+                    />
+                    {editAdminErrors.grade && (
+                      <div className="admin-error">{editAdminErrors.grade}</div>
+                    )}
+                  </div>
+                  <div className="admin-field">
+                    <label>Class *</label>
+                    <input
+                      name="className"
+                      value={editAdminForm.className}
+                      onChange={handleEditAdminChange}
+                    />
+                    {editAdminErrors.className && (
+                      <div className="admin-error">{editAdminErrors.className}</div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {editAdminForm.role === "TEACHER" && (
+                <div className="admin-field">
+                  <label>Subjects (comma separated) *</label>
+                  <input
+                    name="subjects"
+                    placeholder="e.g. Mathematics, Science"
+                    value={editAdminForm.subjects}
+                    onChange={handleEditAdminChange}
+                  />
+                  {editAdminErrors.subjects && (
+                    <div className="admin-error">{editAdminErrors.subjects}</div>
+                  )}
+                </div>
+              )}
+
               {error && <div className="admin-error">{error}</div>}
               <div className="admin-modal-actions">
                 <button
-                  className="admin-ghost-btn"
+                  className="admin-secondary-btn"
                   type="button"
                   onClick={() => setShowEditAdminModal(false)}
+                  disabled={actionLoading}
                 >
                   Cancel
                 </button>
-                <button className="admin-primary-btn" type="submit">
+                <button className="admin-primary-btn" type="submit" disabled={actionLoading}>
                   Save Changes
                 </button>
               </div>
@@ -1018,7 +1377,7 @@ const NationalAdminDashboard = () => {
               <div>
                 <div className="admin-card-title">Confirm Delete</div>
                 <div className="admin-card-subtitle">
-                  Are you sure you want to permanently delete this school admin account?
+                  Are you sure you want to permanently delete this user account?
                 </div>
               </div>
             </div>
@@ -1032,12 +1391,13 @@ const NationalAdminDashboard = () => {
             </div>
             <div className="admin-modal-actions">
               <button
-                className="admin-ghost-btn"
+                className="admin-secondary-btn"
                 type="button"
                 onClick={() => {
                   setShowDeleteConfirm(false);
                   setSelectedAdmin(null);
                 }}
+                disabled={actionLoading}
               >
                 Cancel
               </button>
@@ -1045,6 +1405,7 @@ const NationalAdminDashboard = () => {
                 className="admin-danger-btn"
                 type="button"
                 onClick={handleDeleteAdmin}
+                disabled={actionLoading}
               >
                 Delete Account
               </button>
@@ -1062,53 +1423,113 @@ const NationalAdminDashboard = () => {
                   Update school information.
                 </div>
               </div>
-              <button
-                className="admin-link-btn"
-                type="button"
-                onClick={() => setShowEditSchoolModal(false)}
-              >
-                Close
-              </button>
+
             </div>
             <form className="admin-form" onSubmit={handleEditSchool}>
-              <div className="admin-field">
-                <label>School Name</label>
-                <input
-                  name="name"
-                  value={editSchoolForm.name}
-                  onChange={(e) => {
-                    setEditSchoolForm((prev) => ({ ...prev, name: e.target.value }));
-                    setEditSchoolErrors((prev) => ({ ...prev, name: "" }));
-                  }}
-                />
-                {editSchoolErrors.name && (
-                  <div className="admin-error">{editSchoolErrors.name}</div>
-                )}
+              <div className="admin-form-row">
+                <div className="admin-field">
+                  <label>School Name *</label>
+                  <input
+                    name="name"
+                    value={editSchoolForm.name}
+                    onChange={(e) => {
+                      setEditSchoolForm((prev) => ({ ...prev, name: e.target.value }));
+                      setEditSchoolErrors((prev) => ({ ...prev, name: "" }));
+                    }}
+                  />
+                  {editSchoolErrors.name && (
+                    <div className="admin-error">{editSchoolErrors.name}</div>
+                  )}
+                </div>
+                <div className="admin-field">
+                  <label>Address *</label>
+                  <input
+                    name="address"
+                    value={editSchoolForm.address}
+                    onChange={(e) => {
+                      setEditSchoolForm((prev) => ({ ...prev, address: e.target.value }));
+                      setEditSchoolErrors((prev) => ({ ...prev, address: "" }));
+                    }}
+                  />
+                  {editSchoolErrors.address && (
+                    <div className="admin-error">{editSchoolErrors.address}</div>
+                  )}
+                </div>
               </div>
-              <div className="admin-field">
-                <label>Location</label>
-                <input
-                  name="location"
-                  value={editSchoolForm.location}
-                  onChange={(e) => {
-                    setEditSchoolForm((prev) => ({ ...prev, location: e.target.value }));
-                    setEditSchoolErrors((prev) => ({ ...prev, location: "" }));
-                  }}
-                />
-                {editSchoolErrors.location && (
-                  <div className="admin-error">{editSchoolErrors.location}</div>
-                )}
+
+              <div className="admin-form-row">
+                <div className="admin-field">
+                  <label>Province *</label>
+                  <input
+                    name="province"
+                    value={editSchoolForm.province}
+                    onChange={(e) => {
+                      setEditSchoolForm((prev) => ({ ...prev, province: e.target.value }));
+                      setEditSchoolErrors((prev) => ({ ...prev, province: "" }));
+                    }}
+                  />
+                  {editSchoolErrors.province && (
+                    <div className="admin-error">{editSchoolErrors.province}</div>
+                  )}
+                </div>
+                <div className="admin-field">
+                  <label>District *</label>
+                  <input
+                    name="district"
+                    value={editSchoolForm.district}
+                    onChange={(e) => {
+                      setEditSchoolForm((prev) => ({ ...prev, district: e.target.value }));
+                      setEditSchoolErrors((prev) => ({ ...prev, district: "" }));
+                    }}
+                  />
+                  {editSchoolErrors.district && (
+                    <div className="admin-error">{editSchoolErrors.district}</div>
+                  )}
+                </div>
               </div>
+
+              <div className="admin-form-row">
+                <div className="admin-field">
+                  <label>Zone *</label>
+                  <input
+                    name="zone"
+                    value={editSchoolForm.zone}
+                    onChange={(e) => {
+                      setEditSchoolForm((prev) => ({ ...prev, zone: e.target.value }));
+                      setEditSchoolErrors((prev) => ({ ...prev, zone: "" }));
+                    }}
+                  />
+                  {editSchoolErrors.zone && (
+                    <div className="admin-error">{editSchoolErrors.zone}</div>
+                  )}
+                </div>
+                <div className="admin-field">
+                  <label>Educational Zone *</label>
+                  <input
+                    name="educationalZone"
+                    value={editSchoolForm.educationalZone}
+                    onChange={(e) => {
+                      setEditSchoolForm((prev) => ({ ...prev, educationalZone: e.target.value }));
+                      setEditSchoolErrors((prev) => ({ ...prev, educationalZone: "" }));
+                    }}
+                  />
+                  {editSchoolErrors.educationalZone && (
+                    <div className="admin-error">{editSchoolErrors.educationalZone}</div>
+                  )}
+                </div>
+              </div>
+
               {error && <div className="admin-error">{error}</div>}
               <div className="admin-modal-actions">
                 <button
-                  className="admin-ghost-btn"
+                  className="admin-secondary-btn"
                   type="button"
                   onClick={() => setShowEditSchoolModal(false)}
+                  disabled={actionLoading}
                 >
                   Cancel
                 </button>
-                <button className="admin-primary-btn" type="submit">
+                <button className="admin-primary-btn" type="submit" disabled={actionLoading}>
                   Save Changes
                 </button>
               </div>
@@ -1137,12 +1558,13 @@ const NationalAdminDashboard = () => {
             </div>
             <div className="admin-modal-actions">
               <button
-                className="admin-ghost-btn"
+                className="admin-secondary-btn"
                 type="button"
                 onClick={() => {
                   setShowDeleteSchoolConfirm(false);
                   setSelectedSchool(null);
                 }}
+                disabled={actionLoading}
               >
                 Cancel
               </button>
@@ -1150,10 +1572,21 @@ const NationalAdminDashboard = () => {
                 className="admin-danger-btn"
                 type="button"
                 onClick={handleDeleteSchool}
+                disabled={actionLoading}
               >
                 Delete School
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fullscreen processing loader */}
+      {actionLoading && (
+        <div className="admin-loading-overlay">
+          <div className="admin-spinner-container">
+            <div className="admin-spinner"></div>
+            <div className="admin-loading-text">processing</div>
           </div>
         </div>
       )}

@@ -32,6 +32,7 @@ const SchoolAdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
   const [activeSection, setActiveSection] = useState<"teachers" | "students">(
     "teachers"
   );
@@ -131,6 +132,15 @@ const SchoolAdminDashboard = () => {
   useEffect(() => {
     fetchStaff();
   }, []);
+
+  useEffect(() => {
+    if (successMessage) {
+      const timer = setTimeout(() => {
+        setSuccessMessage("");
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMessage]);
 
   const metrics = useMemo(() => {
     return {
@@ -280,6 +290,7 @@ const SchoolAdminDashboard = () => {
     setError("");
     setSuccessMessage("");
     if (!validateStudentForm()) return;
+    setActionLoading(true);
     try {
       const token = getToken();
       const res = await fetch("/api/accounts/users/", {
@@ -316,6 +327,8 @@ const SchoolAdminDashboard = () => {
       setSuccessMessage("Student created successfully.");
     } catch (err: any) {
       setError(err.message || "Unable to create student");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -324,6 +337,7 @@ const SchoolAdminDashboard = () => {
     setError("");
     setSuccessMessage("");
     if (!validateTeacherForm()) return;
+    setActionLoading(true);
     try {
       const token = getToken();
       const res = await fetch("/api/accounts/users/", {
@@ -355,6 +369,8 @@ const SchoolAdminDashboard = () => {
       setSuccessMessage("Teacher created successfully.");
     } catch (err: any) {
       setError(err.message || "Unable to create teacher");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -389,6 +405,7 @@ const SchoolAdminDashboard = () => {
     if (!editingStudent) return;
     setError("");
     if (!validateEditStudentForm()) return;
+    setActionLoading(true);
     try {
       const token = getToken();
       const res = await fetch(`/api/accounts/users/${editingStudent.id}/`, {
@@ -418,6 +435,8 @@ const SchoolAdminDashboard = () => {
       setSuccessMessage("Student updated successfully.");
     } catch (err: any) {
       setError(err.message || "Unable to update student");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -426,6 +445,7 @@ const SchoolAdminDashboard = () => {
     if (!editingTeacher) return;
     setError("");
     if (!validateEditTeacherForm()) return;
+    setActionLoading(true);
     try {
       const token = getToken();
       const res = await fetch(`/api/accounts/users/${editingTeacher.id}/`, {
@@ -453,10 +473,13 @@ const SchoolAdminDashboard = () => {
       setSuccessMessage("Teacher updated successfully.");
     } catch (err: any) {
       setError(err.message || "Unable to update teacher");
+    } finally {
+      setActionLoading(false);
     }
   };
 
   const toggleStatus = async (user: StaffUser) => {
+    setActionLoading(true);
     try {
       const token = getToken();
       const res = await fetch(`/api/accounts/users/${user.id}/`, {
@@ -475,10 +498,13 @@ const SchoolAdminDashboard = () => {
       );
     } catch (err: any) {
       setError(err.message || "Unable to update status");
+    } finally {
+      setActionLoading(false);
     }
   };
 
   const removeUser = async (id: number) => {
+    setActionLoading(true);
     try {
       const token = getToken();
       const res = await fetch(`/api/accounts/users/${id}/`, {
@@ -489,6 +515,8 @@ const SchoolAdminDashboard = () => {
       setStaff((prev) => prev.filter((member) => member.id !== id));
     } catch (err: any) {
       setError(err.message || "Unable to delete user");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -572,6 +600,7 @@ const SchoolAdminDashboard = () => {
                   ? setShowTeacherModal(true)
                   : setShowStudentModal(true)
               }
+              disabled={actionLoading}
             >
               {activeSection === "teachers" ? "Create Teacher" : "Create Student"}
             </button>
@@ -704,6 +733,7 @@ const SchoolAdminDashboard = () => {
                         className="admin-action-btn"
                         type="button"
                         onClick={() => openEditTeacher(teacher)}
+                        disabled={actionLoading}
                       >
                         Edit
                       </button>
@@ -711,6 +741,7 @@ const SchoolAdminDashboard = () => {
                         className="admin-action-btn warning"
                         type="button"
                         onClick={() => toggleStatus(teacher)}
+                        disabled={actionLoading}
                       >
                         {teacher.is_active ? "Deactivate" : "Activate"}
                       </button>
@@ -718,6 +749,7 @@ const SchoolAdminDashboard = () => {
                         className="admin-action-btn danger"
                         type="button"
                         onClick={() => removeUser(teacher.id)}
+                        disabled={actionLoading}
                       >
                         Delete
                       </button>
@@ -775,6 +807,7 @@ const SchoolAdminDashboard = () => {
                         className="admin-action-btn"
                         type="button"
                         onClick={() => openEditStudent(student)}
+                        disabled={actionLoading}
                       >
                         Edit
                       </button>
@@ -782,6 +815,7 @@ const SchoolAdminDashboard = () => {
                         className="admin-action-btn warning"
                         type="button"
                         onClick={() => toggleStatus(student)}
+                        disabled={actionLoading}
                       >
                         {student.is_active ? "Deactivate" : "Activate"}
                       </button>
@@ -789,6 +823,7 @@ const SchoolAdminDashboard = () => {
                         className="admin-action-btn danger"
                         type="button"
                         onClick={() => removeUser(student.id)}
+                        disabled={actionLoading}
                       >
                         Delete
                       </button>
@@ -815,6 +850,7 @@ const SchoolAdminDashboard = () => {
                 className="admin-link-btn"
                 type="button"
                 onClick={() => setShowStudentModal(false)}
+                disabled={actionLoading}
               >
                 Close
               </button>
@@ -986,10 +1022,11 @@ const SchoolAdminDashboard = () => {
                   className="admin-ghost-btn"
                   type="button"
                   onClick={() => setShowStudentModal(false)}
+                  disabled={actionLoading}
                 >
                   Cancel
                 </button>
-                <button className="admin-primary-btn" type="submit">
+                <button className="admin-primary-btn" type="submit" disabled={actionLoading}>
                   Create Student
                 </button>
               </div>
@@ -1012,6 +1049,7 @@ const SchoolAdminDashboard = () => {
                 className="admin-link-btn"
                 type="button"
                 onClick={() => setShowTeacherModal(false)}
+                disabled={actionLoading}
               >
                 Close
               </button>
@@ -1133,10 +1171,11 @@ const SchoolAdminDashboard = () => {
                   className="admin-ghost-btn"
                   type="button"
                   onClick={() => setShowTeacherModal(false)}
+                  disabled={actionLoading}
                 >
                   Cancel
                 </button>
-                <button className="admin-primary-btn" type="submit">
+                <button className="admin-primary-btn" type="submit" disabled={actionLoading}>
                   Create Teacher
                 </button>
               </div>
@@ -1159,6 +1198,7 @@ const SchoolAdminDashboard = () => {
                 className="admin-link-btn"
                 type="button"
                 onClick={() => setShowEditStudentModal(false)}
+                disabled={actionLoading}
               >
                 Close
               </button>
@@ -1267,10 +1307,11 @@ const SchoolAdminDashboard = () => {
                   className="admin-ghost-btn"
                   type="button"
                   onClick={() => setShowEditStudentModal(false)}
+                  disabled={actionLoading}
                 >
                   Cancel
                 </button>
-                <button className="admin-primary-btn" type="submit">
+                <button className="admin-primary-btn" type="submit" disabled={actionLoading}>
                   Save Changes
                 </button>
               </div>
@@ -1293,6 +1334,7 @@ const SchoolAdminDashboard = () => {
                 className="admin-link-btn"
                 type="button"
                 onClick={() => setShowEditTeacherModal(false)}
+                disabled={actionLoading}
               >
                 Close
               </button>
@@ -1367,14 +1409,25 @@ const SchoolAdminDashboard = () => {
                   className="admin-ghost-btn"
                   type="button"
                   onClick={() => setShowEditTeacherModal(false)}
+                  disabled={actionLoading}
                 >
                   Cancel
                 </button>
-                <button className="admin-primary-btn" type="submit">
+                <button className="admin-primary-btn" type="submit" disabled={actionLoading}>
                   Save Changes
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Fullscreen processing loader */}
+      {actionLoading && (
+        <div className="admin-loading-overlay">
+          <div className="admin-spinner-container">
+            <div className="admin-spinner"></div>
+            <div className="admin-loading-text">processing</div>
           </div>
         </div>
       )}

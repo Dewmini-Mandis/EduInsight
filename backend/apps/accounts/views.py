@@ -76,7 +76,9 @@ class UserViewSet(viewsets.ModelViewSet):
 		if user.is_role(Role.ROLE_SYSTEM_ADMIN):
 			return queryset
 		if user.is_role(Role.ROLE_NATIONAL_ADMIN):
-			return queryset.filter(role__role_name=Role.ROLE_SCHOOL_ADMIN)
+			return queryset.filter(
+				role__role_name__in=[Role.ROLE_SCHOOL_ADMIN, Role.ROLE_TEACHER, Role.ROLE_STUDENT]
+			)
 		if user.is_role(Role.ROLE_SCHOOL_ADMIN):
 			return queryset.filter(
 				role__role_name__in=[Role.ROLE_TEACHER, Role.ROLE_STUDENT],
@@ -121,7 +123,7 @@ class UserViewSet(viewsets.ModelViewSet):
 		if requester.is_role(Role.ROLE_SYSTEM_ADMIN):
 			allowed_roles = {Role.ROLE_SYSTEM_ADMIN, Role.ROLE_NATIONAL_ADMIN, Role.ROLE_SCHOOL_ADMIN, Role.ROLE_TEACHER, Role.ROLE_STUDENT}
 		elif requester.is_role(Role.ROLE_NATIONAL_ADMIN):
-			allowed_roles = {Role.ROLE_SCHOOL_ADMIN}
+			allowed_roles = {Role.ROLE_SCHOOL_ADMIN, Role.ROLE_TEACHER, Role.ROLE_STUDENT}
 		elif requester.is_role(Role.ROLE_SCHOOL_ADMIN):
 			allowed_roles = {Role.ROLE_TEACHER, Role.ROLE_STUDENT}
 		else:
@@ -150,9 +152,9 @@ class UserViewSet(viewsets.ModelViewSet):
 		requester = self.request.user
 		target = self.get_object()
 		if requester.is_role(Role.ROLE_NATIONAL_ADMIN) and not target.is_role(
-			Role.ROLE_SCHOOL_ADMIN
+			Role.ROLE_SCHOOL_ADMIN, Role.ROLE_TEACHER, Role.ROLE_STUDENT
 		):
-			raise PermissionDenied("You can only manage school admins.")
+			raise PermissionDenied("You can only manage school admins, teachers, and students.")
 		if requester.is_role(Role.ROLE_SCHOOL_ADMIN):
 			if not target.is_role(Role.ROLE_TEACHER, Role.ROLE_STUDENT):
 				raise PermissionDenied("You can only manage teachers and students.")

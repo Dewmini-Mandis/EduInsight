@@ -66,6 +66,10 @@ const SystemAdminDashboard = () => {
   // School filter states
   const [schoolsQuery, setSchoolsQuery] = useState("");
   const [schoolsProvince, setSchoolsProvince] = useState("all");
+  const [schoolsDistrict, setSchoolsDistrict] = useState("all");
+  const [schoolsZone, setSchoolsZone] = useState("all");
+  const [schoolsEducationalZone, setSchoolsEducationalZone] = useState("all");
+  const [schoolsSortKey, setSchoolsSortKey] = useState("name_asc");
 
   // User modal states
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -847,20 +851,35 @@ const SystemAdminDashboard = () => {
     });
   }, [filterQuery, filterRole, filterStatus, sortedUsers]);
 
-  const filteredSchools = useMemo(() => {
-    const query = schoolsQuery.trim().toLowerCase();
-    return sortedSchools.filter((school) => {
-      const matchesQuery =
-        !query ||
-        [school.name, school.address, school.province, school.district, school.zone, school.educational_zone]
-          .filter(Boolean)
-          .some((val) => val.toLowerCase().includes(query));
-      const matchesProvince =
-        schoolsProvince === "all" ||
-        (school.province || "").toLowerCase() === schoolsProvince.toLowerCase();
-      return matchesQuery && matchesProvince;
+  const districtOptions = useMemo(() => {
+    const districts = new Set<string>();
+    schools.forEach((school) => {
+      if (school.district?.trim()) {
+        districts.add(school.district.trim());
+      }
     });
-  }, [schoolsQuery, schoolsProvince, sortedSchools]);
+    return Array.from(districts).sort();
+  }, [schools]);
+
+  const zoneOptions = useMemo(() => {
+    const zones = new Set<string>();
+    schools.forEach((school) => {
+      if (school.zone?.trim()) {
+        zones.add(school.zone.trim());
+      }
+    });
+    return Array.from(zones).sort();
+  }, [schools]);
+
+  const educationalZoneOptions = useMemo(() => {
+    const ezones = new Set<string>();
+    schools.forEach((school) => {
+      if (school.educational_zone?.trim()) {
+        ezones.add(school.educational_zone.trim());
+      }
+    });
+    return Array.from(ezones).sort();
+  }, [schools]);
 
   const provinceOptions = useMemo(() => {
     const provinces = new Set<string>();
@@ -871,6 +890,56 @@ const SystemAdminDashboard = () => {
     });
     return Array.from(provinces).sort();
   }, [schools]);
+
+  const filteredSchools = useMemo(() => {
+    const query = schoolsQuery.trim().toLowerCase();
+    let result = sortedSchools.filter((school) => {
+      const matchesQuery =
+        !query ||
+        [school.name, school.address, school.province, school.district, school.zone, school.educational_zone]
+          .filter(Boolean)
+          .some((val) => val.toLowerCase().includes(query));
+      const matchesProvince =
+        schoolsProvince === "all" ||
+        (school.province || "").toLowerCase() === schoolsProvince.toLowerCase();
+      const matchesDistrict =
+        schoolsDistrict === "all" ||
+        (school.district || "").toLowerCase() === schoolsDistrict.toLowerCase();
+      const matchesZone =
+        schoolsZone === "all" ||
+        (school.zone || "").toLowerCase() === schoolsZone.toLowerCase();
+      const matchesEducationalZone =
+        schoolsEducationalZone === "all" ||
+        (school.educational_zone || "").toLowerCase() === schoolsEducationalZone.toLowerCase();
+      return matchesQuery && matchesProvince && matchesDistrict && matchesZone && matchesEducationalZone;
+    });
+
+    result.sort((a, b) => {
+      let comparison = 0;
+      if (schoolsSortKey.startsWith("name")) {
+        comparison = (a.name || "").localeCompare(b.name || "");
+      } else if (schoolsSortKey.startsWith("province")) {
+        comparison = (a.province || "").localeCompare(b.province || "");
+      } else if (schoolsSortKey.startsWith("district")) {
+        comparison = (a.district || "").localeCompare(b.district || "");
+      } else if (schoolsSortKey.startsWith("zone")) {
+        comparison = (a.zone || "").localeCompare(b.zone || "");
+      } else if (schoolsSortKey.startsWith("educational_zone")) {
+        comparison = (a.educational_zone || "").localeCompare(b.educational_zone || "");
+      }
+      return schoolsSortKey.endsWith("_desc") ? -comparison : comparison;
+    });
+
+    return result;
+  }, [
+    schoolsQuery,
+    schoolsProvince,
+    schoolsDistrict,
+    schoolsZone,
+    schoolsEducationalZone,
+    schoolsSortKey,
+    sortedSchools,
+  ]);
 
   const userRoleOptions = ["SYSTEM_ADMIN", "NATIONAL_ADMIN", "SCHOOL_ADMIN", "TEACHER", "STUDENT"];
 
@@ -1207,30 +1276,86 @@ const SystemAdminDashboard = () => {
 
         {activeTab === "schools" && (
           <>
-            <div className="admin-user-toolbar">
-              <div className="admin-user-filters">
-                <input
-                  className="admin-filter-input"
-                  placeholder="Search schools by name or zone..."
-                  value={schoolsQuery}
-                  onChange={(event) => setSchoolsQuery(event.target.value)}
-                />
-                <select
-                  className="admin-filter-select"
-                  value={schoolsProvince}
-                  onChange={(event) => setSchoolsProvince(event.target.value)}
-                >
-                  <option value="all">All Provinces</option>
-                  {provinceOptions.map((province) => (
-                    <option key={province} value={province}>
-                      {province}
-                    </option>
-                  ))}
-                </select>
+            <div className="admin-user-toolbar" style={{ flexDirection: "column", alignItems: "stretch", gap: "12px", height: "auto", marginBottom: "20px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center", flex: 1 }}>
+                  <input
+                    className="admin-filter-input"
+                    placeholder="Search schools by name or address..."
+                    value={schoolsQuery}
+                    onChange={(event) => setSchoolsQuery(event.target.value)}
+                    style={{ width: "220px" }}
+                  />
+                  <select
+                    className="admin-filter-select"
+                    value={schoolsProvince}
+                    onChange={(event) => setSchoolsProvince(event.target.value)}
+                  >
+                    <option value="all">All Provinces</option>
+                    {provinceOptions.map((province) => (
+                      <option key={province} value={province}>
+                        {province}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="admin-filter-select"
+                    value={schoolsDistrict}
+                    onChange={(event) => setSchoolsDistrict(event.target.value)}
+                  >
+                    <option value="all">All Districts</option>
+                    {districtOptions.map((district) => (
+                      <option key={district} value={district}>
+                        {district}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="admin-filter-select"
+                    value={schoolsZone}
+                    onChange={(event) => setSchoolsZone(event.target.value)}
+                  >
+                    <option value="all">All Zones</option>
+                    {zoneOptions.map((zone) => (
+                      <option key={zone} value={zone}>
+                        {zone}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="admin-filter-select"
+                    value={schoolsEducationalZone}
+                    onChange={(event) => setSchoolsEducationalZone(event.target.value)}
+                  >
+                    <option value="all">All Educational Zones</option>
+                    {educationalZoneOptions.map((ezone) => (
+                      <option key={ezone} value={ezone}>
+                        {ezone}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="admin-filter-select"
+                    value={schoolsSortKey}
+                    onChange={(event) => setSchoolsSortKey(event.target.value)}
+                    style={{ border: "1px dashed var(--admin-sidebar)" }}
+                  >
+                    <option value="name_asc">Name (A-Z)</option>
+                    <option value="name_desc">Name (Z-A)</option>
+                    <option value="province_asc">Province (A-Z)</option>
+                    <option value="province_desc">Province (Z-A)</option>
+                    <option value="district_asc">District (A-Z)</option>
+                    <option value="district_desc">District (Z-A)</option>
+                    <option value="zone_asc">Zone (A-Z)</option>
+                    <option value="zone_desc">Zone (Z-A)</option>
+                    <option value="educational_zone_asc">Educational Zone (A-Z)</option>
+                    <option value="educational_zone_desc">Educational Zone (Z-A)</option>
+                  </select>
+                </div>
+                <button className="admin-login-btn" type="button" onClick={handleOpenSchoolCreateModal} style={{ width: "auto", padding: "10px 24px" }}>
+                  Add School
+                </button>
               </div>
-              <button className="admin-login-btn" type="button" onClick={handleOpenSchoolCreateModal}>
-                Add School
-              </button>
             </div>
 
             <section className="admin-content-grid admin-content-grid--single">
@@ -1481,10 +1606,11 @@ const SystemAdminDashboard = () => {
                     className="admin-secondary-btn"
                     type="button"
                     onClick={() => setShowCreateModal(false)}
+                    disabled={actionLoading}
                   >
                     Close
                   </button>
-                  <button className="admin-primary-btn" type="submit">
+                  <button className="admin-primary-btn" type="submit" disabled={actionLoading}>
                     Create User
                   </button>
                 </div>
@@ -1632,10 +1758,11 @@ const SystemAdminDashboard = () => {
                     className="admin-secondary-btn"
                     type="button"
                     onClick={() => setShowEditModal(false)}
+                    disabled={actionLoading}
                   >
                     Cancel
                   </button>
-                  <button className="admin-primary-btn" type="submit">
+                  <button className="admin-primary-btn" type="submit" disabled={actionLoading}>
                     Save Changes
                   </button>
                 </div>
@@ -1669,6 +1796,7 @@ const SystemAdminDashboard = () => {
                   className="admin-secondary-btn"
                   type="button"
                   onClick={() => setShowDeleteModal(false)}
+                  disabled={actionLoading}
                 >
                   Cancel
                 </button>
@@ -1676,6 +1804,7 @@ const SystemAdminDashboard = () => {
                   className="admin-danger-btn"
                   type="button"
                   onClick={handleConfirmDelete}
+                  disabled={actionLoading}
                 >
                   Delete User
                 </button>
@@ -1778,10 +1907,11 @@ const SystemAdminDashboard = () => {
                     className="admin-secondary-btn"
                     type="button"
                     onClick={() => setShowSchoolCreateModal(false)}
+                    disabled={actionLoading}
                   >
                     Close
                   </button>
-                  <button className="admin-primary-btn" type="submit">
+                  <button className="admin-primary-btn" type="submit" disabled={actionLoading}>
                     Create School
                   </button>
                 </div>
@@ -1884,10 +2014,11 @@ const SystemAdminDashboard = () => {
                     className="admin-secondary-btn"
                     type="button"
                     onClick={() => setShowSchoolEditModal(false)}
+                    disabled={actionLoading}
                   >
                     Cancel
                   </button>
-                  <button className="admin-primary-btn" type="submit">
+                  <button className="admin-primary-btn" type="submit" disabled={actionLoading}>
                     Save Changes
                   </button>
                 </div>
@@ -1917,6 +2048,7 @@ const SystemAdminDashboard = () => {
                   className="admin-secondary-btn"
                   type="button"
                   onClick={() => setShowSchoolDeleteModal(false)}
+                  disabled={actionLoading}
                 >
                   Cancel
                 </button>
@@ -1924,6 +2056,7 @@ const SystemAdminDashboard = () => {
                   className="admin-danger-btn"
                   type="button"
                   onClick={handleConfirmSchoolDelete}
+                  disabled={actionLoading}
                 >
                   Delete School
                 </button>
