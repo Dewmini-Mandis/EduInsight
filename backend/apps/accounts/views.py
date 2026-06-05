@@ -58,6 +58,8 @@ class MeView(APIView):
 		return Response(UserSerializer(request.user).data)
 
 	def patch(self, request):
+		if request.user.is_role(Role.ROLE_STUDENT):
+			raise PermissionDenied("Students cannot edit profile details.")
 		serializer = ProfileUpdateSerializer(
 			request.user, data=request.data, partial=True
 		)

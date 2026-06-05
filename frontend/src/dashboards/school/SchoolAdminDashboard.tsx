@@ -523,35 +523,44 @@ const SchoolAdminDashboard = () => {
   return (
     <div className="admin-root">
       <aside className="admin-sidebar">
-        <div className="admin-brand">
-          <div>
-            <div className="admin-brand-title">EduInsight</div>
-            <div className="admin-brand-sub">SCHOOL ADMIN</div>
+        <div>
+          <div className="admin-brand">
+            <div>
+              <div className="admin-brand-title">EduInsight</div>
+              <div className="admin-brand-sub">SCHOOL ADMIN</div>
+            </div>
           </div>
+          <nav className="admin-nav">
+            <button
+              className={`admin-nav-item ${
+                activeSection === "teachers" ? "active" : ""
+              }`}
+              type="button"
+              onClick={() => setActiveSection("teachers")}
+            >
+              Teachers
+            </button>
+            <button
+              className={`admin-nav-item ${
+                activeSection === "students" ? "active" : ""
+              }`}
+              type="button"
+              onClick={() => setActiveSection("students")}
+            >
+              Students
+            </button>
+            <button className="admin-nav-item" type="button">
+              Class Setup
+            </button>
+            <button
+              className="admin-nav-item"
+              type="button"
+              onClick={() => navigate("/dashboard/profile")}
+            >
+              Profile
+            </button>
+          </nav>
         </div>
-        <nav className="admin-nav">
-          <button
-            className={`admin-nav-item ${
-              activeSection === "teachers" ? "active" : ""
-            }`}
-            type="button"
-            onClick={() => setActiveSection("teachers")}
-          >
-            Teachers
-          </button>
-          <button
-            className={`admin-nav-item ${
-              activeSection === "students" ? "active" : ""
-            }`}
-            type="button"
-            onClick={() => setActiveSection("students")}
-          >
-            Students
-          </button>
-          <button className="admin-nav-item" type="button">
-            Class Setup
-          </button>
-        </nav>
         <div className="admin-sidebar-footer">
           <div className="admin-user-card">
             <div className="admin-user-avatar">{currentInitials}</div>
@@ -565,13 +574,6 @@ const SchoolAdminDashboard = () => {
           <button
             className="admin-ghost-btn"
             type="button"
-            onClick={() => navigate("/profile")}
-          >
-            Profile
-          </button>
-          <button
-            className="admin-ghost-btn"
-            type="button"
             onClick={() => navigate("/logout")}
           >
             Sign Out
@@ -580,7 +582,7 @@ const SchoolAdminDashboard = () => {
       </aside>
 
       <main className="admin-main">
-        <header className="admin-header">
+        <div className="admin-topbar">
           <div>
             <div className="admin-title">
               {activeSection === "teachers" ? "Teacher Directory" : "Student Directory"}
@@ -591,37 +593,32 @@ const SchoolAdminDashboard = () => {
                 : "Track student enrollment, classes, and status."}
             </div>
           </div>
-          <div className="admin-header-actions">
-            <button
-              className="admin-primary-btn"
-              type="button"
-              onClick={() =>
-                activeSection === "teachers"
-                  ? setShowTeacherModal(true)
-                  : setShowStudentModal(true)
-              }
-              disabled={actionLoading}
-            >
-              {activeSection === "teachers" ? "Create Teacher" : "Create Student"}
-            </button>
+          <div className="admin-topbar-actions">
+            <div className="admin-profile">
+              <div className="admin-profile-avatar" />
+              <div>
+                <div className="admin-user-name">{currentDisplayName}</div>
+                <div className="admin-profile-meta">School Administrator</div>
+              </div>
+            </div>
           </div>
-        </header>
+        </div>
 
-        <section className="admin-metrics">
+        <section className="admin-metrics-grid admin-metrics-grid--three">
           <div className="metric-card">
-            <div className="metric-label">Teachers</div>
+            <div className="metric-title">Teachers</div>
             <div className="metric-value">{metrics.teachers}</div>
-            <div className="metric-meta">Assigned instructors</div>
+            <div className="metric-badge">Assigned instructors</div>
           </div>
           <div className="metric-card">
-            <div className="metric-label">Students</div>
+            <div className="metric-title">Students</div>
             <div className="metric-value">{metrics.students}</div>
-            <div className="metric-meta">Active learners</div>
+            <div className="metric-badge">Active learners</div>
           </div>
           <div className="metric-card">
-            <div className="metric-label">Active Accounts</div>
+            <div className="metric-title">Active Accounts</div>
             <div className="metric-value">{metrics.active}</div>
-            <div className="metric-meta">Enabled profiles</div>
+            <div className="metric-badge">Enabled profiles</div>
           </div>
         </section>
 
@@ -630,6 +627,65 @@ const SchoolAdminDashboard = () => {
             {successMessage}
           </div>
         )}
+
+        <div className="admin-user-toolbar">
+          <div className="admin-user-filters">
+            <input
+              className="admin-filter-input"
+              type="text"
+              placeholder="Search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <select
+              className="admin-filter-select"
+              value={statusFilter}
+              onChange={(e) =>
+                setStatusFilter(e.target.value as "ALL" | "Active" | "Inactive")
+              }
+            >
+              <option value="ALL">All Status</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+            {activeSection === "students" ? (
+              <>
+                <input
+                  className="admin-filter-input"
+                  placeholder="Grade"
+                  value={gradeFilter}
+                  onChange={(e) => setGradeFilter(e.target.value)}
+                />
+                <input
+                  className="admin-filter-input"
+                  placeholder="Class"
+                  value={classFilter}
+                  onChange={(e) => setClassFilter(e.target.value)}
+                />
+              </>
+            ) : (
+              <input
+                className="admin-filter-input"
+                placeholder="Subject"
+                value={subjectFilter}
+                onChange={(e) => setSubjectFilter(e.target.value)}
+              />
+            )}
+          </div>
+          <button
+            className="admin-login-btn"
+            type="button"
+            onClick={() =>
+              activeSection === "teachers"
+                ? setShowTeacherModal(true)
+                : setShowStudentModal(true)
+            }
+            disabled={actionLoading}
+            style={{ width: "auto", padding: "10px 20px" }}
+          >
+            {activeSection === "teachers" ? "Create Teacher" : "Create Student"}
+          </button>
+        </div>
 
         <section className="admin-content-grid admin-content-grid--single">
           <div className="admin-card">
@@ -644,55 +700,14 @@ const SchoolAdminDashboard = () => {
                     : "Update student details and enrollment status."}
                 </div>
               </div>
-              <div className="admin-filter-row">
-                <div className="admin-search">
-                  <input
-                    type="text"
-                    placeholder="Search"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                  />
-                </div>
-                <select
-                  className="admin-select"
-                  value={statusFilter}
-                  onChange={(e) =>
-                    setStatusFilter(e.target.value as "ALL" | "Active" | "Inactive")
-                  }
-                >
-                  <option value="ALL">All Status</option>
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
-                </select>
-                {activeSection === "students" ? (
-                  <>
-                    <input
-                      className="admin-select"
-                      placeholder="Grade"
-                      value={gradeFilter}
-                      onChange={(e) => setGradeFilter(e.target.value)}
-                    />
-                    <input
-                      className="admin-select"
-                      placeholder="Class"
-                      value={classFilter}
-                      onChange={(e) => setClassFilter(e.target.value)}
-                    />
-                  </>
-                ) : (
-                  <input
-                    className="admin-select"
-                    placeholder="Subject"
-                    value={subjectFilter}
-                    onChange={(e) => setSubjectFilter(e.target.value)}
-                  />
-                )}
-              </div>
             </div>
 
             {activeSection === "teachers" ? (
-              <div className="admin-table admin-table--teachers">
-                <div className="admin-table-header admin-table-header--teachers">
+              <div className="admin-table">
+                <div
+                  className="admin-table-header"
+                  style={{ gridTemplateColumns: "1.2fr 1.4fr 0.7fr 1.2fr 1fr" }}
+                >
                   <span>Name</span>
                   <span>Subjects</span>
                   <span>Status</span>
@@ -705,8 +720,9 @@ const SchoolAdminDashboard = () => {
                 )}
                 {filteredTeachers.map((teacher) => (
                   <div
-                    className="admin-table-row admin-table-row--teachers"
+                    className="admin-table-row"
                     key={teacher.id}
+                    style={{ gridTemplateColumns: "1.2fr 1.4fr 0.7fr 1.2fr 1fr" }}
                   >
                     <div>
                       <div className="user-name">
@@ -721,7 +737,7 @@ const SchoolAdminDashboard = () => {
                     <div>
                       <span
                         className={`status-pill status-${
-                          teacher.is_active ? "active" : "inactive"
+                          teacher.is_active ? "active" : "suspended"
                         }`}
                       >
                         {teacher.is_active ? "Active" : "Inactive"}
@@ -758,8 +774,11 @@ const SchoolAdminDashboard = () => {
                 ))}
               </div>
             ) : (
-              <div className="admin-table admin-table--students">
-                <div className="admin-table-header admin-table-header--students">
+              <div className="admin-table">
+                <div
+                  className="admin-table-header"
+                  style={{ gridTemplateColumns: "0.8fr 1.4fr 0.6fr 0.6fr 0.7fr 1fr 1fr" }}
+                >
                   <span>Index No</span>
                   <span>Name</span>
                   <span>Grade</span>
@@ -774,8 +793,9 @@ const SchoolAdminDashboard = () => {
                 )}
                 {filteredStudents.map((student) => (
                   <div
-                    className="admin-table-row admin-table-row--students"
+                    className="admin-table-row"
                     key={student.id}
+                    style={{ gridTemplateColumns: "0.8fr 1.4fr 0.6fr 0.6fr 0.7fr 1fr 1fr" }}
                   >
                     <div className="user-meta">
                       {student.student_profile?.index_no || "-"}
@@ -795,7 +815,7 @@ const SchoolAdminDashboard = () => {
                     <div>
                       <span
                         className={`status-pill status-${
-                          student.is_active ? "active" : "inactive"
+                          student.is_active ? "active" : "suspended"
                         }`}
                       >
                         {student.is_active ? "Active" : "Inactive"}

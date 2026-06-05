@@ -42,6 +42,13 @@ const StudentDashboard = () => {
           <button className="admin-nav-item" type="button">
             Recommendations
           </button>
+          <button
+            className="admin-nav-item"
+            type="button"
+            onClick={() => navigate("/dashboard/profile")}
+          >
+            Profile
+          </button>
         </nav>
         <div className="admin-sidebar-footer">
           <div className="admin-user-card">

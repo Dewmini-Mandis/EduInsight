@@ -987,6 +987,13 @@ const SystemAdminDashboard = () => {
             <button className="admin-nav-item" type="button">
               Settings
             </button>
+            <button
+              className="admin-nav-item"
+              type="button"
+              onClick={() => navigate("/dashboard/profile")}
+            >
+              Profile
+            </button>
           </nav>
         </div>
         <div className="admin-sidebar-footer">

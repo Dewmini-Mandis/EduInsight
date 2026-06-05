@@ -600,6 +600,17 @@ body {
 	gap: 10px;
 }
 
+.admin-modal-actions .admin-ghost-btn {
+	background: #ffffff;
+	border: 1px solid var(--admin-border);
+	color: #031636;
+}
+
+.admin-modal-actions .admin-ghost-btn:hover {
+	background: #f7f9fb;
+	border-color: #cfd7e6;
+}
+
 .admin-secondary-btn {
 	background: #ffffff;
 	border: 1px solid var(--admin-border);
