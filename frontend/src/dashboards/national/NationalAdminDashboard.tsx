@@ -47,9 +47,38 @@ const NationalAdminDashboard = () => {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
-  const [activeSection, setActiveSection] = useState<"schools" | "admins">(
+  const [activeSection, setActiveSection] = useState<"schools" | "admins" | "quizzes">(
     "schools"
   );
+  const [quizzes, setQuizzes] = useState<any[]>([]);
+  const [showQuizModal, setShowQuizModal] = useState(false);
+  const [showViewQuizModal, setShowViewQuizModal] = useState(false);
+  const [showEditQuizModal, setShowEditQuizModal] = useState(false);
+  const [showDeleteQuizConfirm, setShowDeleteQuizConfirm] = useState(false);
+  const [selectedQuiz, setSelectedQuiz] = useState<any | null>(null);
+  const [quizForm, setQuizForm] = useState({
+    title: "",
+    description: "",
+    schoolId: "",
+    questions: [
+      {
+        question_text: "",
+        question_type: "MCQ",
+        difficulty_level: "Medium",
+        answers: [
+          { answer_text: "", is_correct: false },
+          { answer_text: "", is_correct: false },
+        ],
+        correct_value: "",
+      },
+    ],
+  });
+  const [editQuizForm, setEditQuizForm] = useState({
+    title: "",
+    description: "",
+    schoolId: "",
+    questions: [] as any[],
+  });
   const [showSchoolModal, setShowSchoolModal] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [showEditAdminModal, setShowEditAdminModal] = useState(false);
@@ -153,22 +182,28 @@ const NationalAdminDashboard = () => {
     setError("");
     try {
       const token = getToken();
-      const [schoolsRes, adminsRes] = await Promise.all([
+      const [schoolsRes, adminsRes, quizzesRes] = await Promise.all([
         fetch("/api/schools/", {
           headers: { Authorization: `Token ${token}` },
         }),
         fetch("/api/accounts/users/", {
           headers: { Authorization: `Token ${token}` },
         }),
+        fetch("/api/quizzes/", {
+          headers: { Authorization: `Token ${token}` },
+        }),
       ]);
 
       if (!schoolsRes.ok) throw new Error("Unable to load schools");
       if (!adminsRes.ok) throw new Error("Unable to load school admins");
+      if (!quizzesRes.ok) throw new Error("Unable to load quizzes");
 
       const schoolData = (await schoolsRes.json()) as School[];
       const adminData = (await adminsRes.json()) as SchoolAdmin[];
+      const quizzesData = (await quizzesRes.json()) as any[];
       setSchools(schoolData);
       setAdmins(adminData);
+      setQuizzes(quizzesData);
     } catch (err: any) {
       setError(err.message || "Unable to load dashboard data");
     } finally {
@@ -656,6 +691,284 @@ const NationalAdminDashboard = () => {
     }
   };
 
+  const handleOpenViewQuizModal = (quiz: any) => {
+    setSelectedQuiz(quiz);
+    setShowViewQuizModal(true);
+  };
+
+  const handleOpenEditQuizModal = (quiz: any) => {
+    setSelectedQuiz(quiz);
+    setEditQuizForm({
+      title: quiz.title || "",
+      description: quiz.description || "",
+      schoolId: quiz.school ? quiz.school.toString() : "",
+      questions: (quiz.questions || []).map((q: any) => {
+        const baseQ: any = {
+          id: q.id,
+          question_text: q.question_text || "",
+          question_type: q.question_type || "MCQ",
+          difficulty_level: q.difficulty_level || "Medium",
+          answers: (q.answers || []).map((a: any) => ({
+            id: a.id,
+            answer_text: a.answer_text || "",
+            is_correct: !!a.is_correct,
+          })),
+          correct_value: q.correct_value || "",
+        };
+        if (baseQ.question_type === "MCQ" && baseQ.answers.length === 0) {
+          baseQ.answers = [
+            { answer_text: "", is_correct: false },
+            { answer_text: "", is_correct: false },
+          ];
+        }
+        return baseQ;
+      }),
+    });
+    setError("");
+    setSuccessMessage("");
+    setShowEditQuizModal(true);
+  };
+
+  const handleCreateQuiz = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSuccessMessage("");
+
+    if (!quizForm.title.trim()) {
+      setError("Quiz title is required.");
+      return;
+    }
+    if (quizForm.questions.length === 0) {
+      setError("At least one question is required.");
+      return;
+    }
+    for (let i = 0; i < quizForm.questions.length; i++) {
+      const q = quizForm.questions[i];
+      if (!q.question_text.trim()) {
+        setError(`Question ${i + 1} text is required.`);
+        return;
+      }
+      if (q.question_type === "MCQ") {
+        if (q.answers.length < 2) {
+          setError(`Question ${i + 1} (MCQ) must have at least 2 options.`);
+          return;
+        }
+        let hasCorrect = false;
+        for (let j = 0; j < q.answers.length; j++) {
+          const ans = q.answers[j];
+          if (!ans.answer_text.trim()) {
+            setError(`Question ${i + 1} Option ${j + 1} text is required.`);
+            return;
+          }
+          if (ans.is_correct) hasCorrect = true;
+        }
+        if (!hasCorrect) {
+          setError(`Question ${i + 1} (MCQ) must have at least one correct option.`);
+          return;
+        }
+      } else if (q.question_type === "NUMERIC") {
+        if (!q.correct_value.trim()) {
+          setError(`Question ${i + 1} (Numeric) correct answer value is required.`);
+          return;
+        }
+      }
+    }
+
+    setActionLoading(true);
+    try {
+      const token = getToken();
+      const payload = {
+        title: quizForm.title.trim(),
+        description: quizForm.description.trim(),
+        school: quizForm.schoolId ? Number(quizForm.schoolId) : null,
+        questions: quizForm.questions.map((q) => {
+          const baseQ: any = {
+            question_text: q.question_text.trim(),
+            question_type: q.question_type,
+            difficulty_level: q.difficulty_level,
+          };
+          if (q.question_type === "MCQ") {
+            baseQ.answers = q.answers.map((a) => ({
+              answer_text: a.answer_text.trim(),
+              is_correct: a.is_correct,
+            }));
+          } else {
+            baseQ.correct_value = q.correct_value.trim();
+          }
+          return baseQ;
+        }),
+      };
+
+      const res = await fetch("/api/quizzes/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Token ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const payloadErr = await res.json().catch(() => ({}));
+        throw new Error(payloadErr?.detail || "Unable to create quiz");
+      }
+
+      setQuizForm({
+        title: "",
+        description: "",
+        schoolId: "",
+        questions: [
+          {
+            question_text: "",
+            question_type: "MCQ",
+            difficulty_level: "Medium",
+            answers: [
+              { answer_text: "", is_correct: false },
+              { answer_text: "", is_correct: false },
+            ],
+            correct_value: "",
+          },
+        ],
+      });
+      await fetchData();
+      setShowQuizModal(false);
+      setSuccessMessage("Quiz created successfully.");
+    } catch (err: any) {
+      setError(err.message || "Unable to create quiz");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleUpdateQuiz = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSuccessMessage("");
+    if (!selectedQuiz) return;
+
+    if (!editQuizForm.title.trim()) {
+      setError("Quiz title is required.");
+      return;
+    }
+    if (editQuizForm.questions.length === 0) {
+      setError("At least one question is required.");
+      return;
+    }
+    for (let i = 0; i < editQuizForm.questions.length; i++) {
+      const q = editQuizForm.questions[i];
+      if (!q.question_text.trim()) {
+        setError(`Question ${i + 1} text is required.`);
+        return;
+      }
+      if (q.question_type === "MCQ") {
+        if (q.answers.length < 2) {
+          setError(`Question ${i + 1} (MCQ) must have at least 2 options.`);
+          return;
+        }
+        let hasCorrect = false;
+        for (let j = 0; j < q.answers.length; j++) {
+          const ans = q.answers[j];
+          if (!ans.answer_text.trim()) {
+            setError(`Question ${i + 1} Option ${j + 1} text is required.`);
+            return;
+          }
+          if (ans.is_correct) hasCorrect = true;
+        }
+        if (!hasCorrect) {
+          setError(`Question ${i + 1} (MCQ) must have at least one correct option.`);
+          return;
+        }
+      } else if (q.question_type === "NUMERIC") {
+        if (!q.correct_value.trim()) {
+          setError(`Question ${i + 1} (Numeric) correct answer value is required.`);
+          return;
+        }
+      }
+    }
+
+    setActionLoading(true);
+    try {
+      const token = getToken();
+      const payload = {
+        title: editQuizForm.title.trim(),
+        description: editQuizForm.description.trim(),
+        school: editQuizForm.schoolId ? Number(editQuizForm.schoolId) : null,
+        questions: editQuizForm.questions.map((q) => {
+          const baseQ: any = {
+            question_text: q.question_text.trim(),
+            question_type: q.question_type,
+            difficulty_level: q.difficulty_level,
+          };
+          if (q.id) {
+            baseQ.id = q.id;
+          }
+          if (q.question_type === "MCQ") {
+            baseQ.answers = q.answers.map((a: any) => {
+              const baseA: any = {
+                answer_text: a.answer_text.trim(),
+                is_correct: a.is_correct,
+              };
+              if (a.id) {
+                baseA.id = a.id;
+              }
+              return baseA;
+            });
+          } else {
+            baseQ.correct_value = q.correct_value.trim();
+          }
+          return baseQ;
+        }),
+      };
+
+      const res = await fetch(`/api/quizzes/${selectedQuiz.id}/`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Token ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const payloadErr = await res.json().catch(() => ({}));
+        throw new Error(payloadErr?.detail || "Unable to update quiz");
+      }
+
+      await fetchData();
+      setShowEditQuizModal(false);
+      setSelectedQuiz(null);
+      setSuccessMessage("Quiz updated successfully.");
+    } catch (err: any) {
+      setError(err.message || "Unable to update quiz");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeleteQuiz = async () => {
+    if (!selectedQuiz) return;
+    setError("");
+    setSuccessMessage("");
+    setActionLoading(true);
+    try {
+      const token = getToken();
+      const res = await fetch(`/api/quizzes/${selectedQuiz.id}/`, {
+        method: "DELETE",
+        headers: { Authorization: `Token ${token}` },
+      });
+
+      if (!res.ok) throw new Error("Unable to delete quiz");
+      setShowDeleteQuizConfirm(false);
+      setSelectedQuiz(null);
+      await fetchData();
+      setSuccessMessage("Quiz deleted successfully.");
+    } catch (err: any) {
+      setError(err.message || "Unable to delete quiz");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   return (
     <div className="admin-root">
       <aside className="admin-sidebar">
@@ -680,6 +993,13 @@ const NationalAdminDashboard = () => {
               onClick={() => setActiveSection("admins")}
             >
               Users
+            </button>
+            <button
+              className={`admin-nav-item ${activeSection === "quizzes" ? "active" : ""}`}
+              type="button"
+              onClick={() => setActiveSection("quizzes")}
+            >
+              Quizzes
             </button>
             <button className="admin-nav-item" type="button">
               National Reports
@@ -708,12 +1028,14 @@ const NationalAdminDashboard = () => {
         <div className="admin-topbar">
           <div>
             <div className="admin-title">
-              {activeSection === "schools" ? "School Registry" : "User Management"}
+              {activeSection === "schools" ? "School Registry" : activeSection === "admins" ? "User Management" : "Quiz Management"}
             </div>
             <div className="admin-subtitle">
               {activeSection === "schools"
                 ? "Review registered schools and add new institutions."
-                : "Manage credentials and access levels across school roles."}
+                : activeSection === "admins"
+                ? "Manage credentials and access levels across school roles."
+                : "Manage national and school level educational quizzes."}
             </div>
           </div>
           <div className="admin-topbar-actions">
@@ -892,6 +1214,91 @@ const NationalAdminDashboard = () => {
                           onClick={() => {
                             setSelectedAdmin(admin);
                             setShowDeleteConfirm(true);
+                          }}
+                          disabled={actionLoading}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          </>
+        )}
+
+        {activeSection === "quizzes" && (
+          <>
+            <div className="admin-user-toolbar" style={{ justifyContent: "flex-end", marginBottom: "20px" }}>
+              <button
+                className="admin-login-btn"
+                type="button"
+                onClick={() => {
+                  setShowQuizModal(true);
+                  setError("");
+                  setSuccessMessage("");
+                }}
+                disabled={actionLoading}
+                style={{ width: "auto", padding: "10px 24px" }}
+              >
+                Create Quiz
+              </button>
+            </div>
+            <section className="admin-content-grid admin-content-grid--single">
+              <div className="admin-card">
+                <div className="admin-card-header">
+                  <div>
+                    <div className="admin-card-title">Quiz Directory</div>
+                    <div className="admin-card-subtitle">
+                      Manage national and school level quizzes.
+                    </div>
+                  </div>
+                </div>
+                <div className="admin-table">
+                  <div className="admin-table-header" style={{ gridTemplateColumns: "1.4fr 1fr 1fr 0.6fr 1.3fr" }}>
+                    <span>Quiz Title</span>
+                    <span>Assigned School</span>
+                    <span>Created By</span>
+                    <span>Questions</span>
+                    <span>Actions</span>
+                  </div>
+                  {loading && <div className="admin-empty">Loading quizzes...</div>}
+                  {!loading && quizzes.length === 0 && (
+                    <div className="admin-empty">No quizzes created yet.</div>
+                  )}
+                  {quizzes.map((quiz) => (
+                    <div className="admin-table-row" key={quiz.id} style={{ gridTemplateColumns: "1.4fr 1fr 1fr 0.6fr 1.3fr" }}>
+                      <div>
+                        <strong className="user-name">{quiz.title}</strong>
+                        <div className="user-meta">{quiz.description || "No description"}</div>
+                      </div>
+                      <div className="user-meta">{quiz.school_name || "National (All Schools)"}</div>
+                      <div className="user-meta">{quiz.created_by_name || "National Admin"}</div>
+                      <div className="user-meta">{quiz.questions ? quiz.questions.length : 0} Qs</div>
+                      <div className="admin-action-group">
+                        <button
+                          className="admin-action-btn"
+                          type="button"
+                          onClick={() => handleOpenViewQuizModal(quiz)}
+                          disabled={actionLoading}
+                        >
+                          View
+                        </button>
+                        <button
+                          className="admin-action-btn"
+                          type="button"
+                          onClick={() => handleOpenEditQuizModal(quiz)}
+                          disabled={actionLoading}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="admin-action-btn danger"
+                          type="button"
+                          onClick={() => {
+                            setSelectedQuiz(quiz);
+                            setShowDeleteQuizConfirm(true);
                           }}
                           disabled={actionLoading}
                         >
@@ -1575,6 +1982,717 @@ const NationalAdminDashboard = () => {
                 disabled={actionLoading}
               >
                 Delete School
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showQuizModal && (
+        <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="admin-modal" style={{ width: "min(680px, 100%)", maxHeight: "90vh", overflowY: "auto" }}>
+            <div className="admin-modal-header">
+              <div>
+                <div className="admin-card-title">Create Quiz</div>
+                <div className="admin-card-subtitle">
+                  Configure quiz details and questions list.
+                </div>
+              </div>
+            </div>
+            <form className="admin-form" onSubmit={handleCreateQuiz}>
+              <div className="admin-field">
+                <label>Quiz Title *</label>
+                <input
+                  name="title"
+                  placeholder="e.g. Science Term Test 1"
+                  value={quizForm.title}
+                  onChange={(e) => setQuizForm(prev => ({ ...prev, title: e.target.value }))}
+                  required
+                />
+              </div>
+              <div className="admin-field">
+                <label>Description</label>
+                <textarea
+                  name="description"
+                  placeholder="Enter short description"
+                  value={quizForm.description}
+                  onChange={(e) => setQuizForm(prev => ({ ...prev, description: e.target.value }))}
+                  style={{ border: "1px solid var(--admin-border)", borderRadius: "10px", padding: "8px 10px", minHeight: "60px", fontFamily: "inherit", fontSize: "13px" }}
+                />
+              </div>
+              <div className="admin-field">
+                <label>Assign to Specific School (Optional)</label>
+                <select
+                  name="schoolId"
+                  value={quizForm.schoolId}
+                  onChange={(e) => setQuizForm(prev => ({ ...prev, schoolId: e.target.value }))}
+                  className="admin-filter-select"
+                  style={{ width: "100%" }}
+                >
+                  <option value="">National (All Schools)</option>
+                  {schools.map((school) => (
+                    <option key={school.id} value={school.id}>
+                      {school.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ marginTop: "1rem", borderTop: "1px solid var(--admin-border)", paddingTop: "1rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                  <div className="admin-card-title" style={{ fontSize: "1rem" }}>Questions ({quizForm.questions.length})</div>
+                  <button
+                    type="button"
+                    className="admin-primary-btn"
+                    onClick={() => {
+                      setQuizForm(prev => ({
+                        ...prev,
+                        questions: [
+                          ...prev.questions,
+                          {
+                            question_text: "",
+                            question_type: "MCQ",
+                            difficulty_level: "Medium",
+                            answers: [
+                              { answer_text: "", is_correct: false },
+                              { answer_text: "", is_correct: false },
+                            ],
+                            correct_value: "",
+                          }
+                        ]
+                      }));
+                    }}
+                    style={{ padding: "6px 12px", fontSize: "12px" }}
+                  >
+                    + Add Question
+                  </button>
+                </div>
+
+                {quizForm.questions.map((q, qIndex) => (
+                  <div key={qIndex} style={{ background: "#f8fafc", border: "1px solid var(--admin-border)", borderRadius: "10px", padding: "12px", marginBottom: "12px", position: "relative" }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuizForm(prev => ({
+                          ...prev,
+                          questions: prev.questions.filter((_, idx) => idx !== qIndex)
+                        }));
+                      }}
+                      style={{ position: "absolute", top: "10px", right: "10px", background: "none", border: "none", color: "var(--admin-danger)", cursor: "pointer", fontWeight: "bold", fontSize: "14px" }}
+                      title="Remove question"
+                    >
+                      &times;
+                    </button>
+                    <div style={{ fontWeight: "700", fontSize: "13px", marginBottom: "8px", color: "var(--admin-sidebar)" }}>
+                      Question #{qIndex + 1}
+                    </div>
+
+                    <div className="admin-field" style={{ marginBottom: "8px" }}>
+                      <label>Question Text *</label>
+                      <input
+                        placeholder="e.g. What is the chemical symbol for water?"
+                        value={q.question_text}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setQuizForm(prev => ({
+                            ...prev,
+                            questions: prev.questions.map((question, idx) =>
+                              idx === qIndex ? { ...question, question_text: val } : question
+                            )
+                          }));
+                        }}
+                        required
+                      />
+                    </div>
+
+                    <div className="admin-form-row" style={{ marginBottom: "8px" }}>
+                      <div className="admin-field">
+                        <label>Question Type *</label>
+                        <select
+                          value={q.question_type}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setQuizForm(prev => ({
+                              ...prev,
+                              questions: prev.questions.map((question, idx) =>
+                                idx === qIndex ? { ...question, question_type: val } : question
+                              )
+                            }));
+                          }}
+                        >
+                          <option value="MCQ">Multiple Choice (MCQ)</option>
+                          <option value="NUMERIC">Numeric Answer</option>
+                        </select>
+                      </div>
+                      <div className="admin-field">
+                        <label>Difficulty *</label>
+                        <select
+                          value={q.difficulty_level}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setQuizForm(prev => ({
+                              ...prev,
+                              questions: prev.questions.map((question, idx) =>
+                                idx === qIndex ? { ...question, difficulty_level: val } : question
+                              )
+                            }));
+                          }}
+                        >
+                          <option value="Easy">Easy</option>
+                          <option value="Medium">Medium</option>
+                          <option value="Hard">Hard</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {q.question_type === "MCQ" && (
+                      <div style={{ marginTop: "10px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                          <label style={{ fontSize: "12px", fontWeight: "600" }}>Options (Mark correct options) *</label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setQuizForm(prev => ({
+                                ...prev,
+                                questions: prev.questions.map((question, idx) =>
+                                  idx === qIndex ? {
+                                    ...question,
+                                    answers: [...question.answers, { answer_text: "", is_correct: false }]
+                                  } : question
+                                )
+                              }));
+                            }}
+                            style={{ background: "none", border: "none", color: "var(--admin-accent)", cursor: "pointer", fontSize: "11px", fontWeight: "700" }}
+                          >
+                            + Add Option
+                          </button>
+                        </div>
+                        {q.answers.map((ans, aIndex) => (
+                          <div key={aIndex} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                            <input
+                              type="checkbox"
+                              checked={ans.is_correct}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                setQuizForm(prev => ({
+                                  ...prev,
+                                  questions: prev.questions.map((question, idx) =>
+                                    idx === qIndex ? {
+                                      ...question,
+                                      answers: question.answers.map((item, itemIdx) =>
+                                        itemIdx === aIndex ? { ...item, is_correct: checked } : item
+                                      )
+                                    } : question
+                                  )
+                                }));
+                              }}
+                              style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                              title="Mark as correct"
+                            />
+                            <input
+                              placeholder={`Option #${aIndex + 1}`}
+                              value={ans.answer_text}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setQuizForm(prev => ({
+                                  ...prev,
+                                  questions: prev.questions.map((question, idx) =>
+                                    idx === qIndex ? {
+                                      ...question,
+                                      answers: question.answers.map((item, itemIdx) =>
+                                        itemIdx === aIndex ? { ...item, answer_text: val } : item
+                                      )
+                                    } : question
+                                  )
+                                }));
+                              }}
+                              style={{ flex: 1, padding: "6px 8px", fontSize: "12px" }}
+                              required
+                            />
+                            {q.answers.length > 2 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setQuizForm(prev => ({
+                                    ...prev,
+                                    questions: prev.questions.map((question, idx) =>
+                                      idx === qIndex ? {
+                                        ...question,
+                                        answers: question.answers.filter((_, itemIdx) => itemIdx !== aIndex)
+                                      } : question
+                                    )
+                                  }));
+                                }}
+                                style={{ background: "none", border: "none", color: "var(--admin-danger)", cursor: "pointer", fontSize: "14px", fontWeight: "bold" }}
+                                title="Delete option"
+                              >
+                                &times;
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {q.question_type === "NUMERIC" && (
+                      <div className="admin-field" style={{ marginTop: "10px" }}>
+                        <label>Correct Value *</label>
+                        <input
+                          placeholder="e.g. 42 or 3.14"
+                          value={q.correct_value}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setQuizForm(prev => ({
+                              ...prev,
+                              questions: prev.questions.map((question, idx) =>
+                                idx === qIndex ? { ...question, correct_value: val } : question
+                              )
+                            }));
+                          }}
+                          required
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {error && <div className="admin-error">{error}</div>}
+              <div className="admin-modal-actions" style={{ marginTop: "1.5rem" }}>
+                <button
+                  className="admin-secondary-btn"
+                  type="button"
+                  onClick={() => {
+                    setShowQuizModal(false);
+                    setError("");
+                  }}
+                  disabled={actionLoading}
+                >
+                  Cancel
+                </button>
+                <button className="admin-primary-btn" type="submit" disabled={actionLoading}>
+                  Create Quiz
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showViewQuizModal && selectedQuiz && (
+        <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="admin-modal" style={{ width: "min(680px, 100%)", maxHeight: "90vh", overflowY: "auto" }}>
+            <div className="admin-modal-header" style={{ marginBottom: "1rem" }}>
+              <div>
+                <div className="admin-card-title">View Quiz: {selectedQuiz.title}</div>
+                <div className="admin-card-subtitle">
+                  {selectedQuiz.description || "No description provided."}
+                </div>
+              </div>
+            </div>
+            <div className="admin-form">
+              <div className="admin-field" style={{ marginBottom: "12px" }}>
+                <label style={{ fontWeight: "700" }}>Scope / School</label>
+                <div style={{ fontSize: "14px", padding: "8px 12px", background: "#f1f5f9", borderRadius: "8px" }}>
+                  {selectedQuiz.school_name || "National (All Schools)"}
+                </div>
+              </div>
+
+              <div style={{ marginTop: "1.5rem", borderTop: "1px solid var(--admin-border)", paddingTop: "1rem" }}>
+                <div className="admin-card-title" style={{ fontSize: "1.1rem", marginBottom: "1rem" }}>
+                  Questions ({selectedQuiz.questions ? selectedQuiz.questions.length : 0})
+                </div>
+
+                {(selectedQuiz.questions || []).map((q: any, qIndex: number) => (
+                  <div key={q.id || qIndex} style={{ background: "#f8fafc", border: "1px solid var(--admin-border)", borderRadius: "10px", padding: "14px", marginBottom: "12px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+                      <span style={{ fontWeight: "700", fontSize: "13px", color: "var(--admin-sidebar)" }}>
+                        Question #{qIndex + 1} ({q.question_type})
+                      </span>
+                      <span className="status-pill status-active" style={{ fontSize: "11px", padding: "2px 8px" }}>
+                        {q.difficulty_level || "Medium"}
+                      </span>
+                    </div>
+
+                    <div style={{ fontSize: "14px", fontWeight: "600", marginBottom: "10px" }}>
+                      {q.question_text}
+                    </div>
+
+                    {q.question_type === "MCQ" && (
+                      <div style={{ marginTop: "8px" }}>
+                        <div style={{ fontSize: "12px", fontWeight: "700", color: "#64748b", marginBottom: "6px" }}>Options:</div>
+                        {(q.answers || []).map((ans: any, aIndex: number) => (
+                          <div key={ans.id || aIndex} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "6px 10px", background: ans.is_correct ? "#f0fdf4" : "transparent", border: ans.is_correct ? "1px solid #bbf7d0" : "1px solid transparent", borderRadius: "6px", marginBottom: "4px" }}>
+                            <span style={{ color: ans.is_correct ? "#16a34a" : "#94a3b8", fontWeight: "bold" }}>
+                              {ans.is_correct ? "✓" : "○"}
+                            </span>
+                            <span style={{ fontSize: "13px", fontWeight: ans.is_correct ? "600" : "400" }}>
+                              {ans.answer_text}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {q.question_type === "NUMERIC" && (
+                      <div style={{ marginTop: "8px", display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span style={{ fontSize: "12px", fontWeight: "700", color: "#64748b" }}>Correct Answer:</span>
+                        <strong style={{ fontSize: "13px", padding: "4px 8px", background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#16a34a", borderRadius: "6px" }}>
+                          {q.correct_value}
+                        </strong>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="admin-modal-actions" style={{ marginTop: "1.5rem" }}>
+                <button
+                  className="admin-secondary-btn"
+                  type="button"
+                  onClick={() => {
+                    setShowViewQuizModal(false);
+                    setSelectedQuiz(null);
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showEditQuizModal && selectedQuiz && (
+        <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="admin-modal" style={{ width: "min(680px, 100%)", maxHeight: "90vh", overflowY: "auto" }}>
+            <div className="admin-modal-header">
+              <div>
+                <div className="admin-card-title">Edit Quiz</div>
+                <div className="admin-card-subtitle">
+                  Modify quiz details and questions list.
+                </div>
+              </div>
+            </div>
+            <form className="admin-form" onSubmit={handleUpdateQuiz}>
+              <div className="admin-field">
+                <label>Quiz Title *</label>
+                <input
+                  name="title"
+                  placeholder="e.g. Science Term Test 1"
+                  value={editQuizForm.title}
+                  onChange={(e) => setEditQuizForm(prev => ({ ...prev, title: e.target.value }))}
+                  required
+                />
+              </div>
+              <div className="admin-field">
+                <label>Description</label>
+                <textarea
+                  name="description"
+                  placeholder="Enter short description"
+                  value={editQuizForm.description}
+                  onChange={(e) => setEditQuizForm(prev => ({ ...prev, description: e.target.value }))}
+                  style={{ border: "1px solid var(--admin-border)", borderRadius: "10px", padding: "8px 10px", minHeight: "60px", fontFamily: "inherit", fontSize: "13px" }}
+                />
+              </div>
+              <div className="admin-field">
+                <label>Assign to Specific School (Optional)</label>
+                <select
+                  name="schoolId"
+                  value={editQuizForm.schoolId}
+                  onChange={(e) => setEditQuizForm(prev => ({ ...prev, schoolId: e.target.value }))}
+                  className="admin-filter-select"
+                  style={{ width: "100%" }}
+                >
+                  <option value="">National (All Schools)</option>
+                  {schools.map((school) => (
+                    <option key={school.id} value={school.id}>
+                      {school.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ marginTop: "1rem", borderTop: "1px solid var(--admin-border)", paddingTop: "1rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                  <div className="admin-card-title" style={{ fontSize: "1rem" }}>Questions ({editQuizForm.questions.length})</div>
+                  <button
+                    type="button"
+                    className="admin-primary-btn"
+                    onClick={() => {
+                      setEditQuizForm(prev => ({
+                        ...prev,
+                        questions: [
+                          ...prev.questions,
+                          {
+                            question_text: "",
+                            question_type: "MCQ",
+                            difficulty_level: "Medium",
+                            answers: [
+                              { answer_text: "", is_correct: false },
+                              { answer_text: "", is_correct: false },
+                            ],
+                            correct_value: "",
+                          }
+                        ]
+                      }));
+                    }}
+                    style={{ padding: "6px 12px", fontSize: "12px" }}
+                  >
+                    + Add Question
+                  </button>
+                </div>
+
+                {editQuizForm.questions.map((q, qIndex) => (
+                  <div key={qIndex} style={{ background: "#f8fafc", border: "1px solid var(--admin-border)", borderRadius: "10px", padding: "12px", marginBottom: "12px", position: "relative" }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditQuizForm(prev => ({
+                          ...prev,
+                          questions: prev.questions.filter((_, idx) => idx !== qIndex)
+                        }));
+                      }}
+                      style={{ position: "absolute", top: "10px", right: "10px", background: "none", border: "none", color: "var(--admin-danger)", cursor: "pointer", fontWeight: "bold", fontSize: "14px" }}
+                      title="Remove question"
+                    >
+                      &times;
+                    </button>
+                    <div style={{ fontWeight: "700", fontSize: "13px", marginBottom: "8px", color: "var(--admin-sidebar)" }}>
+                      Question #{qIndex + 1}
+                    </div>
+
+                    <div className="admin-field" style={{ marginBottom: "8px" }}>
+                      <label>Question Text *</label>
+                      <input
+                        placeholder="e.g. What is the chemical symbol for water?"
+                        value={q.question_text}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEditQuizForm(prev => ({
+                            ...prev,
+                            questions: prev.questions.map((question, idx) =>
+                              idx === qIndex ? { ...question, question_text: val } : question
+                            )
+                          }));
+                        }}
+                        required
+                      />
+                    </div>
+
+                    <div className="admin-form-row" style={{ marginBottom: "8px" }}>
+                      <div className="admin-field">
+                        <label>Question Type *</label>
+                        <select
+                          value={q.question_type}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setEditQuizForm(prev => ({
+                              ...prev,
+                              questions: prev.questions.map((question, idx) =>
+                                idx === qIndex ? { ...question, question_type: val } : question
+                              )
+                            }));
+                          }}
+                        >
+                          <option value="MCQ">Multiple Choice (MCQ)</option>
+                          <option value="NUMERIC">Numeric Answer</option>
+                        </select>
+                      </div>
+                      <div className="admin-field">
+                        <label>Difficulty *</label>
+                        <select
+                          value={q.difficulty_level}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setEditQuizForm(prev => ({
+                              ...prev,
+                              questions: prev.questions.map((question, idx) =>
+                                idx === qIndex ? { ...question, difficulty_level: val } : question
+                              )
+                            }));
+                          }}
+                        >
+                          <option value="Easy">Easy</option>
+                          <option value="Medium">Medium</option>
+                          <option value="Hard">Hard</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {q.question_type === "MCQ" && (
+                      <div style={{ marginTop: "10px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                          <label style={{ fontSize: "12px", fontWeight: "600" }}>Options (Mark correct options) *</label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditQuizForm(prev => ({
+                                ...prev,
+                                questions: prev.questions.map((question, idx) =>
+                                  idx === qIndex ? {
+                                    ...question,
+                                    answers: [...question.answers, { answer_text: "", is_correct: false }]
+                                  } : question
+                                )
+                              }));
+                            }}
+                            style={{ background: "none", border: "none", color: "var(--admin-accent)", cursor: "pointer", fontSize: "11px", fontWeight: "700" }}
+                          >
+                            + Add Option
+                          </button>
+                        </div>
+                        {q.answers.map((ans: any, aIndex: number) => (
+                          <div key={aIndex} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                            <input
+                              type="checkbox"
+                              checked={ans.is_correct}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                setEditQuizForm(prev => ({
+                                  ...prev,
+                                  questions: prev.questions.map((question, idx) =>
+                                    idx === qIndex ? {
+                                      ...question,
+                                      answers: question.answers.map((item: any, itemIdx: number) =>
+                                        itemIdx === aIndex ? { ...item, is_correct: checked } : item
+                                      )
+                                    } : question
+                                  )
+                                }));
+                              }}
+                              style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                              title="Mark as correct"
+                            />
+                            <input
+                              placeholder={`Option #${aIndex + 1}`}
+                              value={ans.answer_text}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setEditQuizForm(prev => ({
+                                  ...prev,
+                                  questions: prev.questions.map((question, idx) =>
+                                    idx === qIndex ? {
+                                      ...question,
+                                      answers: question.answers.map((item: any, itemIdx: number) =>
+                                        itemIdx === aIndex ? { ...item, answer_text: val } : item
+                                      )
+                                    } : question
+                                  )
+                                }));
+                              }}
+                              style={{ flex: 1, padding: "6px 8px", fontSize: "12px" }}
+                              required
+                            />
+                            {q.answers.length > 2 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditQuizForm(prev => ({
+                                    ...prev,
+                                    questions: prev.questions.map((question, idx) =>
+                                      idx === qIndex ? {
+                                        ...question,
+                                        answers: question.answers.filter((_: any, itemIdx: number) => itemIdx !== aIndex)
+                                      } : question
+                                    )
+                                  }));
+                                }}
+                                style={{ background: "none", border: "none", color: "var(--admin-danger)", cursor: "pointer", fontSize: "14px", fontWeight: "bold" }}
+                                title="Delete option"
+                              >
+                                &times;
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {q.question_type === "NUMERIC" && (
+                      <div className="admin-field" style={{ marginTop: "10px" }}>
+                        <label>Correct Value *</label>
+                        <input
+                          placeholder="e.g. 42 or 3.14"
+                          value={q.correct_value}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setEditQuizForm(prev => ({
+                              ...prev,
+                              questions: prev.questions.map((question, idx) =>
+                                idx === qIndex ? { ...question, correct_value: val } : question
+                              )
+                            }));
+                          }}
+                          required
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {error && <div className="admin-error">{error}</div>}
+              <div className="admin-modal-actions" style={{ marginTop: "1.5rem" }}>
+                <button
+                  className="admin-secondary-btn"
+                  type="button"
+                  onClick={() => {
+                    setShowEditQuizModal(false);
+                    setSelectedQuiz(null);
+                    setError("");
+                  }}
+                  disabled={actionLoading}
+                >
+                  Cancel
+                </button>
+                <button className="admin-primary-btn" type="submit" disabled={actionLoading}>
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showDeleteQuizConfirm && selectedQuiz && (
+        <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="admin-modal admin-modal--small">
+            <div className="admin-modal-header">
+              <div>
+                <div className="admin-card-title">Confirm Delete</div>
+                <div className="admin-card-subtitle">
+                  Are you sure you want to permanently delete this quiz?
+                </div>
+              </div>
+            </div>
+            <div style={{ padding: "1rem", backgroundColor: "#fef2f2", borderRadius: "0.375rem", margin: "1rem 0" }}>
+              <div style={{ fontSize: "0.875rem", fontWeight: "500" }}>
+                {selectedQuiz.title}
+              </div>
+              <div style={{ fontSize: "0.75rem", color: "#666", marginTop: "0.25rem" }}>
+                This action cannot be undone and will delete all associated questions.
+              </div>
+            </div>
+            <div className="admin-modal-actions">
+              <button
+                className="admin-secondary-btn"
+                type="button"
+                onClick={() => {
+                  setShowDeleteQuizConfirm(false);
+                  setSelectedQuiz(null);
+                }}
+                disabled={actionLoading}
+              >
+                Cancel
+              </button>
+              <button
+                className="admin-danger-btn"
+                type="button"
+                onClick={handleDeleteQuiz}
+                disabled={actionLoading}
+              >
+                Delete Quiz
               </button>
             </div>
           </div>
