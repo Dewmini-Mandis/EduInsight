@@ -51,9 +51,7 @@ const NationalAdminDashboard = () => {
     "schools"
   );
   const [quizzes, setQuizzes] = useState<any[]>([]);
-  const [showQuizModal, setShowQuizModal] = useState(false);
-  const [showViewQuizModal, setShowViewQuizModal] = useState(false);
-  const [showEditQuizModal, setShowEditQuizModal] = useState(false);
+  const [quizAction, setQuizAction] = useState<"list" | "create" | "edit" | "view">("list");
   const [showDeleteQuizConfirm, setShowDeleteQuizConfirm] = useState(false);
   const [selectedQuiz, setSelectedQuiz] = useState<any | null>(null);
   const [quizForm, setQuizForm] = useState({
@@ -693,7 +691,7 @@ const NationalAdminDashboard = () => {
 
   const handleOpenViewQuizModal = (quiz: any) => {
     setSelectedQuiz(quiz);
-    setShowViewQuizModal(true);
+    setQuizAction("view");
   };
 
   const handleOpenEditQuizModal = (quiz: any) => {
@@ -726,7 +724,7 @@ const NationalAdminDashboard = () => {
     });
     setError("");
     setSuccessMessage("");
-    setShowEditQuizModal(true);
+    setQuizAction("edit");
   };
 
   const handleCreateQuiz = async (e: React.FormEvent) => {
@@ -831,7 +829,7 @@ const NationalAdminDashboard = () => {
         ],
       });
       await fetchData();
-      setShowQuizModal(false);
+      setQuizAction("list");
       setSuccessMessage("Quiz created successfully.");
     } catch (err: any) {
       setError(err.message || "Unable to create quiz");
@@ -935,7 +933,7 @@ const NationalAdminDashboard = () => {
       }
 
       await fetchData();
-      setShowEditQuizModal(false);
+      setQuizAction("list");
       setSelectedQuiz(null);
       setSuccessMessage("Quiz updated successfully.");
     } catch (err: any) {
@@ -1230,84 +1228,741 @@ const NationalAdminDashboard = () => {
 
         {activeSection === "quizzes" && (
           <>
-            <div className="admin-user-toolbar" style={{ justifyContent: "flex-end", marginBottom: "20px" }}>
-              <button
-                className="admin-login-btn"
-                type="button"
-                onClick={() => {
-                  setShowQuizModal(true);
-                  setError("");
-                  setSuccessMessage("");
-                }}
-                disabled={actionLoading}
-                style={{ width: "auto", padding: "10px 24px" }}
-              >
-                Create Quiz
-              </button>
-            </div>
+            {quizAction === "list" && (
+              <div className="admin-user-toolbar" style={{ justifyContent: "flex-end", marginBottom: "20px" }}>
+                <button
+                  className="admin-login-btn"
+                  type="button"
+                  onClick={() => {
+                    setQuizAction("create");
+                    setError("");
+                    setSuccessMessage("");
+                  }}
+                  disabled={actionLoading}
+                  style={{ width: "auto", padding: "10px 24px" }}
+                >
+                  Create Quiz
+                </button>
+              </div>
+            )}
             <section className="admin-content-grid admin-content-grid--single">
               <div className="admin-card">
                 <div className="admin-card-header">
                   <div>
-                    <div className="admin-card-title">Quiz Directory</div>
+                    <div className="admin-card-title">
+                      {quizAction === "create"
+                        ? "Create Quiz"
+                        : quizAction === "edit"
+                        ? "Edit Quiz"
+                        : quizAction === "view"
+                        ? `View Quiz: ${selectedQuiz?.title || ""}`
+                        : "Quiz Directory"}
+                    </div>
                     <div className="admin-card-subtitle">
-                      Manage national and school level quizzes.
+                      {quizAction === "create"
+                        ? "Configure quiz details and questions list."
+                        : quizAction === "edit"
+                        ? "Modify quiz details and questions list."
+                        : quizAction === "view"
+                        ? selectedQuiz?.description || "No description provided."
+                        : "Manage national and school level quizzes."}
                     </div>
                   </div>
-                </div>
-                <div className="admin-table">
-                  <div className="admin-table-header" style={{ gridTemplateColumns: "1.4fr 1fr 1fr 0.6fr 1.3fr" }}>
-                    <span>Quiz Title</span>
-                    <span>Assigned School</span>
-                    <span>Created By</span>
-                    <span>Questions</span>
-                    <span>Actions</span>
-                  </div>
-                  {loading && <div className="admin-empty">Loading quizzes...</div>}
-                  {!loading && quizzes.length === 0 && (
-                    <div className="admin-empty">No quizzes created yet.</div>
+                  {quizAction !== "list" && (
+                    <button
+                      className="admin-secondary-btn"
+                      onClick={() => {
+                        setQuizAction("list");
+                        setSelectedQuiz(null);
+                        setError("");
+                      }}
+                      style={{ width: "auto", padding: "8px 16px" }}
+                    >
+                      &larr; Back to Quizzes
+                    </button>
                   )}
-                  {quizzes.map((quiz) => (
-                    <div className="admin-table-row" key={quiz.id} style={{ gridTemplateColumns: "1.4fr 1fr 1fr 0.6fr 1.3fr" }}>
-                      <div>
-                        <strong className="user-name">{quiz.title}</strong>
-                        <div className="user-meta">{quiz.description || "No description"}</div>
-                      </div>
-                      <div className="user-meta">{quiz.school_name || "National (All Schools)"}</div>
-                      <div className="user-meta">{quiz.created_by_name || "National Admin"}</div>
-                      <div className="user-meta">{quiz.questions ? quiz.questions.length : 0} Qs</div>
-                      <div className="admin-action-group">
+                </div>
+
+                {quizAction === "create" ? (
+                  <form className="admin-form" onSubmit={handleCreateQuiz} style={{ padding: "1.5rem" }}>
+                    <div className="admin-field">
+                      <label>Quiz Title *</label>
+                      <input
+                        name="title"
+                        placeholder="e.g. Science Term Test 1"
+                        value={quizForm.title}
+                        onChange={(e) => setQuizForm(prev => ({ ...prev, title: e.target.value }))}
+                        required
+                      />
+                    </div>
+                    <div className="admin-field">
+                      <label>Description</label>
+                      <textarea
+                        name="description"
+                        placeholder="Enter short description"
+                        value={quizForm.description}
+                        onChange={(e) => setQuizForm(prev => ({ ...prev, description: e.target.value }))}
+                        style={{ border: "1px solid var(--admin-border)", borderRadius: "10px", padding: "8px 10px", minHeight: "60px", fontFamily: "inherit", fontSize: "13px" }}
+                      />
+                    </div>
+                    <div className="admin-field">
+                      <label>Assign to Specific School (Optional)</label>
+                      <select
+                        name="schoolId"
+                        value={quizForm.schoolId}
+                        onChange={(e) => setQuizForm(prev => ({ ...prev, schoolId: e.target.value }))}
+                        className="admin-filter-select"
+                        style={{ width: "100%" }}
+                      >
+                        <option value="">National (All Schools)</option>
+                        {schools.map((school) => (
+                          <option key={school.id} value={school.id}>
+                            {school.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div style={{ marginTop: "1rem", borderTop: "1px solid var(--admin-border)", paddingTop: "1rem" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                        <div className="admin-card-title" style={{ fontSize: "1rem" }}>Questions ({quizForm.questions.length})</div>
                         <button
-                          className="admin-action-btn"
                           type="button"
-                          onClick={() => handleOpenViewQuizModal(quiz)}
-                          disabled={actionLoading}
-                        >
-                          View
-                        </button>
-                        <button
-                          className="admin-action-btn"
-                          type="button"
-                          onClick={() => handleOpenEditQuizModal(quiz)}
-                          disabled={actionLoading}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="admin-action-btn danger"
-                          type="button"
+                          className="admin-primary-btn"
                           onClick={() => {
-                            setSelectedQuiz(quiz);
-                            setShowDeleteQuizConfirm(true);
+                            setQuizForm(prev => ({
+                              ...prev,
+                              questions: [
+                                ...prev.questions,
+                                {
+                                  question_text: "",
+                                  question_type: "MCQ",
+                                  difficulty_level: "Medium",
+                                  answers: [
+                                    { answer_text: "", is_correct: false },
+                                    { answer_text: "", is_correct: false },
+                                  ],
+                                  correct_value: "",
+                                }
+                              ]
+                            }));
                           }}
-                          disabled={actionLoading}
+                          style={{ padding: "6px 12px", fontSize: "12px" }}
                         >
-                          Delete
+                          + Add Question
                         </button>
+                      </div>
+
+                      {quizForm.questions.map((q, qIndex) => (
+                        <div key={qIndex} style={{ background: "#f8fafc", border: "1px solid var(--admin-border)", borderRadius: "10px", padding: "12px", marginBottom: "12px", position: "relative" }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setQuizForm(prev => ({
+                                ...prev,
+                                questions: prev.questions.filter((_, idx) => idx !== qIndex)
+                              }));
+                            }}
+                            style={{ position: "absolute", top: "10px", right: "10px", background: "none", border: "none", color: "var(--admin-danger)", cursor: "pointer", fontWeight: "bold", fontSize: "14px" }}
+                            title="Remove question"
+                          >
+                            &times;
+                          </button>
+                          <div style={{ fontWeight: "700", fontSize: "13px", marginBottom: "8px", color: "var(--admin-sidebar)" }}>
+                            Question #{qIndex + 1}
+                          </div>
+
+                          <div className="admin-field" style={{ marginBottom: "8px" }}>
+                            <label>Question Text *</label>
+                            <input
+                              placeholder="e.g. What is the chemical symbol for water?"
+                              value={q.question_text}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setQuizForm(prev => ({
+                                  ...prev,
+                                  questions: prev.questions.map((question, idx) =>
+                                    idx === qIndex ? { ...question, question_text: val } : question
+                                  )
+                                }));
+                              }}
+                              required
+                            />
+                          </div>
+
+                          <div className="admin-form-row" style={{ marginBottom: "8px" }}>
+                            <div className="admin-field">
+                              <label>Question Type *</label>
+                              <select
+                                value={q.question_type}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setQuizForm(prev => ({
+                                    ...prev,
+                                    questions: prev.questions.map((question, idx) =>
+                                      idx === qIndex ? { ...question, question_type: val } : question
+                                    )
+                                  }));
+                                }}
+                              >
+                                <option value="MCQ">Multiple Choice (MCQ)</option>
+                                <option value="NUMERIC">Numeric Answer</option>
+                              </select>
+                            </div>
+                            <div className="admin-field">
+                              <label>Difficulty *</label>
+                              <select
+                                value={q.difficulty_level}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setQuizForm(prev => ({
+                                    ...prev,
+                                    questions: prev.questions.map((question, idx) =>
+                                      idx === qIndex ? { ...question, difficulty_level: val } : question
+                                    )
+                                  }));
+                                }}
+                              >
+                                <option value="Easy">Easy</option>
+                                <option value="Medium">Medium</option>
+                                <option value="Hard">Hard</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          {q.question_type === "MCQ" && (
+                            <div style={{ marginTop: "10px" }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                                <label style={{ fontSize: "12px", fontWeight: "600" }}>Options (Mark correct options) *</label>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setQuizForm(prev => ({
+                                      ...prev,
+                                      questions: prev.questions.map((question, idx) =>
+                                        idx === qIndex ? {
+                                          ...question,
+                                          answers: [...question.answers, { answer_text: "", is_correct: false }]
+                                        } : question
+                                      )
+                                    }));
+                                  }}
+                                  style={{ background: "none", border: "none", color: "var(--admin-accent)", cursor: "pointer", fontSize: "11px", fontWeight: "700" }}
+                                >
+                                  + Add Option
+                                </button>
+                              </div>
+                              {q.answers.map((ans, aIndex) => (
+                                <div key={aIndex} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={ans.is_correct}
+                                    onChange={(e) => {
+                                      const checked = e.target.checked;
+                                      setQuizForm(prev => ({
+                                        ...prev,
+                                        questions: prev.questions.map((question, idx) =>
+                                          idx === qIndex ? {
+                                            ...question,
+                                            answers: question.answers.map((item, itemIdx) =>
+                                              itemIdx === aIndex ? { ...item, is_correct: checked } : item
+                                            )
+                                          } : question
+                                        )
+                                      }));
+                                    }}
+                                    style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                                    title="Mark as correct"
+                                  />
+                                  <input
+                                    placeholder={`Option #${aIndex + 1}`}
+                                    value={ans.answer_text}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setQuizForm(prev => ({
+                                        ...prev,
+                                        questions: prev.questions.map((question, idx) =>
+                                          idx === qIndex ? {
+                                            ...question,
+                                            answers: question.answers.map((item, itemIdx) =>
+                                              itemIdx === aIndex ? { ...item, answer_text: val } : item
+                                            )
+                                          } : question
+                                        )
+                                      }));
+                                    }}
+                                    style={{ flex: 1, padding: "6px 8px", fontSize: "12px" }}
+                                    required
+                                  />
+                                  {q.answers.length > 2 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setQuizForm(prev => ({
+                                          ...prev,
+                                          questions: prev.questions.map((question, idx) =>
+                                            idx === qIndex ? {
+                                              ...question,
+                                              answers: question.answers.filter((_, itemIdx) => itemIdx !== aIndex)
+                                            } : question
+                                          )
+                                        }));
+                                      }}
+                                      style={{ background: "none", border: "none", color: "var(--admin-danger)", cursor: "pointer", fontSize: "14px", fontWeight: "bold" }}
+                                      title="Delete option"
+                                    >
+                                      &times;
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {q.question_type === "NUMERIC" && (
+                            <div className="admin-field" style={{ marginTop: "10px" }}>
+                              <label>Correct Value *</label>
+                              <input
+                                placeholder="e.g. 42 or 3.14"
+                                value={q.correct_value}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setQuizForm(prev => ({
+                                    ...prev,
+                                    questions: prev.questions.map((question, idx) =>
+                                      idx === qIndex ? { ...question, correct_value: val } : question
+                                    )
+                                  }));
+                                }}
+                                required
+                              />
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {error && <div className="admin-error">{error}</div>}
+                    <div className="admin-modal-actions" style={{ marginTop: "1.5rem" }}>
+                      <button
+                        className="admin-secondary-btn"
+                        type="button"
+                        onClick={() => {
+                          setQuizAction("list");
+                          setError("");
+                        }}
+                        disabled={actionLoading}
+                      >
+                        Cancel
+                      </button>
+                      <button className="admin-primary-btn" type="submit" disabled={actionLoading}>
+                        Create Quiz
+                      </button>
+                    </div>
+                  </form>
+                ) : quizAction === "view" && selectedQuiz ? (
+                  <div className="admin-form" style={{ padding: "1.5rem" }}>
+                    <div className="admin-field" style={{ marginBottom: "12px" }}>
+                      <label style={{ fontWeight: "700" }}>Scope / School</label>
+                      <div style={{ fontSize: "14px", padding: "8px 12px", background: "#f1f5f9", borderRadius: "8px" }}>
+                        {selectedQuiz.school_name || "National (All Schools)"}
                       </div>
                     </div>
-                  ))}
-                </div>
+
+                    <div style={{ marginTop: "1.5rem", borderTop: "1px solid var(--admin-border)", paddingTop: "1rem" }}>
+                      <div className="admin-card-title" style={{ fontSize: "1.1rem", marginBottom: "1rem" }}>
+                        Questions ({selectedQuiz.questions ? selectedQuiz.questions.length : 0})
+                      </div>
+
+                      {(selectedQuiz.questions || []).map((q: any, qIndex: number) => (
+                        <div key={q.id || qIndex} style={{ background: "#f8fafc", border: "1px solid var(--admin-border)", borderRadius: "10px", padding: "14px", marginBottom: "12px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+                            <span style={{ fontWeight: "700", fontSize: "13px", color: "var(--admin-sidebar)" }}>
+                              Question #{qIndex + 1} ({q.question_type})
+                            </span>
+                            <span className="status-pill status-active" style={{ fontSize: "11px", padding: "2px 8px" }}>
+                              {q.difficulty_level || "Medium"}
+                            </span>
+                          </div>
+
+                          <div style={{ fontSize: "14px", fontWeight: "600", marginBottom: "10px" }}>
+                            {q.question_text}
+                          </div>
+
+                          {q.question_type === "MCQ" && (
+                            <div style={{ marginTop: "8px" }}>
+                              <div style={{ fontSize: "12px", fontWeight: "700", color: "#64748b", marginBottom: "6px" }}>Options:</div>
+                              {(q.answers || []).map((ans: any, aIndex: number) => (
+                                <div key={ans.id || aIndex} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "6px 10px", background: ans.is_correct ? "#f0fdf4" : "transparent", border: ans.is_correct ? "1px solid #bbf7d0" : "1px solid transparent", borderRadius: "6px", marginBottom: "4px" }}>
+                                  <span style={{ color: ans.is_correct ? "#16a34a" : "#94a3b8", fontWeight: "bold" }}>
+                                    {ans.is_correct ? "✓" : "○"}
+                                  </span>
+                                  <span style={{ fontSize: "13px", fontWeight: ans.is_correct ? "600" : "400" }}>
+                                    {ans.answer_text}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {q.question_type === "NUMERIC" && (
+                            <div style={{ marginTop: "8px", display: "flex", alignItems: "center", gap: "8px" }}>
+                              <span style={{ fontSize: "12px", fontWeight: "700", color: "#64748b" }}>Correct Answer:</span>
+                              <strong style={{ fontSize: "13px", padding: "4px 8px", background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#16a34a", borderRadius: "6px" }}>
+                                {q.correct_value}
+                              </strong>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="admin-modal-actions" style={{ marginTop: "1.5rem" }}>
+                      <button
+                        className="admin-secondary-btn"
+                        type="button"
+                        onClick={() => {
+                          setQuizAction("list");
+                          setSelectedQuiz(null);
+                        }}
+                      >
+                        Back to Quizzes
+                      </button>
+                    </div>
+                  </div>
+                ) : quizAction === "edit" && selectedQuiz ? (
+                  <form className="admin-form" onSubmit={handleUpdateQuiz} style={{ padding: "1.5rem" }}>
+                    <div className="admin-field">
+                      <label>Quiz Title *</label>
+                      <input
+                        name="title"
+                        placeholder="e.g. Science Term Test 1"
+                        value={editQuizForm.title}
+                        onChange={(e) => setEditQuizForm(prev => ({ ...prev, title: e.target.value }))}
+                        required
+                      />
+                    </div>
+                    <div className="admin-field">
+                      <label>Description</label>
+                      <textarea
+                        name="description"
+                        placeholder="Enter short description"
+                        value={editQuizForm.description}
+                        onChange={(e) => setEditQuizForm(prev => ({ ...prev, description: e.target.value }))}
+                        style={{ border: "1px solid var(--admin-border)", borderRadius: "10px", padding: "8px 10px", minHeight: "60px", fontFamily: "inherit", fontSize: "13px" }}
+                      />
+                    </div>
+                    <div className="admin-field">
+                      <label>Assign to Specific School (Optional)</label>
+                      <select
+                        name="schoolId"
+                        value={editQuizForm.schoolId}
+                        onChange={(e) => setEditQuizForm(prev => ({ ...prev, schoolId: e.target.value }))}
+                        className="admin-filter-select"
+                        style={{ width: "100%" }}
+                      >
+                        <option value="">National (All Schools)</option>
+                        {schools.map((school) => (
+                          <option key={school.id} value={school.id}>
+                            {school.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div style={{ marginTop: "1rem", borderTop: "1px solid var(--admin-border)", paddingTop: "1rem" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+                        <div className="admin-card-title" style={{ fontSize: "1rem" }}>Questions ({editQuizForm.questions.length})</div>
+                        <button
+                          type="button"
+                          className="admin-primary-btn"
+                          onClick={() => {
+                            setEditQuizForm(prev => ({
+                              ...prev,
+                              questions: [
+                                ...prev.questions,
+                                {
+                                  question_text: "",
+                                  question_type: "MCQ",
+                                  difficulty_level: "Medium",
+                                  answers: [
+                                    { answer_text: "", is_correct: false },
+                                    { answer_text: "", is_correct: false },
+                                  ],
+                                  correct_value: "",
+                                }
+                              ]
+                            }));
+                          }}
+                          style={{ padding: "6px 12px", fontSize: "12px" }}
+                        >
+                          + Add Question
+                        </button>
+                      </div>
+
+                      {editQuizForm.questions.map((q, qIndex) => (
+                        <div key={qIndex} style={{ background: "#f8fafc", border: "1px solid var(--admin-border)", borderRadius: "10px", padding: "12px", marginBottom: "12px", position: "relative" }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditQuizForm(prev => ({
+                                ...prev,
+                                questions: prev.questions.filter((_, idx) => idx !== qIndex)
+                              }));
+                            }}
+                            style={{ position: "absolute", top: "10px", right: "10px", background: "none", border: "none", color: "var(--admin-danger)", cursor: "pointer", fontWeight: "bold", fontSize: "14px" }}
+                            title="Remove question"
+                          >
+                            &times;
+                          </button>
+                          <div style={{ fontWeight: "700", fontSize: "13px", marginBottom: "8px", color: "var(--admin-sidebar)" }}>
+                            Question #{qIndex + 1}
+                          </div>
+
+                          <div className="admin-field" style={{ marginBottom: "8px" }}>
+                            <label>Question Text *</label>
+                            <input
+                              placeholder="e.g. What is the chemical symbol for water?"
+                              value={q.question_text}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setEditQuizForm(prev => ({
+                                  ...prev,
+                                  questions: prev.questions.map((question, idx) =>
+                                    idx === qIndex ? { ...question, question_text: val } : question
+                                  )
+                                }));
+                              }}
+                              required
+                            />
+                          </div>
+
+                          <div className="admin-form-row" style={{ marginBottom: "8px" }}>
+                            <div className="admin-field">
+                              <label>Question Type *</label>
+                              <select
+                                value={q.question_type}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setEditQuizForm(prev => ({
+                                    ...prev,
+                                    questions: prev.questions.map((question, idx) =>
+                                      idx === qIndex ? { ...question, question_type: val } : question
+                                    )
+                                  }));
+                                }}
+                              >
+                                <option value="MCQ">Multiple Choice (MCQ)</option>
+                                <option value="NUMERIC">Numeric Answer</option>
+                              </select>
+                            </div>
+                            <div className="admin-field">
+                              <label>Difficulty *</label>
+                              <select
+                                value={q.difficulty_level}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setEditQuizForm(prev => ({
+                                    ...prev,
+                                    questions: prev.questions.map((question, idx) =>
+                                      idx === qIndex ? { ...question, difficulty_level: val } : question
+                                    )
+                                  }));
+                                }}
+                              >
+                                <option value="Easy">Easy</option>
+                                <option value="Medium">Medium</option>
+                                <option value="Hard">Hard</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          {q.question_type === "MCQ" && (
+                            <div style={{ marginTop: "10px" }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                                <label style={{ fontSize: "12px", fontWeight: "600" }}>Options (Mark correct options) *</label>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditQuizForm(prev => ({
+                                      ...prev,
+                                      questions: prev.questions.map((question, idx) =>
+                                        idx === qIndex ? {
+                                          ...question,
+                                          answers: [...question.answers, { answer_text: "", is_correct: false }]
+                                        } : question
+                                      )
+                                    }));
+                                  }}
+                                  style={{ background: "none", border: "none", color: "var(--admin-accent)", cursor: "pointer", fontSize: "11px", fontWeight: "700" }}
+                                >
+                                  + Add Option
+                                </button>
+                              </div>
+                              {q.answers.map((ans: any, aIndex: number) => (
+                                <div key={aIndex} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={ans.is_correct}
+                                    onChange={(e) => {
+                                      const checked = e.target.checked;
+                                      setEditQuizForm(prev => ({
+                                        ...prev,
+                                        questions: prev.questions.map((question, idx) =>
+                                          idx === qIndex ? {
+                                            ...question,
+                                            answers: question.answers.map((item: any, itemIdx: number) =>
+                                              itemIdx === aIndex ? { ...item, is_correct: checked } : item
+                                            )
+                                          } : question
+                                        )
+                                      }));
+                                    }}
+                                    style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                                    title="Mark as correct"
+                                  />
+                                  <input
+                                    placeholder={`Option #${aIndex + 1}`}
+                                    value={ans.answer_text}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setEditQuizForm(prev => ({
+                                        ...prev,
+                                        questions: prev.questions.map((question, idx) =>
+                                          idx === qIndex ? {
+                                            ...question,
+                                            answers: question.answers.map((item: any, itemIdx: number) =>
+                                              itemIdx === aIndex ? { ...item, answer_text: val } : item
+                                            )
+                                          } : question
+                                        )
+                                      }));
+                                    }}
+                                    style={{ flex: 1, padding: "6px 8px", fontSize: "12px" }}
+                                    required
+                                  />
+                                  {q.answers.length > 2 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditQuizForm(prev => ({
+                                          ...prev,
+                                          questions: prev.questions.map((question, idx) =>
+                                            idx === qIndex ? {
+                                              ...question,
+                                              answers: question.answers.filter((_: any, itemIdx: number) => itemIdx !== aIndex)
+                                            } : question
+                                          )
+                                        }));
+                                      }}
+                                      style={{ background: "none", border: "none", color: "var(--admin-danger)", cursor: "pointer", fontSize: "14px", fontWeight: "bold" }}
+                                      title="Delete option"
+                                    >
+                                      &times;
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {q.question_type === "NUMERIC" && (
+                            <div className="admin-field" style={{ marginTop: "10px" }}>
+                              <label>Correct Value *</label>
+                              <input
+                                placeholder="e.g. 42 or 3.14"
+                                value={q.correct_value}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setEditQuizForm(prev => ({
+                                    ...prev,
+                                    questions: prev.questions.map((question, idx) =>
+                                      idx === qIndex ? { ...question, correct_value: val } : question
+                                    )
+                                  }));
+                                }}
+                                required
+                              />
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    {error && <div className="admin-error">{error}</div>}
+                    <div className="admin-modal-actions" style={{ marginTop: "1.5rem" }}>
+                      <button
+                        className="admin-secondary-btn"
+                        type="button"
+                        onClick={() => {
+                          setQuizAction("list");
+                          setSelectedQuiz(null);
+                          setError("");
+                        }}
+                        disabled={actionLoading}
+                      >
+                        Cancel
+                      </button>
+                      <button className="admin-primary-btn" type="submit" disabled={actionLoading}>
+                        Save Changes
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="admin-table">
+                    <div className="admin-table-header" style={{ gridTemplateColumns: "1.4fr 1fr 1fr 0.6fr 1.3fr" }}>
+                      <span>Quiz Title</span>
+                      <span>Assigned School</span>
+                      <span>Created By</span>
+                      <span>Questions</span>
+                      <span>Actions</span>
+                    </div>
+                    {loading && <div className="admin-empty">Loading quizzes...</div>}
+                    {!loading && quizzes.length === 0 && (
+                      <div className="admin-empty">No quizzes created yet.</div>
+                    )}
+                    {quizzes.map((quiz) => (
+                      <div className="admin-table-row" key={quiz.id} style={{ gridTemplateColumns: "1.4fr 1fr 1fr 0.6fr 1.3fr" }}>
+                        <div>
+                          <strong className="user-name">{quiz.title}</strong>
+                          <div className="user-meta">{quiz.description || "No description"}</div>
+                        </div>
+                        <div className="user-meta">{quiz.school_name || "National (All Schools)"}</div>
+                        <div className="user-meta">{quiz.created_by_name || "National Admin"}</div>
+                        <div className="user-meta">{quiz.questions ? quiz.questions.length : 0} Qs</div>
+                        <div className="admin-action-group">
+                          <button
+                            className="admin-action-btn"
+                            type="button"
+                            onClick={() => handleOpenViewQuizModal(quiz)}
+                            disabled={actionLoading}
+                          >
+                            View
+                          </button>
+                          <button
+                            className="admin-action-btn"
+                            type="button"
+                            onClick={() => handleOpenEditQuizModal(quiz)}
+                            disabled={actionLoading}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="admin-action-btn danger"
+                            type="button"
+                            onClick={() => {
+                              setSelectedQuiz(quiz);
+                              setShowDeleteQuizConfirm(true);
+                            }}
+                            disabled={actionLoading}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </section>
           </>
@@ -1984,673 +2639,6 @@ const NationalAdminDashboard = () => {
                 Delete School
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {showQuizModal && (
-        <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
-          <div className="admin-modal" style={{ width: "min(680px, 100%)", maxHeight: "90vh", overflowY: "auto" }}>
-            <div className="admin-modal-header">
-              <div>
-                <div className="admin-card-title">Create Quiz</div>
-                <div className="admin-card-subtitle">
-                  Configure quiz details and questions list.
-                </div>
-              </div>
-            </div>
-            <form className="admin-form" onSubmit={handleCreateQuiz}>
-              <div className="admin-field">
-                <label>Quiz Title *</label>
-                <input
-                  name="title"
-                  placeholder="e.g. Science Term Test 1"
-                  value={quizForm.title}
-                  onChange={(e) => setQuizForm(prev => ({ ...prev, title: e.target.value }))}
-                  required
-                />
-              </div>
-              <div className="admin-field">
-                <label>Description</label>
-                <textarea
-                  name="description"
-                  placeholder="Enter short description"
-                  value={quizForm.description}
-                  onChange={(e) => setQuizForm(prev => ({ ...prev, description: e.target.value }))}
-                  style={{ border: "1px solid var(--admin-border)", borderRadius: "10px", padding: "8px 10px", minHeight: "60px", fontFamily: "inherit", fontSize: "13px" }}
-                />
-              </div>
-              <div className="admin-field">
-                <label>Assign to Specific School (Optional)</label>
-                <select
-                  name="schoolId"
-                  value={quizForm.schoolId}
-                  onChange={(e) => setQuizForm(prev => ({ ...prev, schoolId: e.target.value }))}
-                  className="admin-filter-select"
-                  style={{ width: "100%" }}
-                >
-                  <option value="">National (All Schools)</option>
-                  {schools.map((school) => (
-                    <option key={school.id} value={school.id}>
-                      {school.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={{ marginTop: "1rem", borderTop: "1px solid var(--admin-border)", paddingTop: "1rem" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-                  <div className="admin-card-title" style={{ fontSize: "1rem" }}>Questions ({quizForm.questions.length})</div>
-                  <button
-                    type="button"
-                    className="admin-primary-btn"
-                    onClick={() => {
-                      setQuizForm(prev => ({
-                        ...prev,
-                        questions: [
-                          ...prev.questions,
-                          {
-                            question_text: "",
-                            question_type: "MCQ",
-                            difficulty_level: "Medium",
-                            answers: [
-                              { answer_text: "", is_correct: false },
-                              { answer_text: "", is_correct: false },
-                            ],
-                            correct_value: "",
-                          }
-                        ]
-                      }));
-                    }}
-                    style={{ padding: "6px 12px", fontSize: "12px" }}
-                  >
-                    + Add Question
-                  </button>
-                </div>
-
-                {quizForm.questions.map((q, qIndex) => (
-                  <div key={qIndex} style={{ background: "#f8fafc", border: "1px solid var(--admin-border)", borderRadius: "10px", padding: "12px", marginBottom: "12px", position: "relative" }}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setQuizForm(prev => ({
-                          ...prev,
-                          questions: prev.questions.filter((_, idx) => idx !== qIndex)
-                        }));
-                      }}
-                      style={{ position: "absolute", top: "10px", right: "10px", background: "none", border: "none", color: "var(--admin-danger)", cursor: "pointer", fontWeight: "bold", fontSize: "14px" }}
-                      title="Remove question"
-                    >
-                      &times;
-                    </button>
-                    <div style={{ fontWeight: "700", fontSize: "13px", marginBottom: "8px", color: "var(--admin-sidebar)" }}>
-                      Question #{qIndex + 1}
-                    </div>
-
-                    <div className="admin-field" style={{ marginBottom: "8px" }}>
-                      <label>Question Text *</label>
-                      <input
-                        placeholder="e.g. What is the chemical symbol for water?"
-                        value={q.question_text}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setQuizForm(prev => ({
-                            ...prev,
-                            questions: prev.questions.map((question, idx) =>
-                              idx === qIndex ? { ...question, question_text: val } : question
-                            )
-                          }));
-                        }}
-                        required
-                      />
-                    </div>
-
-                    <div className="admin-form-row" style={{ marginBottom: "8px" }}>
-                      <div className="admin-field">
-                        <label>Question Type *</label>
-                        <select
-                          value={q.question_type}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setQuizForm(prev => ({
-                              ...prev,
-                              questions: prev.questions.map((question, idx) =>
-                                idx === qIndex ? { ...question, question_type: val } : question
-                              )
-                            }));
-                          }}
-                        >
-                          <option value="MCQ">Multiple Choice (MCQ)</option>
-                          <option value="NUMERIC">Numeric Answer</option>
-                        </select>
-                      </div>
-                      <div className="admin-field">
-                        <label>Difficulty *</label>
-                        <select
-                          value={q.difficulty_level}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setQuizForm(prev => ({
-                              ...prev,
-                              questions: prev.questions.map((question, idx) =>
-                                idx === qIndex ? { ...question, difficulty_level: val } : question
-                              )
-                            }));
-                          }}
-                        >
-                          <option value="Easy">Easy</option>
-                          <option value="Medium">Medium</option>
-                          <option value="Hard">Hard</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {q.question_type === "MCQ" && (
-                      <div style={{ marginTop: "10px" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                          <label style={{ fontSize: "12px", fontWeight: "600" }}>Options (Mark correct options) *</label>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setQuizForm(prev => ({
-                                ...prev,
-                                questions: prev.questions.map((question, idx) =>
-                                  idx === qIndex ? {
-                                    ...question,
-                                    answers: [...question.answers, { answer_text: "", is_correct: false }]
-                                  } : question
-                                )
-                              }));
-                            }}
-                            style={{ background: "none", border: "none", color: "var(--admin-accent)", cursor: "pointer", fontSize: "11px", fontWeight: "700" }}
-                          >
-                            + Add Option
-                          </button>
-                        </div>
-                        {q.answers.map((ans, aIndex) => (
-                          <div key={aIndex} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                            <input
-                              type="checkbox"
-                              checked={ans.is_correct}
-                              onChange={(e) => {
-                                const checked = e.target.checked;
-                                setQuizForm(prev => ({
-                                  ...prev,
-                                  questions: prev.questions.map((question, idx) =>
-                                    idx === qIndex ? {
-                                      ...question,
-                                      answers: question.answers.map((item, itemIdx) =>
-                                        itemIdx === aIndex ? { ...item, is_correct: checked } : item
-                                      )
-                                    } : question
-                                  )
-                                }));
-                              }}
-                              style={{ width: "16px", height: "16px", cursor: "pointer" }}
-                              title="Mark as correct"
-                            />
-                            <input
-                              placeholder={`Option #${aIndex + 1}`}
-                              value={ans.answer_text}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setQuizForm(prev => ({
-                                  ...prev,
-                                  questions: prev.questions.map((question, idx) =>
-                                    idx === qIndex ? {
-                                      ...question,
-                                      answers: question.answers.map((item, itemIdx) =>
-                                        itemIdx === aIndex ? { ...item, answer_text: val } : item
-                                      )
-                                    } : question
-                                  )
-                                }));
-                              }}
-                              style={{ flex: 1, padding: "6px 8px", fontSize: "12px" }}
-                              required
-                            />
-                            {q.answers.length > 2 && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setQuizForm(prev => ({
-                                    ...prev,
-                                    questions: prev.questions.map((question, idx) =>
-                                      idx === qIndex ? {
-                                        ...question,
-                                        answers: question.answers.filter((_, itemIdx) => itemIdx !== aIndex)
-                                      } : question
-                                    )
-                                  }));
-                                }}
-                                style={{ background: "none", border: "none", color: "var(--admin-danger)", cursor: "pointer", fontSize: "14px", fontWeight: "bold" }}
-                                title="Delete option"
-                              >
-                                &times;
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {q.question_type === "NUMERIC" && (
-                      <div className="admin-field" style={{ marginTop: "10px" }}>
-                        <label>Correct Value *</label>
-                        <input
-                          placeholder="e.g. 42 or 3.14"
-                          value={q.correct_value}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setQuizForm(prev => ({
-                              ...prev,
-                              questions: prev.questions.map((question, idx) =>
-                                idx === qIndex ? { ...question, correct_value: val } : question
-                              )
-                            }));
-                          }}
-                          required
-                        />
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {error && <div className="admin-error">{error}</div>}
-              <div className="admin-modal-actions" style={{ marginTop: "1.5rem" }}>
-                <button
-                  className="admin-secondary-btn"
-                  type="button"
-                  onClick={() => {
-                    setShowQuizModal(false);
-                    setError("");
-                  }}
-                  disabled={actionLoading}
-                >
-                  Cancel
-                </button>
-                <button className="admin-primary-btn" type="submit" disabled={actionLoading}>
-                  Create Quiz
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {showViewQuizModal && selectedQuiz && (
-        <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
-          <div className="admin-modal" style={{ width: "min(680px, 100%)", maxHeight: "90vh", overflowY: "auto" }}>
-            <div className="admin-modal-header" style={{ marginBottom: "1rem" }}>
-              <div>
-                <div className="admin-card-title">View Quiz: {selectedQuiz.title}</div>
-                <div className="admin-card-subtitle">
-                  {selectedQuiz.description || "No description provided."}
-                </div>
-              </div>
-            </div>
-            <div className="admin-form">
-              <div className="admin-field" style={{ marginBottom: "12px" }}>
-                <label style={{ fontWeight: "700" }}>Scope / School</label>
-                <div style={{ fontSize: "14px", padding: "8px 12px", background: "#f1f5f9", borderRadius: "8px" }}>
-                  {selectedQuiz.school_name || "National (All Schools)"}
-                </div>
-              </div>
-
-              <div style={{ marginTop: "1.5rem", borderTop: "1px solid var(--admin-border)", paddingTop: "1rem" }}>
-                <div className="admin-card-title" style={{ fontSize: "1.1rem", marginBottom: "1rem" }}>
-                  Questions ({selectedQuiz.questions ? selectedQuiz.questions.length : 0})
-                </div>
-
-                {(selectedQuiz.questions || []).map((q: any, qIndex: number) => (
-                  <div key={q.id || qIndex} style={{ background: "#f8fafc", border: "1px solid var(--admin-border)", borderRadius: "10px", padding: "14px", marginBottom: "12px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-                      <span style={{ fontWeight: "700", fontSize: "13px", color: "var(--admin-sidebar)" }}>
-                        Question #{qIndex + 1} ({q.question_type})
-                      </span>
-                      <span className="status-pill status-active" style={{ fontSize: "11px", padding: "2px 8px" }}>
-                        {q.difficulty_level || "Medium"}
-                      </span>
-                    </div>
-
-                    <div style={{ fontSize: "14px", fontWeight: "600", marginBottom: "10px" }}>
-                      {q.question_text}
-                    </div>
-
-                    {q.question_type === "MCQ" && (
-                      <div style={{ marginTop: "8px" }}>
-                        <div style={{ fontSize: "12px", fontWeight: "700", color: "#64748b", marginBottom: "6px" }}>Options:</div>
-                        {(q.answers || []).map((ans: any, aIndex: number) => (
-                          <div key={ans.id || aIndex} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "6px 10px", background: ans.is_correct ? "#f0fdf4" : "transparent", border: ans.is_correct ? "1px solid #bbf7d0" : "1px solid transparent", borderRadius: "6px", marginBottom: "4px" }}>
-                            <span style={{ color: ans.is_correct ? "#16a34a" : "#94a3b8", fontWeight: "bold" }}>
-                              {ans.is_correct ? "✓" : "○"}
-                            </span>
-                            <span style={{ fontSize: "13px", fontWeight: ans.is_correct ? "600" : "400" }}>
-                              {ans.answer_text}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {q.question_type === "NUMERIC" && (
-                      <div style={{ marginTop: "8px", display: "flex", alignItems: "center", gap: "8px" }}>
-                        <span style={{ fontSize: "12px", fontWeight: "700", color: "#64748b" }}>Correct Answer:</span>
-                        <strong style={{ fontSize: "13px", padding: "4px 8px", background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#16a34a", borderRadius: "6px" }}>
-                          {q.correct_value}
-                        </strong>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              <div className="admin-modal-actions" style={{ marginTop: "1.5rem" }}>
-                <button
-                  className="admin-secondary-btn"
-                  type="button"
-                  onClick={() => {
-                    setShowViewQuizModal(false);
-                    setSelectedQuiz(null);
-                  }}
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showEditQuizModal && selectedQuiz && (
-        <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
-          <div className="admin-modal" style={{ width: "min(680px, 100%)", maxHeight: "90vh", overflowY: "auto" }}>
-            <div className="admin-modal-header">
-              <div>
-                <div className="admin-card-title">Edit Quiz</div>
-                <div className="admin-card-subtitle">
-                  Modify quiz details and questions list.
-                </div>
-              </div>
-            </div>
-            <form className="admin-form" onSubmit={handleUpdateQuiz}>
-              <div className="admin-field">
-                <label>Quiz Title *</label>
-                <input
-                  name="title"
-                  placeholder="e.g. Science Term Test 1"
-                  value={editQuizForm.title}
-                  onChange={(e) => setEditQuizForm(prev => ({ ...prev, title: e.target.value }))}
-                  required
-                />
-              </div>
-              <div className="admin-field">
-                <label>Description</label>
-                <textarea
-                  name="description"
-                  placeholder="Enter short description"
-                  value={editQuizForm.description}
-                  onChange={(e) => setEditQuizForm(prev => ({ ...prev, description: e.target.value }))}
-                  style={{ border: "1px solid var(--admin-border)", borderRadius: "10px", padding: "8px 10px", minHeight: "60px", fontFamily: "inherit", fontSize: "13px" }}
-                />
-              </div>
-              <div className="admin-field">
-                <label>Assign to Specific School (Optional)</label>
-                <select
-                  name="schoolId"
-                  value={editQuizForm.schoolId}
-                  onChange={(e) => setEditQuizForm(prev => ({ ...prev, schoolId: e.target.value }))}
-                  className="admin-filter-select"
-                  style={{ width: "100%" }}
-                >
-                  <option value="">National (All Schools)</option>
-                  {schools.map((school) => (
-                    <option key={school.id} value={school.id}>
-                      {school.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={{ marginTop: "1rem", borderTop: "1px solid var(--admin-border)", paddingTop: "1rem" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-                  <div className="admin-card-title" style={{ fontSize: "1rem" }}>Questions ({editQuizForm.questions.length})</div>
-                  <button
-                    type="button"
-                    className="admin-primary-btn"
-                    onClick={() => {
-                      setEditQuizForm(prev => ({
-                        ...prev,
-                        questions: [
-                          ...prev.questions,
-                          {
-                            question_text: "",
-                            question_type: "MCQ",
-                            difficulty_level: "Medium",
-                            answers: [
-                              { answer_text: "", is_correct: false },
-                              { answer_text: "", is_correct: false },
-                            ],
-                            correct_value: "",
-                          }
-                        ]
-                      }));
-                    }}
-                    style={{ padding: "6px 12px", fontSize: "12px" }}
-                  >
-                    + Add Question
-                  </button>
-                </div>
-
-                {editQuizForm.questions.map((q, qIndex) => (
-                  <div key={qIndex} style={{ background: "#f8fafc", border: "1px solid var(--admin-border)", borderRadius: "10px", padding: "12px", marginBottom: "12px", position: "relative" }}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditQuizForm(prev => ({
-                          ...prev,
-                          questions: prev.questions.filter((_, idx) => idx !== qIndex)
-                        }));
-                      }}
-                      style={{ position: "absolute", top: "10px", right: "10px", background: "none", border: "none", color: "var(--admin-danger)", cursor: "pointer", fontWeight: "bold", fontSize: "14px" }}
-                      title="Remove question"
-                    >
-                      &times;
-                    </button>
-                    <div style={{ fontWeight: "700", fontSize: "13px", marginBottom: "8px", color: "var(--admin-sidebar)" }}>
-                      Question #{qIndex + 1}
-                    </div>
-
-                    <div className="admin-field" style={{ marginBottom: "8px" }}>
-                      <label>Question Text *</label>
-                      <input
-                        placeholder="e.g. What is the chemical symbol for water?"
-                        value={q.question_text}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setEditQuizForm(prev => ({
-                            ...prev,
-                            questions: prev.questions.map((question, idx) =>
-                              idx === qIndex ? { ...question, question_text: val } : question
-                            )
-                          }));
-                        }}
-                        required
-                      />
-                    </div>
-
-                    <div className="admin-form-row" style={{ marginBottom: "8px" }}>
-                      <div className="admin-field">
-                        <label>Question Type *</label>
-                        <select
-                          value={q.question_type}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setEditQuizForm(prev => ({
-                              ...prev,
-                              questions: prev.questions.map((question, idx) =>
-                                idx === qIndex ? { ...question, question_type: val } : question
-                              )
-                            }));
-                          }}
-                        >
-                          <option value="MCQ">Multiple Choice (MCQ)</option>
-                          <option value="NUMERIC">Numeric Answer</option>
-                        </select>
-                      </div>
-                      <div className="admin-field">
-                        <label>Difficulty *</label>
-                        <select
-                          value={q.difficulty_level}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setEditQuizForm(prev => ({
-                              ...prev,
-                              questions: prev.questions.map((question, idx) =>
-                                idx === qIndex ? { ...question, difficulty_level: val } : question
-                              )
-                            }));
-                          }}
-                        >
-                          <option value="Easy">Easy</option>
-                          <option value="Medium">Medium</option>
-                          <option value="Hard">Hard</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {q.question_type === "MCQ" && (
-                      <div style={{ marginTop: "10px" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                          <label style={{ fontSize: "12px", fontWeight: "600" }}>Options (Mark correct options) *</label>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditQuizForm(prev => ({
-                                ...prev,
-                                questions: prev.questions.map((question, idx) =>
-                                  idx === qIndex ? {
-                                    ...question,
-                                    answers: [...question.answers, { answer_text: "", is_correct: false }]
-                                  } : question
-                                )
-                              }));
-                            }}
-                            style={{ background: "none", border: "none", color: "var(--admin-accent)", cursor: "pointer", fontSize: "11px", fontWeight: "700" }}
-                          >
-                            + Add Option
-                          </button>
-                        </div>
-                        {q.answers.map((ans: any, aIndex: number) => (
-                          <div key={aIndex} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                            <input
-                              type="checkbox"
-                              checked={ans.is_correct}
-                              onChange={(e) => {
-                                const checked = e.target.checked;
-                                setEditQuizForm(prev => ({
-                                  ...prev,
-                                  questions: prev.questions.map((question, idx) =>
-                                    idx === qIndex ? {
-                                      ...question,
-                                      answers: question.answers.map((item: any, itemIdx: number) =>
-                                        itemIdx === aIndex ? { ...item, is_correct: checked } : item
-                                      )
-                                    } : question
-                                  )
-                                }));
-                              }}
-                              style={{ width: "16px", height: "16px", cursor: "pointer" }}
-                              title="Mark as correct"
-                            />
-                            <input
-                              placeholder={`Option #${aIndex + 1}`}
-                              value={ans.answer_text}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setEditQuizForm(prev => ({
-                                  ...prev,
-                                  questions: prev.questions.map((question, idx) =>
-                                    idx === qIndex ? {
-                                      ...question,
-                                      answers: question.answers.map((item: any, itemIdx: number) =>
-                                        itemIdx === aIndex ? { ...item, answer_text: val } : item
-                                      )
-                                    } : question
-                                  )
-                                }));
-                              }}
-                              style={{ flex: 1, padding: "6px 8px", fontSize: "12px" }}
-                              required
-                            />
-                            {q.answers.length > 2 && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditQuizForm(prev => ({
-                                    ...prev,
-                                    questions: prev.questions.map((question, idx) =>
-                                      idx === qIndex ? {
-                                        ...question,
-                                        answers: question.answers.filter((_: any, itemIdx: number) => itemIdx !== aIndex)
-                                      } : question
-                                    )
-                                  }));
-                                }}
-                                style={{ background: "none", border: "none", color: "var(--admin-danger)", cursor: "pointer", fontSize: "14px", fontWeight: "bold" }}
-                                title="Delete option"
-                              >
-                                &times;
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {q.question_type === "NUMERIC" && (
-                      <div className="admin-field" style={{ marginTop: "10px" }}>
-                        <label>Correct Value *</label>
-                        <input
-                          placeholder="e.g. 42 or 3.14"
-                          value={q.correct_value}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setEditQuizForm(prev => ({
-                              ...prev,
-                              questions: prev.questions.map((question, idx) =>
-                                idx === qIndex ? { ...question, correct_value: val } : question
-                              )
-                            }));
-                          }}
-                          required
-                        />
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {error && <div className="admin-error">{error}</div>}
-              <div className="admin-modal-actions" style={{ marginTop: "1.5rem" }}>
-                <button
-                  className="admin-secondary-btn"
-                  type="button"
-                  onClick={() => {
-                    setShowEditQuizModal(false);
-                    setSelectedQuiz(null);
-                    setError("");
-                  }}
-                  disabled={actionLoading}
-                >
-                  Cancel
-                </button>
-                <button className="admin-primary-btn" type="submit" disabled={actionLoading}>
-                  Save Changes
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}

@@ -8,6 +8,7 @@ type CurrentUser = {
   first_name: string;
   last_name: string;
   role: string;
+  school_id?: number | null;
 };
 
 const useCurrentUser = () => {
