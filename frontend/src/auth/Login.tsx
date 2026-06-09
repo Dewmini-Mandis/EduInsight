@@ -8,7 +8,6 @@ const Login = () => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [remember, setRemember] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
@@ -59,7 +58,6 @@ const Login = () => {
       </div>
       <div className="login-right-panel">
         <div className="login-brand">
-          <div className="login-logo" />
           <div>
             <div className="login-brand-title">Edulnsight</div>
             <div className="login-brand-sub">NATIONAL PORTAL</div>
@@ -68,30 +66,23 @@ const Login = () => {
         <div className="login-card">
           <form onSubmit={handleSubmit}>
             <div className="login-label"><b>Email or Username</b></div>
-            <div className="login-input-wrap">
-              <span className="login-input-icon user" />
-              <input
-                type="text"
-                className="login-input"
-                placeholder="admin@moe.gov.lk"
-                value={username}
-                onChange={e => setUsername(e.target.value)}
-                required
-              />
-            </div>
-            <div className="login-label-row">
-              <div className="login-label"><b>Password</b></div>
-              <a className="login-forgot" href="#">Forgot password?</a>
-            </div>
-            <div className="login-input-wrap" style={{ position: "relative", display: "flex", alignItems: "center" }}>
-              <span className="login-input-icon lock" />
+            <input
+              type="text"
+              className="login-input"
+              placeholder="admin@moe.gov.lk"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              required
+            />
+            <div className="login-label"><b>Password</b></div>
+            <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
               <input
                 type={showPassword ? "text" : "password"}
                 className="login-input"
                 placeholder="••••••••"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                style={{ paddingRight: "40px", width: "100%" }}
+                style={{ paddingRight: "40px", width: "100%", marginBottom: "0.5rem" }}
                 required
               />
               <button
@@ -100,6 +91,8 @@ const Login = () => {
                 style={{
                   position: "absolute",
                   right: "12px",
+                  top: "22px",
+                  transform: "translateY(-50%)",
                   background: "none",
                   border: "none",
                   cursor: "pointer",
@@ -118,14 +111,8 @@ const Login = () => {
                 )}
               </button>
             </div>
-            <div className="login-remember-row">
-              <input
-                type="checkbox"
-                id="remember"
-                checked={remember}
-                onChange={e => setRemember(e.target.checked)}
-              />
-              <label htmlFor="remember">Remember this device</label>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.2rem", marginBottom: "1.2rem" }}>
+              <a className="login-forgot" href="#">Forgot password?</a>
             </div>
             {error && <div className="auth-error" style={{marginBottom: 12}}>{error}</div>}
             <button className="login-btn" type="submit">Sign In to Portal</button>

@@ -44,6 +44,7 @@ const SchoolAdminDashboard = () => {
     title: "",
     description: "",
     schoolId: "",
+    max_attempts: 3,
     questions: [
       {
         question_text: "",
@@ -53,6 +54,7 @@ const SchoolAdminDashboard = () => {
           { answer_text: "", is_correct: false },
           { answer_text: "", is_correct: false },
         ],
+        hints: [] as any[],
         correct_value: "",
       },
     ],
@@ -61,6 +63,7 @@ const SchoolAdminDashboard = () => {
     title: "",
     description: "",
     schoolId: "",
+    max_attempts: 3,
     questions: [] as any[],
   });
   const [showStudentModal, setShowStudentModal] = useState(false);
@@ -588,6 +591,7 @@ const SchoolAdminDashboard = () => {
       title: quiz.title || "",
       description: quiz.description || "",
       schoolId: quiz.school ? quiz.school.toString() : "",
+      max_attempts: quiz.max_attempts || 3,
       questions: (quiz.questions || []).map((q: any) => {
         const baseQ: any = {
           id: q.id,
@@ -598,6 +602,11 @@ const SchoolAdminDashboard = () => {
             id: a.id,
             answer_text: a.answer_text || "",
             is_correct: !!a.is_correct,
+          })),
+          hints: (q.hints || []).map((h: any) => ({
+            id: h.id,
+            hint_text: h.hint_text || "",
+            sequence_no: h.sequence_no,
           })),
           correct_value: q.correct_value || "",
         };
@@ -667,6 +676,7 @@ const SchoolAdminDashboard = () => {
         title: quizForm.title.trim(),
         description: quizForm.description.trim(),
         school: currentUser?.school_id ? Number(currentUser.school_id) : null,
+        max_attempts: Number(quizForm.max_attempts),
         questions: quizForm.questions.map((q) => {
           const baseQ: any = {
             question_text: q.question_text.trim(),
@@ -681,6 +691,10 @@ const SchoolAdminDashboard = () => {
           } else {
             baseQ.correct_value = q.correct_value.trim();
           }
+          baseQ.hints = (q.hints || []).map((h: any, idx: number) => ({
+            hint_text: h.hint_text.trim(),
+            sequence_no: idx + 1
+          }));
           return baseQ;
         }),
       };
@@ -703,6 +717,7 @@ const SchoolAdminDashboard = () => {
         title: "",
         description: "",
         schoolId: "",
+        max_attempts: 3,
         questions: [
           {
             question_text: "",
@@ -712,6 +727,7 @@ const SchoolAdminDashboard = () => {
               { answer_text: "", is_correct: false },
               { answer_text: "", is_correct: false },
             ],
+            hints: [] as any[],
             correct_value: "",
           },
         ],
@@ -779,6 +795,7 @@ const SchoolAdminDashboard = () => {
         title: editQuizForm.title.trim(),
         description: editQuizForm.description.trim(),
         school: currentUser?.school_id ? Number(currentUser.school_id) : null,
+        max_attempts: Number(editQuizForm.max_attempts),
         questions: editQuizForm.questions.map((q) => {
           const baseQ: any = {
             question_text: q.question_text.trim(),
@@ -802,6 +819,10 @@ const SchoolAdminDashboard = () => {
           } else {
             baseQ.correct_value = q.correct_value.trim();
           }
+          baseQ.hints = (q.hints || []).map((h: any, idx: number) => ({
+            hint_text: h.hint_text.trim(),
+            sequence_no: idx + 1
+          }));
           return baseQ;
         }),
       };
@@ -892,9 +913,6 @@ const SchoolAdminDashboard = () => {
               onClick={() => setActiveSection("quizzes")}
             >
               Quizzes
-            </button>
-            <button className="admin-nav-item" type="button">
-              Class Setup
             </button>
             <button
               className="admin-nav-item"
@@ -1124,6 +1142,17 @@ const SchoolAdminDashboard = () => {
                       style={{ border: "1px solid var(--admin-border)", borderRadius: "10px", padding: "8px 10px", minHeight: "60px", fontFamily: "inherit", fontSize: "13px" }}
                     />
                   </div>
+                  <div className="admin-field">
+                    <label>Max Attempts Allowed *</label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="e.g. 3"
+                      value={quizForm.max_attempts}
+                      onChange={(e) => setQuizForm(prev => ({ ...prev, max_attempts: Number(e.target.value) }))}
+                      required
+                    />
+                  </div>
 
                   <div style={{ marginTop: "1rem", borderTop: "1px solid var(--admin-border)", paddingTop: "1rem" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
@@ -1144,6 +1173,7 @@ const SchoolAdminDashboard = () => {
                                   { answer_text: "", is_correct: false },
                                   { answer_text: "", is_correct: false },
                                 ],
+                                hints: [] as any[],
                                 correct_value: "",
                               }
                             ]
@@ -1454,6 +1484,17 @@ const SchoolAdminDashboard = () => {
                       style={{ border: "1px solid var(--admin-border)", borderRadius: "10px", padding: "8px 10px", minHeight: "60px", fontFamily: "inherit", fontSize: "13px" }}
                     />
                   </div>
+                  <div className="admin-field">
+                    <label>Max Attempts Allowed *</label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="e.g. 3"
+                      value={editQuizForm.max_attempts}
+                      onChange={(e) => setEditQuizForm(prev => ({ ...prev, max_attempts: Number(e.target.value) }))}
+                      required
+                    />
+                  </div>
 
                   <div style={{ marginTop: "1rem", borderTop: "1px solid var(--admin-border)", paddingTop: "1rem" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
@@ -1474,6 +1515,7 @@ const SchoolAdminDashboard = () => {
                                   { answer_text: "", is_correct: false },
                                   { answer_text: "", is_correct: false },
                                 ],
+                                hints: [] as any[],
                                 correct_value: "",
                               }
                             ]

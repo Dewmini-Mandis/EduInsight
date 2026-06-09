@@ -156,36 +156,25 @@ body, .login-root, .login-card, .login-title, .login-label, .login-input, .login
 .login-forgot:hover {
   color: #031636;
 }
-.login-input-wrap {
-  display: flex;
-  align-items: center;
-  background: #f7f9fb;
+.login-input {
   border: 1.2px solid #dbe2ef;
   border-radius: 8px;
-  margin-bottom: 1.1rem;
-  padding: 0.1rem 0.7rem;
-}
-.login-input-icon {
-  font-size: 1.2rem;
-  margin-right: 0.7rem;
-  color: #b6c3d7;
-}
-.login-input-icon.user::before {
-  content: '\1F464'; /* user emoji */
-}
-.login-input-icon.lock::before {
-  content: '\1F512'; /* lock emoji */
-}
-.login-input {
-  border: none;
   outline: none;
-  background: transparent;
+  background: #f7f9fb;
   font-size: 1.08rem;
   color: #031636;
   width: 100%;
-  padding: 0.7rem 0;
+  padding: 0.7rem 0.8rem;
   font-family: inherit;
   font-weight: 400;
+  box-sizing: border-box;
+  margin-bottom: 1.1rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.login-input:focus {
+  border-color: #3b82f6;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
 }
 .login-input::placeholder {
   color: #b6c3d7;

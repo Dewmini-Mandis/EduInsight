@@ -18,6 +18,7 @@ class Quiz(models.Model):
 		related_name="quizzes",
 	)
 	created_at = models.DateTimeField(auto_now_add=True)
+	max_attempts = models.PositiveIntegerField(default=3)
 
 	def __str__(self) -> str:
 		return self.title

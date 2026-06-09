@@ -181,7 +181,6 @@ const UserProfilePage = () => {
       <aside className="admin-sidebar">
         <div>
           <div className="admin-brand">
-            <div className="admin-logo" />
             <div>
               <div className="admin-brand-title">EduInsight</div>
               <div className="admin-brand-sub">{roleLabel}</div>
@@ -200,10 +199,7 @@ const UserProfilePage = () => {
                   Schools
                 </button>
                 <button className="admin-nav-item" type="button" onClick={() => navigate("/dashboard")}>
-                  Security
-                </button>
-                <button className="admin-nav-item" type="button" onClick={() => navigate("/dashboard")}>
-                  Settings
+                  User Logs
                 </button>
               </>
             )}
@@ -214,6 +210,9 @@ const UserProfilePage = () => {
                 </button>
                 <button className="admin-nav-item" type="button" onClick={() => navigate("/dashboard")}>
                   Users
+                </button>
+                <button className="admin-nav-item" type="button" onClick={() => navigate("/dashboard")}>
+                  Quizzes
                 </button>
                 <button className="admin-nav-item" type="button" onClick={() => navigate("/dashboard")}>
                   National Reports
@@ -229,7 +228,7 @@ const UserProfilePage = () => {
                   Students
                 </button>
                 <button className="admin-nav-item" type="button" onClick={() => navigate("/dashboard")}>
-                  Class Setup
+                  Quizzes
                 </button>
               </>
             )}

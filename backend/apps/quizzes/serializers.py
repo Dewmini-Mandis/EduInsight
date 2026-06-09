@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Quiz, Question, Answer, CorrectAnswer
+from .models import Quiz, Question, Answer, CorrectAnswer, Hint
 
 class AnswerSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(required=False)
@@ -13,9 +13,17 @@ class CorrectAnswerSerializer(serializers.ModelSerializer):
         model = CorrectAnswer
         fields = ["correct_value"]
 
+class HintSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(required=False)
+
+    class Meta:
+        model = Hint
+        fields = ["id", "hint_text", "sequence_no"]
+
 class QuestionSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(required=False)
     answers = AnswerSerializer(many=True, required=False)
+    hints = HintSerializer(many=True, required=False)
     correct_value = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
     correct_answer = CorrectAnswerSerializer(read_only=True)
 
@@ -27,6 +35,7 @@ class QuestionSerializer(serializers.ModelSerializer):
             "question_type",
             "difficulty_level",
             "answers",
+            "hints",
             "correct_value",
             "correct_answer",
         ]
@@ -55,6 +64,7 @@ class QuizSerializer(serializers.ModelSerializer):
             "created_by_name",
             "questions",
             "created_at",
+            "max_attempts",
         ]
         read_only_fields = ["created_by"]
 
@@ -68,6 +78,7 @@ class QuizSerializer(serializers.ModelSerializer):
 
         for q_data in questions_data:
             answers_data = q_data.pop("answers", [])
+            hints_data = q_data.pop("hints", [])
             correct_value = q_data.pop("correct_value", None)
 
             question = Question.objects.create(quiz=quiz, **q_data)
@@ -79,6 +90,9 @@ class QuizSerializer(serializers.ModelSerializer):
                 if correct_value is not None:
                     CorrectAnswer.objects.create(question=question, correct_value=correct_value)
 
+            for h_data in hints_data:
+                Hint.objects.create(question=question, **h_data)
+
         return quiz
 
     def update(self, instance, validated_data):
@@ -86,12 +100,14 @@ class QuizSerializer(serializers.ModelSerializer):
         instance.title = validated_data.get("title", instance.title)
         instance.description = validated_data.get("description", instance.description)
         instance.school = validated_data.get("school", instance.school)
+        instance.max_attempts = validated_data.get("max_attempts", instance.max_attempts)
         instance.save()
 
         if questions_data is not None:
             instance.questions.all().delete()
             for q_data in questions_data:
                 answers_data = q_data.pop("answers", [])
+                hints_data = q_data.pop("hints", [])
                 correct_value = q_data.pop("correct_value", None)
 
                 question = Question.objects.create(quiz=instance, **q_data)
@@ -102,5 +118,8 @@ class QuizSerializer(serializers.ModelSerializer):
                 elif q_data.get("question_type") == Question.TYPE_NUMERIC:
                     if correct_value is not None:
                         CorrectAnswer.objects.create(question=question, correct_value=correct_value)
+
+                for h_data in hints_data:
+                    Hint.objects.create(question=question, **h_data)
 
         return instance

@@ -55,7 +55,7 @@ const SystemAdminDashboard = () => {
   const [successMessage, setSuccessMessage] = useState("");
   
   // Tabs & Navigation
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'schools'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'schools' | 'logs'>('dashboard');
   const [actionLoading, setActionLoading] = useState(false);
 
   // User filter states
@@ -981,11 +981,12 @@ const SystemAdminDashboard = () => {
             >
               Schools
             </button>
-            <button className="admin-nav-item" type="button">
-              Security
-            </button>
-            <button className="admin-nav-item" type="button">
-              Settings
+            <button
+              className={`admin-nav-item ${activeTab === "logs" ? "active" : ""}`}
+              type="button"
+              onClick={() => setActiveTab("logs")}
+            >
+              User Logs
             </button>
             <button
               className="admin-nav-item"
@@ -1014,14 +1015,16 @@ const SystemAdminDashboard = () => {
         <div className="admin-topbar">
           <div>
             <div className="admin-title">
-              {activeTab === "dashboard" ? "System Administration" : activeTab === "users" ? "User Management" : "Schools Management"}
+              {activeTab === "dashboard" ? "System Administration" : activeTab === "users" ? "User Management" : activeTab === "schools" ? "Schools Management" : "User Audit Logs"}
             </div>
             <div className="admin-subtitle">
               {activeTab === "dashboard"
                 ? "Overview of national system operations"
                 : activeTab === "users"
                 ? "Manage credentials and access levels across all roles"
-                : "Manage registered educational institutions"}
+                : activeTab === "schools"
+                ? "Manage registered educational institutions"
+                : "View and filter real-time security and administrative logs"}
             </div>
           </div>
           <div className="admin-topbar-actions">
@@ -2080,6 +2083,73 @@ const SystemAdminDashboard = () => {
               <div className="admin-loading-text">processing</div>
             </div>
           </div>
+        )}
+
+        {activeTab === "logs" && (
+          <section className="admin-card admin-logs" style={{ padding: "1.5rem" }}>
+            <div className="admin-card-header" style={{ marginBottom: "1rem" }}>
+              <div>
+                <div className="admin-card-title">User Logs & System Activity</div>
+                <div className="admin-card-subtitle">Real-time monitoring of administrative activity</div>
+              </div>
+              <button className="admin-secondary-btn" type="button" style={{ width: "auto", padding: "8px 16px" }}>
+                DOWNLOAD FULL AUDIT LOG (CSV)
+              </button>
+            </div>
+            
+            <div style={{ display: "flex", gap: "10px", marginBottom: "1.5rem" }}>
+              <input 
+                className="admin-filter-input" 
+                placeholder="Search audit logs..." 
+                style={{ flex: 1 }}
+                readOnly
+              />
+              <select className="admin-filter-select">
+                <option value="all">All Events</option>
+                <option value="success">Success</option>
+                <option value="blocked">Blocked</option>
+                <option value="warning">Warning</option>
+              </select>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              <div className="admin-log-item" style={{ border: "1px solid var(--admin-border)", borderRadius: "8px", padding: "12px" }}>
+                <div>
+                  <div className="user-name" style={{ fontWeight: "600", fontSize: "14px" }}>Admin Panel logged in from 192.168.1.45</div>
+                  <div className="admin-log-meta" style={{ fontSize: "12px", color: "var(--admin-text-muted)" }}>June 09, 2026 - 19:42:12</div>
+                </div>
+                <div className="admin-log-status success" style={{ padding: "4px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: "700", background: "#f0fdf4", color: "#16a34a" }}>SUCCESS</div>
+              </div>
+              <div className="admin-log-item" style={{ border: "1px solid var(--admin-border)", borderRadius: "8px", padding: "12px" }}>
+                <div>
+                  <div className="user-name" style={{ fontWeight: "600", fontSize: "14px" }}>Unauthorized Access Attempt on API Endpoint /v1/students</div>
+                  <div className="admin-log-meta" style={{ fontSize: "12px", color: "var(--admin-text-muted)" }}>June 09, 2026 - 19:38:05</div>
+                </div>
+                <div className="admin-log-status blocked" style={{ padding: "4px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: "700", background: "#fef2f2", color: "#dc2626" }}>BLOCKED</div>
+              </div>
+              <div className="admin-log-item" style={{ border: "1px solid var(--admin-border)", borderRadius: "8px", padding: "12px" }}>
+                <div>
+                  <div className="user-name" style={{ fontWeight: "600", fontSize: "14px" }}>System configuration updated by Amila Samarakoon</div>
+                  <div className="admin-log-meta" style={{ fontSize: "12px", color: "var(--admin-text-muted)" }}>June 09, 2026 - 18:15:33</div>
+                </div>
+                <div className="admin-log-status" style={{ padding: "4px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: "700", background: "#f1f5f9", color: "#475569" }}>COMPLETED</div>
+              </div>
+              <div className="admin-log-item" style={{ border: "1px solid var(--admin-border)", borderRadius: "8px", padding: "12px" }}>
+                <div>
+                  <div className="user-name" style={{ fontWeight: "600", fontSize: "14px" }}>New School Admin assigned to Central College Kandy</div>
+                  <div className="admin-log-meta" style={{ fontSize: "12px", color: "var(--admin-text-muted)" }}>June 09, 2026 - 15:30:10</div>
+                </div>
+                <div className="admin-log-status success" style={{ padding: "4px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: "700", background: "#f0fdf4", color: "#16a34a" }}>SUCCESS</div>
+              </div>
+              <div className="admin-log-item" style={{ border: "1px solid var(--admin-border)", borderRadius: "8px", padding: "12px" }}>
+                <div>
+                  <div className="user-name" style={{ fontWeight: "600", fontSize: "14px" }}>Password reset requested for user principal@central.edu.lk</div>
+                  <div className="admin-log-meta" style={{ fontSize: "12px", color: "var(--admin-text-muted)" }}>June 09, 2026 - 12:12:04</div>
+                </div>
+                <div className="admin-log-status success" style={{ padding: "4px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: "700", background: "#f0fdf4", color: "#16a34a" }}>SUCCESS</div>
+              </div>
+            </div>
+          </section>
         )}
       </main>
     </div>
