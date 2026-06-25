@@ -58,15 +58,56 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
+import os
+import socket
 import dj_database_url
 
-DATABASES = {
-	"default": dj_database_url.parse(
-		"postgresql://neondb_owner:npg_NTFYE8qIifC0@ep-cool-shadow-aoob8xsr.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require",
-		conn_max_age=0,
-		ssl_require=True,
-	)
-}
+db_url = os.getenv(
+	"DATABASE_URL",
+	"postgresql://neondb_owner:npg_NTFYE8qIifC0@ep-cool-shadow-aoob8xsr.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+)
+
+db_config = dj_database_url.parse(
+	db_url,
+	conn_max_age=0,
+	ssl_require=True,
+)
+
+# Force IPv4 resolve to bypass IPv6 handshake/routing issues on some local networks
+try:
+	host = db_config.get("HOST")
+	if host and not host.startswith("/") and not host.replace(".", "").isdigit():
+		ipv4_addresses = [
+			info[4][0]
+			for info in socket.getaddrinfo(host, 5432, socket.AF_INET)
+		]
+		if ipv4_addresses:
+			db_config["HOST"] = ipv4_addresses[0]
+			db_config["OPTIONS"] = db_config.get("OPTIONS") or {}
+			# Omit channel_binding as it's not supported by Neon and causes connection failures
+			db_config["OPTIONS"].pop("channel_binding", None)
+			# Add endpoint ID to options for Neon routing when connecting via IP address directly
+			endpoint_id = host.split(".")[0]
+			if endpoint_id.endswith("-pooler"):
+				endpoint_id = endpoint_id[:-7]
+			db_config["OPTIONS"]["options"] = f"endpoint={endpoint_id}"
+except Exception:
+	pass
+
+USE_SQLITE = os.getenv("USE_SQLITE", "True").lower() in ("true", "1", "t")
+
+if USE_SQLITE:
+	DATABASES = {
+		"default": {
+			"ENGINE": "django.db.backends.sqlite3",
+			"NAME": BASE_DIR / "db.sqlite3",
+		}
+	}
+else:
+	DATABASES = {
+		"default": db_config
+	}
+
 
 AUTH_PASSWORD_VALIDATORS = [
 	{

@@ -1,9 +1,48 @@
 from django.db import models
 
 
+class Lesson(models.Model):
+	title = models.CharField(max_length=255)
+	description = models.TextField(blank=True)
+	term = models.CharField(
+		max_length=20,
+		choices=[
+			("1st Term", "1st Term"),
+			("2nd Term", "2nd Term"),
+			("3rd Term", "3rd Term"),
+		]
+	)
+	created_by = models.ForeignKey(
+		"accounts.User",
+		on_delete=models.SET_NULL,
+		null=True,
+		related_name="lessons_created",
+	)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	def __str__(self) -> str:
+		return f"{self.title} ({self.term})"
+
+
 class Quiz(models.Model):
 	title = models.CharField(max_length=255)
 	description = models.TextField(blank=True)
+	lesson = models.ForeignKey(
+		Lesson,
+		on_delete=models.SET_NULL,
+		null=True,
+		blank=True,
+		related_name="quizzes",
+	)
+	learning_level = models.CharField(
+		max_length=20,
+		choices=[
+			("Beginner", "Beginner"),
+			("Intermediate", "Intermediate"),
+			("Advanced", "Advanced"),
+		],
+		default="Beginner",
+	)
 	created_by = models.ForeignKey(
 		"accounts.User",
 		on_delete=models.SET_NULL,
@@ -22,6 +61,7 @@ class Quiz(models.Model):
 
 	def __str__(self) -> str:
 		return self.title
+
 
 
 class Question(models.Model):

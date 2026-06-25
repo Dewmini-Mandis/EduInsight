@@ -1,5 +1,22 @@
 from rest_framework import serializers
-from .models import Quiz, Question, Answer, CorrectAnswer, Hint
+from .models import Quiz, Question, Answer, CorrectAnswer, Hint, Lesson
+
+class LessonSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.CharField(source="created_by.get_full_name", read_only=True)
+
+    class Meta:
+        model = Lesson
+        fields = [
+            "id",
+            "title",
+            "description",
+            "term",
+            "created_by",
+            "created_by_name",
+            "created_at",
+        ]
+        read_only_fields = ["created_by"]
+
 
 class AnswerSerializer(serializers.ModelSerializer):
     id = serializers.IntegerField(required=False)
@@ -51,6 +68,7 @@ class QuizSerializer(serializers.ModelSerializer):
     questions = QuestionSerializer(many=True, required=False)
     created_by_name = serializers.CharField(source="created_by.get_full_name", read_only=True)
     school_name = serializers.CharField(source="school.name", read_only=True)
+    lesson_title = serializers.CharField(source="lesson.title", read_only=True)
 
     class Meta:
         model = Quiz
@@ -58,6 +76,9 @@ class QuizSerializer(serializers.ModelSerializer):
             "id",
             "title",
             "description",
+            "lesson",
+            "lesson_title",
+            "learning_level",
             "school",
             "school_name",
             "created_by",
@@ -101,7 +122,10 @@ class QuizSerializer(serializers.ModelSerializer):
         instance.description = validated_data.get("description", instance.description)
         instance.school = validated_data.get("school", instance.school)
         instance.max_attempts = validated_data.get("max_attempts", instance.max_attempts)
+        instance.lesson = validated_data.get("lesson", instance.lesson)
+        instance.learning_level = validated_data.get("learning_level", instance.learning_level)
         instance.save()
+
 
         if questions_data is not None:
             instance.questions.all().delete()

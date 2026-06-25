@@ -4,8 +4,39 @@ from rest_framework.permissions import IsAuthenticated
 from django.db import models
 
 from apps.accounts.models import Role
-from .models import Quiz
-from .serializers import QuizSerializer
+from .models import Quiz, Lesson
+from .serializers import QuizSerializer, LessonSerializer
+
+
+
+class LessonViewSet(viewsets.ModelViewSet):
+    serializer_class = LessonSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        term = self.request.query_params.get("term")
+        queryset = Lesson.objects.all().order_by("created_at")
+        if term:
+            queryset = queryset.filter(term=term)
+        return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if not user.is_role(Role.ROLE_SYSTEM_ADMIN, Role.ROLE_NATIONAL_ADMIN):
+            raise PermissionDenied("You do not have permission to create lessons.")
+        serializer.save(created_by=user)
+
+    def perform_update(self, serializer):
+        user = self.request.user
+        if not user.is_role(Role.ROLE_SYSTEM_ADMIN, Role.ROLE_NATIONAL_ADMIN):
+            raise PermissionDenied("You do not have permission to update lessons.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        user = self.request.user
+        if not user.is_role(Role.ROLE_SYSTEM_ADMIN, Role.ROLE_NATIONAL_ADMIN):
+            raise PermissionDenied("You do not have permission to delete lessons.")
+        instance.delete()
 
 
 class QuizViewSet(viewsets.ModelViewSet):
@@ -15,6 +46,10 @@ class QuizViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         queryset = Quiz.objects.all().prefetch_related("questions__answers", "questions__correct_answer")
+
+        lesson_id = self.request.query_params.get("lesson")
+        if lesson_id:
+            queryset = queryset.filter(lesson_id=lesson_id)
 
         if user.is_role(Role.ROLE_SYSTEM_ADMIN, Role.ROLE_NATIONAL_ADMIN):
             return queryset

@@ -29,11 +29,8 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
         
         # Students can only view their own attempts
         if user.is_role(Role.ROLE_STUDENT):
-            try:
-                student = user.student_profile
-                return QuizAttempt.objects.filter(student=student).prefetch_related("answers").order_by("-start_time")
-            except Student.DoesNotExist:
-                return QuizAttempt.objects.none()
+            student, _ = Student.objects.get_or_create(user=user)
+            return QuizAttempt.objects.filter(student=student).prefetch_related("answers").order_by("-start_time")
             
         return QuizAttempt.objects.none()
 
@@ -42,10 +39,7 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
         if not user.is_role(Role.ROLE_STUDENT):
             return Response({"detail": "Only students can submit quiz attempts."}, status=status.HTTP_403_FORBIDDEN)
             
-        try:
-            student = user.student_profile
-        except Student.DoesNotExist:
-            return Response({"detail": "Student profile not found for this user."}, status=status.HTTP_400_BAD_REQUEST)
+        student, _ = Student.objects.get_or_create(user=user)
         
         quiz_id = request.data.get("quiz")
         if not quiz_id:

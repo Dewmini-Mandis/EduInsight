@@ -47,23 +47,33 @@ const NationalAdminDashboard = () => {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
-  const [activeSection, setActiveSection] = useState<"schools" | "admins" | "quizzes">(
+  const [activeSection, setActiveSection] = useState<"schools" | "admins" | "quizzes" | "lessons">(
     "schools"
   );
   const [quizzes, setQuizzes] = useState<any[]>([]);
   const [quizAction, setQuizAction] = useState<"list" | "create" | "edit" | "view">("list");
   const [showDeleteQuizConfirm, setShowDeleteQuizConfirm] = useState(false);
   const [selectedQuiz, setSelectedQuiz] = useState<any | null>(null);
+
+  const [lessons, setLessons] = useState<any[]>([]);
+  const [lessonAction, setLessonAction] = useState<"list" | "create" | "edit">("list");
+  const [selectedLesson, setSelectedLesson] = useState<any | null>(null);
+  const [showDeleteLessonConfirm, setShowDeleteLessonConfirm] = useState(false);
+  const [lessonForm, setLessonForm] = useState({ title: "", description: "", term: "1st Term" });
+  const [editLessonForm, setEditLessonForm] = useState({ title: "", description: "", term: "1st Term" });
+
   const [quizForm, setQuizForm] = useState({
     title: "",
     description: "",
     schoolId: "",
+    lessonId: "",
+    learning_level: "Beginner",
+    difficulty_level: "Medium",
     max_attempts: 3,
     questions: [
       {
         question_text: "",
         question_type: "MCQ",
-        difficulty_level: "Medium",
         answers: [
           { answer_text: "", is_correct: false },
           { answer_text: "", is_correct: false },
@@ -77,6 +87,9 @@ const NationalAdminDashboard = () => {
     title: "",
     description: "",
     schoolId: "",
+    lessonId: "",
+    learning_level: "Beginner",
+    difficulty_level: "Medium",
     max_attempts: 3,
     questions: [] as any[],
   });
@@ -183,7 +196,7 @@ const NationalAdminDashboard = () => {
     setError("");
     try {
       const token = getToken();
-      const [schoolsRes, adminsRes, quizzesRes] = await Promise.all([
+      const [schoolsRes, adminsRes, quizzesRes, lessonsRes] = await Promise.all([
         fetch("/api/schools/", {
           headers: { Authorization: `Token ${token}` },
         }),
@@ -193,18 +206,24 @@ const NationalAdminDashboard = () => {
         fetch("/api/quizzes/", {
           headers: { Authorization: `Token ${token}` },
         }),
+        fetch("/api/quizzes/lessons/", {
+          headers: { Authorization: `Token ${token}` },
+        }),
       ]);
 
       if (!schoolsRes.ok) throw new Error("Unable to load schools");
       if (!adminsRes.ok) throw new Error("Unable to load school admins");
       if (!quizzesRes.ok) throw new Error("Unable to load quizzes");
+      if (!lessonsRes.ok) throw new Error("Unable to load lessons");
 
       const schoolData = (await schoolsRes.json()) as School[];
       const adminData = (await adminsRes.json()) as SchoolAdmin[];
       const quizzesData = (await quizzesRes.json()) as any[];
+      const lessonsData = (await lessonsRes.json()) as any[];
       setSchools(schoolData);
       setAdmins(adminData);
       setQuizzes(quizzesData);
+      setLessons(lessonsData);
     } catch (err: any) {
       setError(err.message || "Unable to load dashboard data");
     } finally {
@@ -703,13 +722,15 @@ const NationalAdminDashboard = () => {
       title: quiz.title || "",
       description: quiz.description || "",
       schoolId: quiz.school ? quiz.school.toString() : "",
+      lessonId: quiz.lesson ? quiz.lesson.toString() : "",
+      learning_level: quiz.learning_level || "Beginner",
+      difficulty_level: (quiz.questions && quiz.questions.length > 0) ? quiz.questions[0].difficulty_level || "Medium" : "Medium",
       max_attempts: quiz.max_attempts || 3,
       questions: (quiz.questions || []).map((q: any) => {
         const baseQ: any = {
           id: q.id,
           question_text: q.question_text || "",
           question_type: q.question_type || "MCQ",
-          difficulty_level: q.difficulty_level || "Medium",
           answers: (q.answers || []).map((a: any) => ({
             id: a.id,
             answer_text: a.answer_text || "",
@@ -788,12 +809,14 @@ const NationalAdminDashboard = () => {
         title: quizForm.title.trim(),
         description: quizForm.description.trim(),
         school: quizForm.schoolId ? Number(quizForm.schoolId) : null,
+        lesson: quizForm.lessonId ? Number(quizForm.lessonId) : null,
+        learning_level: quizForm.learning_level,
         max_attempts: Number(quizForm.max_attempts),
         questions: quizForm.questions.map((q) => {
           const baseQ: any = {
             question_text: q.question_text.trim(),
             question_type: q.question_type,
-            difficulty_level: q.difficulty_level,
+            difficulty_level: quizForm.difficulty_level,
           };
           if (q.question_type === "MCQ") {
             baseQ.answers = q.answers.map((a) => ({
@@ -829,12 +852,14 @@ const NationalAdminDashboard = () => {
         title: "",
         description: "",
         schoolId: "",
+        lessonId: "",
+        learning_level: "Beginner",
+        difficulty_level: "Medium",
         max_attempts: 3,
         questions: [
           {
             question_text: "",
             question_type: "MCQ",
-            difficulty_level: "Medium",
             answers: [
               { answer_text: "", is_correct: false },
               { answer_text: "", is_correct: false },
@@ -907,12 +932,14 @@ const NationalAdminDashboard = () => {
         title: editQuizForm.title.trim(),
         description: editQuizForm.description.trim(),
         school: editQuizForm.schoolId ? Number(editQuizForm.schoolId) : null,
+        lesson: editQuizForm.lessonId ? Number(editQuizForm.lessonId) : null,
+        learning_level: editQuizForm.learning_level,
         max_attempts: Number(editQuizForm.max_attempts),
         questions: editQuizForm.questions.map((q) => {
           const baseQ: any = {
             question_text: q.question_text.trim(),
             question_type: q.question_type,
-            difficulty_level: q.difficulty_level,
+            difficulty_level: editQuizForm.difficulty_level,
           };
           if (q.id) {
             baseQ.id = q.id;
@@ -988,6 +1015,100 @@ const NationalAdminDashboard = () => {
     }
   };
 
+  const handleCreateLesson = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSuccessMessage("");
+    if (!lessonForm.title.trim()) {
+      setError("Lesson title is required.");
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const token = getToken();
+      const res = await fetch("/api/quizzes/lessons/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Token ${token}`,
+        },
+        body: JSON.stringify({
+          title: lessonForm.title.trim(),
+          description: lessonForm.description.trim(),
+          term: lessonForm.term,
+        }),
+      });
+      if (!res.ok) throw new Error("Unable to create lesson");
+      setLessonForm({ title: "", description: "", term: "1st Term" });
+      await fetchData();
+      setLessonAction("list");
+      setSuccessMessage("Lesson created successfully.");
+    } catch (err: any) {
+      setError(err.message || "Unable to create lesson");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleUpdateLesson = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSuccessMessage("");
+    if (!selectedLesson) return;
+    if (!editLessonForm.title.trim()) {
+      setError("Lesson title is required.");
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const token = getToken();
+      const res = await fetch(`/api/quizzes/lessons/${selectedLesson.id}/`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Token ${token}`,
+        },
+        body: JSON.stringify({
+          title: editLessonForm.title.trim(),
+          description: editLessonForm.description.trim(),
+          term: editLessonForm.term,
+        }),
+      });
+      if (!res.ok) throw new Error("Unable to update lesson");
+      setLessonAction("list");
+      setSelectedLesson(null);
+      await fetchData();
+      setSuccessMessage("Lesson updated successfully.");
+    } catch (err: any) {
+      setError(err.message || "Unable to update lesson");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeleteLesson = async () => {
+    if (!selectedLesson) return;
+    setError("");
+    setSuccessMessage("");
+    setActionLoading(true);
+    try {
+      const token = getToken();
+      const res = await fetch(`/api/quizzes/lessons/${selectedLesson.id}/`, {
+        method: "DELETE",
+        headers: { Authorization: `Token ${token}` },
+      });
+      if (!res.ok) throw new Error("Unable to delete lesson");
+      setShowDeleteLessonConfirm(false);
+      setSelectedLesson(null);
+      await fetchData();
+      setSuccessMessage("Lesson deleted successfully.");
+    } catch (err: any) {
+      setError(err.message || "Unable to delete lesson");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   return (
     <div className="admin-root">
       <aside className="admin-sidebar">
@@ -1020,6 +1141,18 @@ const NationalAdminDashboard = () => {
             >
               Quizzes
             </button>
+            <button
+              className={`admin-nav-item ${activeSection === "lessons" ? "active" : ""}`}
+              type="button"
+              onClick={() => {
+                setActiveSection("lessons");
+                setLessonAction("list");
+                setError("");
+                setSuccessMessage("");
+              }}
+            >
+              Lessons
+            </button>
             <button className="admin-nav-item" type="button">
               National Reports
             </button>
@@ -1047,13 +1180,21 @@ const NationalAdminDashboard = () => {
         <div className="admin-topbar">
           <div>
             <div className="admin-title">
-              {activeSection === "schools" ? "School Registry" : activeSection === "admins" ? "User Management" : "Quiz Management"}
+              {activeSection === "schools"
+                ? "School Registry"
+                : activeSection === "admins"
+                ? "User Management"
+                : activeSection === "lessons"
+                ? "Lesson Management"
+                : "Quiz Management"}
             </div>
             <div className="admin-subtitle">
               {activeSection === "schools"
                 ? "Review registered schools and add new institutions."
                 : activeSection === "admins"
                 ? "Manage credentials and access levels across school roles."
+                : activeSection === "lessons"
+                ? "Create academic terms and organize curriculum lessons."
                 : "Manage national and school level educational quizzes."}
             </div>
           </div>
@@ -1354,6 +1495,54 @@ const NationalAdminDashboard = () => {
                         ))}
                       </select>
                     </div>
+                    <div className="admin-field">
+                      <label>Assign to Lesson *</label>
+                      <select
+                        name="lessonId"
+                        value={quizForm.lessonId}
+                        onChange={(e) => setQuizForm(prev => ({ ...prev, lessonId: e.target.value }))}
+                        className="admin-filter-select"
+                        style={{ width: "100%" }}
+                        required
+                      >
+                        <option value="">-- Select Lesson --</option>
+                        {lessons.map((lesson) => (
+                          <option key={lesson.id} value={lesson.id}>
+                            {lesson.title} ({lesson.term})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="admin-field">
+                      <label>Learning Level *</label>
+                      <select
+                        name="learning_level"
+                        value={quizForm.learning_level}
+                        onChange={(e) => setQuizForm(prev => ({ ...prev, learning_level: e.target.value }))}
+                        className="admin-filter-select"
+                        style={{ width: "100%" }}
+                        required
+                      >
+                        <option value="Beginner">Beginner Level</option>
+                        <option value="Intermediate">Intermediate Level</option>
+                        <option value="Advanced">Advanced Level</option>
+                      </select>
+                    </div>
+                    <div className="admin-field">
+                      <label>Difficulty *</label>
+                      <select
+                        name="difficulty_level"
+                        value={quizForm.difficulty_level}
+                        onChange={(e) => setQuizForm(prev => ({ ...prev, difficulty_level: e.target.value }))}
+                        className="admin-filter-select"
+                        style={{ width: "100%" }}
+                        required
+                      >
+                        <option value="Easy">Easy</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Hard">Hard</option>
+                      </select>
+                    </div>
 
                     <div style={{ marginTop: "1rem", borderTop: "1px solid var(--admin-border)", paddingTop: "1rem" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
@@ -1369,7 +1558,6 @@ const NationalAdminDashboard = () => {
                                 {
                                   question_text: "",
                                   question_type: "MCQ",
-                                  difficulty_level: "Medium",
                                   answers: [
                                     { answer_text: "", is_correct: false },
                                     { answer_text: "", is_correct: false },
@@ -1440,25 +1628,6 @@ const NationalAdminDashboard = () => {
                               >
                                 <option value="MCQ">Multiple Choice (MCQ)</option>
                                 <option value="NUMERIC">Numeric Answer</option>
-                              </select>
-                            </div>
-                            <div className="admin-field">
-                              <label>Difficulty *</label>
-                              <select
-                                value={q.difficulty_level}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  setQuizForm(prev => ({
-                                    ...prev,
-                                    questions: prev.questions.map((question, idx) =>
-                                      idx === qIndex ? { ...question, difficulty_level: val } : question
-                                    )
-                                  }));
-                                }}
-                              >
-                                <option value="Easy">Easy</option>
-                                <option value="Medium">Medium</option>
-                                <option value="Hard">Hard</option>
                               </select>
                             </div>
                           </div>
@@ -1713,6 +1882,54 @@ const NationalAdminDashboard = () => {
                         ))}
                       </select>
                     </div>
+                    <div className="admin-field">
+                      <label>Assign to Lesson *</label>
+                      <select
+                        name="lessonId"
+                        value={editQuizForm.lessonId}
+                        onChange={(e) => setEditQuizForm(prev => ({ ...prev, lessonId: e.target.value }))}
+                        className="admin-filter-select"
+                        style={{ width: "100%" }}
+                        required
+                      >
+                        <option value="">-- Select Lesson --</option>
+                        {lessons.map((lesson) => (
+                          <option key={lesson.id} value={lesson.id}>
+                            {lesson.title} ({lesson.term})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="admin-field">
+                      <label>Learning Level *</label>
+                      <select
+                        name="learning_level"
+                        value={editQuizForm.learning_level}
+                        onChange={(e) => setEditQuizForm(prev => ({ ...prev, learning_level: e.target.value }))}
+                        className="admin-filter-select"
+                        style={{ width: "100%" }}
+                        required
+                      >
+                        <option value="Beginner">Beginner Level</option>
+                        <option value="Intermediate">Intermediate Level</option>
+                        <option value="Advanced">Advanced Level</option>
+                      </select>
+                    </div>
+                    <div className="admin-field">
+                      <label>Difficulty *</label>
+                      <select
+                        name="difficulty_level"
+                        value={editQuizForm.difficulty_level}
+                        onChange={(e) => setEditQuizForm(prev => ({ ...prev, difficulty_level: e.target.value }))}
+                        className="admin-filter-select"
+                        style={{ width: "100%" }}
+                        required
+                      >
+                        <option value="Easy">Easy</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Hard">Hard</option>
+                      </select>
+                    </div>
 
                     <div style={{ marginTop: "1rem", borderTop: "1px solid var(--admin-border)", paddingTop: "1rem" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
@@ -1728,7 +1945,6 @@ const NationalAdminDashboard = () => {
                                 {
                                   question_text: "",
                                   question_type: "MCQ",
-                                  difficulty_level: "Medium",
                                   answers: [
                                     { answer_text: "", is_correct: false },
                                     { answer_text: "", is_correct: false },
@@ -1798,25 +2014,6 @@ const NationalAdminDashboard = () => {
                               >
                                 <option value="MCQ">Multiple Choice (MCQ)</option>
                                 <option value="NUMERIC">Numeric Answer</option>
-                              </select>
-                            </div>
-                            <div className="admin-field">
-                              <label>Difficulty *</label>
-                              <select
-                                value={q.difficulty_level}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  setEditQuizForm(prev => ({
-                                    ...prev,
-                                    questions: prev.questions.map((question, idx) =>
-                                      idx === qIndex ? { ...question, difficulty_level: val } : question
-                                    )
-                                  }));
-                                }}
-                              >
-                                <option value="Easy">Easy</option>
-                                <option value="Medium">Medium</option>
-                                <option value="Hard">Hard</option>
                               </select>
                             </div>
                           </div>
@@ -1997,6 +2194,234 @@ const NationalAdminDashboard = () => {
                             onClick={() => {
                               setSelectedQuiz(quiz);
                               setShowDeleteQuizConfirm(true);
+                            }}
+                            disabled={actionLoading}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
+          </>
+        )}
+
+        {activeSection === "lessons" && (
+          <>
+            {lessonAction === "list" && (
+              <div className="admin-user-toolbar" style={{ justifyContent: "flex-end", marginBottom: "20px" }}>
+                <button
+                  className="admin-login-btn"
+                  type="button"
+                  onClick={() => {
+                    setLessonAction("create");
+                    setError("");
+                    setSuccessMessage("");
+                    setLessonForm({ title: "", description: "", term: "1st Term" });
+                  }}
+                  disabled={actionLoading}
+                  style={{ width: "auto", padding: "10px 24px" }}
+                >
+                  Create Lesson
+                </button>
+              </div>
+            )}
+            <section className="admin-content-grid admin-content-grid--single">
+              <div className="admin-card">
+                <div className="admin-card-header">
+                  <div>
+                    <div className="admin-card-title">
+                      {lessonAction === "create"
+                        ? "Create Lesson"
+                        : lessonAction === "edit"
+                        ? "Edit Lesson"
+                        : "Lesson Directory"}
+                    </div>
+                    <div className="admin-card-subtitle">
+                      {lessonAction === "create"
+                        ? "Define lesson details and associate it with a term."
+                        : lessonAction === "edit"
+                        ? "Modify lesson details and term assignment."
+                        : "List of academic lessons and their terms."}
+                    </div>
+                  </div>
+                  {lessonAction !== "list" && (
+                    <button
+                      className="admin-secondary-btn"
+                      onClick={() => {
+                        setLessonAction("list");
+                        setSelectedLesson(null);
+                        setError("");
+                      }}
+                      style={{ width: "auto", padding: "8px 16px" }}
+                    >
+                      &larr; Back to Lessons
+                    </button>
+                  )}
+                </div>
+
+                {lessonAction === "create" ? (
+                  <form className="admin-form" onSubmit={handleCreateLesson} style={{ padding: "1.5rem" }}>
+                    <div className="admin-field">
+                      <label>Lesson Title *</label>
+                      <input
+                        name="title"
+                        placeholder="e.g. Introduction to Physics"
+                        value={lessonForm.title}
+                        onChange={(e) => setLessonForm(prev => ({ ...prev, title: e.target.value }))}
+                        required
+                      />
+                    </div>
+                    <div className="admin-field">
+                      <label>Description</label>
+                      <textarea
+                        name="description"
+                        placeholder="Enter description of the lesson"
+                        value={lessonForm.description}
+                        onChange={(e) => setLessonForm(prev => ({ ...prev, description: e.target.value }))}
+                        style={{ border: "1px solid var(--admin-border)", borderRadius: "10px", padding: "8px 10px", minHeight: "60px", fontFamily: "inherit", fontSize: "13px" }}
+                      />
+                    </div>
+                    <div className="admin-field">
+                      <label>Academic Term *</label>
+                      <select
+                        name="term"
+                        value={lessonForm.term}
+                        onChange={(e) => setLessonForm(prev => ({ ...prev, term: e.target.value }))}
+                        className="admin-filter-select"
+                        style={{ width: "100%" }}
+                        required
+                      >
+                        <option value="1st Term">1st Term</option>
+                        <option value="2nd Term">2nd Term</option>
+                        <option value="3rd Term">3rd Term</option>
+                      </select>
+                    </div>
+
+                    {error && <div className="admin-error">{error}</div>}
+                    <div className="admin-modal-actions" style={{ marginTop: "1.5rem" }}>
+                      <button
+                        className="admin-secondary-btn"
+                        type="button"
+                        onClick={() => {
+                          setLessonAction("list");
+                          setError("");
+                        }}
+                        disabled={actionLoading}
+                      >
+                        Cancel
+                      </button>
+                      <button className="admin-primary-btn" type="submit" disabled={actionLoading}>
+                        Create Lesson
+                      </button>
+                    </div>
+                  </form>
+                ) : lessonAction === "edit" && selectedLesson ? (
+                  <form className="admin-form" onSubmit={handleUpdateLesson} style={{ padding: "1.5rem" }}>
+                    <div className="admin-field">
+                      <label>Lesson Title *</label>
+                      <input
+                        name="title"
+                        value={editLessonForm.title}
+                        onChange={(e) => setEditLessonForm(prev => ({ ...prev, title: e.target.value }))}
+                        required
+                      />
+                    </div>
+                    <div className="admin-field">
+                      <label>Description</label>
+                      <textarea
+                        name="description"
+                        value={editLessonForm.description}
+                        onChange={(e) => setEditLessonForm(prev => ({ ...prev, description: e.target.value }))}
+                        style={{ border: "1px solid var(--admin-border)", borderRadius: "10px", padding: "8px 10px", minHeight: "60px", fontFamily: "inherit", fontSize: "13px" }}
+                      />
+                    </div>
+                    <div className="admin-field">
+                      <label>Academic Term *</label>
+                      <select
+                        name="term"
+                        value={editLessonForm.term}
+                        onChange={(e) => setEditLessonForm(prev => ({ ...prev, term: e.target.value }))}
+                        className="admin-filter-select"
+                        style={{ width: "100%" }}
+                        required
+                      >
+                        <option value="1st Term">1st Term</option>
+                        <option value="2nd Term">2nd Term</option>
+                        <option value="3rd Term">3rd Term</option>
+                      </select>
+                    </div>
+
+                    {error && <div className="admin-error">{error}</div>}
+                    <div className="admin-modal-actions" style={{ marginTop: "1.5rem" }}>
+                      <button
+                        className="admin-secondary-btn"
+                        type="button"
+                        onClick={() => {
+                          setLessonAction("list");
+                          setError("");
+                        }}
+                        disabled={actionLoading}
+                      >
+                        Cancel
+                      </button>
+                      <button className="admin-primary-btn" type="submit" disabled={actionLoading}>
+                        Save Changes
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="admin-table">
+                    <div className="admin-table-header" style={{ gridTemplateColumns: "1.5fr 1fr 2fr 1fr 1fr" }}>
+                      <span>Lesson Title</span>
+                      <span>Term</span>
+                      <span>Description</span>
+                      <span>Created By</span>
+                      <span>Actions</span>
+                    </div>
+                    {loading && <div className="admin-empty">Loading lessons...</div>}
+                    {!loading && lessons.length === 0 && (
+                      <div className="admin-empty">No lessons created yet.</div>
+                    )}
+                    {lessons.map((lesson) => (
+                      <div className="admin-table-row" key={lesson.id} style={{ gridTemplateColumns: "1.5fr 1fr 2fr 1fr 1fr" }}>
+                        <div>
+                          <strong className="user-name">{lesson.title}</strong>
+                          <div className="user-meta">ID {lesson.id}</div>
+                        </div>
+                        <div>
+                          <span className="status-pill status-active" style={{ fontSize: "12px" }}>
+                            {lesson.term}
+                          </span>
+                        </div>
+                        <div className="user-meta" style={{ whiteSpace: "normal" }}>{lesson.description || "—"}</div>
+                        <div className="user-meta">{lesson.created_by_name || "National Admin"}</div>
+                        <div className="admin-action-group">
+                          <button
+                            className="admin-action-btn"
+                            type="button"
+                            onClick={() => {
+                              setSelectedLesson(lesson);
+                              setEditLessonForm({
+                                title: lesson.title || "",
+                                description: lesson.description || "",
+                                term: lesson.term || "1st Term",
+                              });
+                              setLessonAction("edit");
+                            }}
+                            disabled={actionLoading}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="admin-action-btn danger"
+                            type="button"
+                            onClick={() => {
+                              setSelectedLesson(lesson);
+                              setShowDeleteLessonConfirm(true);
                             }}
                             disabled={actionLoading}
                           >
@@ -2725,6 +3150,50 @@ const NationalAdminDashboard = () => {
                 disabled={actionLoading}
               >
                 Delete Quiz
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteLessonConfirm && selectedLesson && (
+        <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="admin-modal admin-modal--small">
+            <div className="admin-modal-header">
+              <div>
+                <div className="admin-card-title">Confirm Delete</div>
+                <div className="admin-card-subtitle">
+                  Are you sure you want to permanently delete this lesson?
+                </div>
+              </div>
+            </div>
+            <div style={{ padding: "1rem", backgroundColor: "#fef2f2", borderRadius: "0.375rem", margin: "1rem 0" }}>
+              <div style={{ fontSize: "0.875rem", fontWeight: "500" }}>
+                {selectedLesson.title}
+              </div>
+              <div style={{ fontSize: "0.75rem", color: "#666", marginTop: "0.25rem" }}>
+                This action cannot be undone and will affect quizzes assigned to this lesson.
+              </div>
+            </div>
+            <div className="admin-modal-actions">
+              <button
+                className="admin-secondary-btn"
+                type="button"
+                onClick={() => {
+                  setShowDeleteLessonConfirm(false);
+                  setSelectedLesson(null);
+                }}
+                disabled={actionLoading}
+              >
+                Cancel
+              </button>
+              <button
+                className="admin-danger-btn"
+                type="button"
+                onClick={handleDeleteLesson}
+                disabled={actionLoading}
+              >
+                Delete Lesson
               </button>
             </div>
           </div>

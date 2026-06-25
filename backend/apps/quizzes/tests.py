@@ -188,3 +188,83 @@ class QuizAPITests(APITestCase):
         }
         res = self.client.post(self.list_url, payload, format="json")
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_lesson_crud_permissions(self):
+        """
+        Verify that only System/National Admins can create, edit, delete lessons.
+        """
+        lesson_url = "/api/quizzes/lessons/"
+        
+        # Student cannot create a lesson
+        self.client.force_authenticate(user=self.student_a)
+        payload = {
+            "title": "Student Lesson",
+            "description": "Attempted by student",
+            "term": "1st Term"
+        }
+        res = self.client.post(lesson_url, payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+        # National Admin can create a lesson
+        self.client.force_authenticate(user=self.nat_admin)
+        payload["title"] = "National Admin Lesson"
+        res = self.client.post(lesson_url, payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        lesson_id = res.data["id"]
+
+        # Student cannot update the lesson
+        self.client.force_authenticate(user=self.student_a)
+        res = self.client.patch(f"{lesson_url}{lesson_id}/", {"title": "Hacked Title"}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+        # National Admin can update the lesson
+        self.client.force_authenticate(user=self.nat_admin)
+        res = self.client.patch(f"{lesson_url}{lesson_id}/", {"title": "Updated Title"}, format="json")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["title"], "Updated Title")
+
+        # Student cannot delete the lesson
+        self.client.force_authenticate(user=self.student_a)
+        res = self.client.delete(f"{lesson_url}{lesson_id}/")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+        # National Admin can delete the lesson
+        self.client.force_authenticate(user=self.nat_admin)
+        res = self.client.delete(f"{lesson_url}{lesson_id}/")
+        self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_quiz_filtering_by_lesson(self):
+        """
+        Verify that quizzes can be filtered by the lesson query parameter.
+        """
+        from apps.quizzes.models import Lesson
+        lesson_1 = Lesson.objects.create(title="Lesson 1", term="1st Term", created_by=self.nat_admin)
+        lesson_2 = Lesson.objects.create(title="Lesson 2", term="1st Term", created_by=self.nat_admin)
+
+        quiz_1 = Quiz.objects.create(title="Quiz 1", created_by=self.nat_admin, lesson=lesson_1)
+        quiz_2 = Quiz.objects.create(title="Quiz 2", created_by=self.nat_admin, lesson=lesson_2)
+
+        self.client.force_authenticate(user=self.student_a)
+        
+        # Retrieve all
+        res = self.client.get(self.list_url)
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        # Should see quiz_1 and quiz_2
+        quiz_ids = [q["id"] for q in res.data]
+        self.assertIn(quiz_1.id, quiz_ids)
+        self.assertIn(quiz_2.id, quiz_ids)
+
+        # Filter by lesson_1
+        res = self.client.get(f"{self.list_url}?lesson={lesson_1.id}")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        filtered_ids = [q["id"] for q in res.data]
+        self.assertIn(quiz_1.id, filtered_ids)
+        self.assertNotIn(quiz_2.id, filtered_ids)
+
+        # Filter by lesson_2
+        res = self.client.get(f"{self.list_url}?lesson={lesson_2.id}")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        filtered_ids = [q["id"] for q in res.data]
+        self.assertIn(quiz_2.id, filtered_ids)
+        self.assertNotIn(quiz_1.id, filtered_ids)
+
