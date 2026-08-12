@@ -6,6 +6,9 @@ import SystemSidebar from "../components/SystemSidebar";
 import PageHeader from "../components/PageHeader";
 import SystemAdminDashboard from "../dashboards/system/SystemAdminDashboard";
 import ManageCurriculum from "../dashboards/system/ManageCurriculum";
+import AdminSchools from "../dashboards/system/AdminSchools";
+import AdminTeachers from "../dashboards/system/AdminTeachers";
+import AdminStudents from "../dashboards/system/AdminStudents";
 
 const SystemLayout = () => {
   const [collapsed, setCollapsed] = useState(false);
@@ -41,11 +44,10 @@ const SystemLayout = () => {
         <div style={{ padding: "24px 32px", overflowY: "auto", flex: 1 }}>
           <Routes>
             <Route path="dashboard" element={<SystemAdminDashboard />} />
-            <Route path="classrooms" element={<SystemAdminDashboard />} />
-            <Route path="teachers" element={<SystemAdminDashboard />} />
-            <Route path="students" element={<SystemAdminDashboard />} />
-            <Route path="schools" element={<SystemAdminDashboard />} />
-            <Route path="logs" element={<SystemAdminDashboard />} />
+            <Route path="teachers" element={<AdminTeachers />} />
+            <Route path="students" element={<AdminStudents />} />
+            <Route path="schools" element={<AdminSchools />} />
+            <Route path="curriculum" element={<ManageCurriculum />} />
             <Route path="curriculum" element={<ManageCurriculum />} />
             <Route path="*" element={<Navigate to="dashboard" replace />} />
           </Routes>

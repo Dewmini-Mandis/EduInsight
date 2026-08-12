@@ -14,6 +14,7 @@ from .serializers import (
 	UserSerializer,
 	UserUpdateSerializer,
 	NotificationSerializer,
+	SystemAccessLogSerializer,
 )
 from .models import Role, User, Notification
 
@@ -77,6 +78,9 @@ class UserViewSet(viewsets.ModelViewSet):
 	def get_queryset(self):
 		user = self.request.user
 		queryset = self.queryset.all()
+		role_param = self.request.query_params.get('role')
+		if role_param:
+			queryset = queryset.filter(role__role_name=role_param)
 		if user.is_role(Role.ROLE_SYSTEM_ADMIN):
 			return queryset
 		if user.is_role(Role.ROLE_TEACHER):
@@ -185,3 +189,16 @@ class NotificationViewSet(viewsets.ModelViewSet):
 
 	def perform_create(self, serializer):
 		serializer.save(user=self.request.user)
+
+
+from .models import SystemAccessLog
+class SystemAccessLogViewSet(viewsets.ReadOnlyModelViewSet):
+	queryset = SystemAccessLog.objects.all()
+	serializer_class = SystemAccessLogSerializer
+	permission_classes = [IsAuthenticated]
+
+	def get_queryset(self):
+		user = self.request.user
+		if user.is_role("SYSTEM_ADMIN"):
+			return SystemAccessLog.objects.all()
+		return SystemAccessLog.objects.none()

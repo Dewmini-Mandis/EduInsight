@@ -26,8 +26,7 @@ const CreateStudent = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [indexNumber, setIndexNumber] = useState("");
-  const [className, setClassName] = useState("");
-  const [classRoomId, setClassRoomId] = useState<number | "">(teacherClassrooms.length > 0 ? teacherClassrooms[0].id : "");
+  const [classRoomId, setClassRoomId] = useState<number | "">("");
   
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -79,8 +78,8 @@ const CreateStudent = () => {
     e.preventDefault();
     setError("");
 
-    if (!email.trim() || !firstName.trim() || !lastName.trim() || !password.trim()) {
-      setError("Please fill in all required fields.");
+    if (!email.trim() || !firstName.trim() || !lastName.trim() || !password.trim() || classRoomId === "") {
+      setError("Please fill in all required fields, including Class Assignment.");
       return;
     }
 
@@ -98,8 +97,7 @@ const CreateStudent = () => {
       password,
       role: "STUDENT",
       index_no: indexNumber,
-      class_name: className,
-      class_room_id: classRoomId === "" ? null : classRoomId,
+      class_room_id: classRoomId,
     };
 
     try {
@@ -270,26 +268,18 @@ const CreateStudent = () => {
                     <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "6px" }}>Students will be prompted to change this on first login.</p>
                   </div>
                   <div>
-                    <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "var(--navy-950)", marginBottom: "8px" }}>Class Assignment</label>
-                    {teacherClassrooms.length > 0 ? (
-                      <select 
-                        value={classRoomId} 
-                        onChange={(e) => setClassRoomId(Number(e.target.value) || "")}
-                        style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid var(--border)", fontSize: "14px", outline: "none", backgroundColor: "var(--surface)", color: "var(--text-primary)" }}
-                      >
-                        {teacherClassrooms.map((cls: any) => (
-                          <option key={cls.id} value={cls.id}>{cls.name}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input 
-                        type="text"
-                        value={className} 
-                        onChange={(e) => setClassName(e.target.value)}
-                        style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid var(--border)", fontSize: "14px", outline: "none", backgroundColor: "var(--surface)" }}
-                        placeholder="Enter class name (or configure in Profile)"
-                      />
-                    )}
+                    <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "var(--navy-950)", marginBottom: "8px" }}>Class Assignment *</label>
+                    <select 
+                      value={classRoomId} 
+                      onChange={(e) => setClassRoomId(Number(e.target.value) || "")}
+                      style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid var(--border)", fontSize: "14px", outline: "none", backgroundColor: "var(--surface)", color: "var(--text-primary)" }}
+                      required
+                    >
+                      <option value="" disabled>Select a class</option>
+                      {teacherClassrooms.map((cls: any) => (
+                        <option key={cls.id} value={cls.id}>{cls.name}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 

@@ -49,3 +49,29 @@ class Notification(models.Model):
 
 	def __str__(self) -> str:
 		return f"To {self.user.username}: {self.title}"
+
+
+class SystemAccessLog(models.Model):
+	STATUS_SUCCESS = "SUCCESS"
+	STATUS_BLOCKED = "BLOCKED"
+	STATUS_WARNING = "WARNING"
+	STATUS_COMPLETED = "COMPLETED"
+	
+	STATUS_CHOICES = [
+		(STATUS_SUCCESS, "Success"),
+		(STATUS_BLOCKED, "Blocked"),
+		(STATUS_WARNING, "Warning"),
+		(STATUS_COMPLETED, "Completed"),
+	]
+	
+	user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="access_logs")
+	action = models.CharField(max_length=255)
+	ip_address = models.GenericIPAddressField(null=True, blank=True)
+	status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_SUCCESS)
+	timestamp = models.DateTimeField(auto_now_add=True)
+	
+	class Meta:
+		ordering = ["-timestamp"]
+
+	def __str__(self):
+		return f"{self.action} - {self.status} at {self.timestamp}"

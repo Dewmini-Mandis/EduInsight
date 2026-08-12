@@ -2,8 +2,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { getToken, getUser } from "../../auth/authUtils";
 import "../../styles/admin.css";
-
-import AdminClassrooms from "./AdminClassrooms";
 import AdminTeachers from "./AdminTeachers";
 import AdminStudents from "./AdminStudents";
 
@@ -55,6 +53,31 @@ const SystemAdminDashboard = () => {
   const [users, setUsers] = useState<SystemUser[]>([]);
   const [schools, setSchools] = useState<School[]>([]);
   const [schoolsCount, setSchoolsCount] = useState(0);
+  const [logs, setLogs] = useState<any[]>([]);
+  const [logsLoading, setLogsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchLogs();
+  }, []);
+
+  const fetchLogs = async () => {
+    const token = getToken();
+    if (!token) return;
+    try {
+      const res = await fetch("/api/accounts/access-logs/", {
+        headers: { Authorization: `Token ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setLogs(data.results || data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -958,11 +981,8 @@ const SystemAdminDashboard = () => {
 
   const userRoleOptions = ["SYSTEM_ADMIN", "NATIONAL_ADMIN", "SCHOOL_ADMIN", "TEACHER", "STUDENT"];
 
-  const activeUsers = users.filter((user) => user.is_active).length;
-
-  const nationalAdmins = useMemo(() => {
-    return sortedUsers.filter((user) => user.role?.toUpperCase() === "NATIONAL_ADMIN");
-  }, [sortedUsers]);
+  const teachersCount = users.filter((user) => user.role === "TEACHER").length;
+  const studentsCount = users.filter((user) => user.role === "STUDENT").length;
 
   return (
     <>
@@ -970,14 +990,14 @@ const SystemAdminDashboard = () => {
           <>
             <section className="admin-metrics-grid admin-metrics-grid--three">
               <div className="metric-card">
-                <div className="metric-title">TOTAL USERS</div>
-                <div className="metric-value">{users.length}</div>
-                <div className="metric-badge">All roles</div>
+                <div className="metric-title">TOTAL TEACHERS</div>
+                <div className="metric-value">{teachersCount}</div>
+                <div className="metric-badge">Registered teachers</div>
               </div>
               <div className="metric-card">
-                <div className="metric-title">ACTIVE USERS</div>
-                <div className="metric-value">{activeUsers}</div>
-                <div className="metric-badge">Currently enabled</div>
+                <div className="metric-title">TOTAL STUDENTS</div>
+                <div className="metric-value">{studentsCount}</div>
+                <div className="metric-badge">Registered students</div>
               </div>
               <div className="metric-card">
                 <div className="metric-title">SCHOOLS</div>
@@ -986,82 +1006,6 @@ const SystemAdminDashboard = () => {
               </div>
             </section>
 
-            <section className="admin-content-grid admin-content-grid--single">
-              <div className="admin-card">
-                <div className="admin-card-header">
-                  <div>
-                    <div className="admin-card-title">National Administrators</div>
-                    <div className="admin-card-subtitle">Overview of national administrators in the system</div>
-                  </div>
-                </div>
-                {error && <div className="admin-error">{error}</div>}
-                {successMessage && <div className="admin-success">{successMessage}</div>}
-                <div className="admin-table">
-                  <div className="admin-table-header">
-                    <span>User</span>
-                    <span>Role</span>
-                    <span>Status</span>
-                    <span>Last Login</span>
-                    <span>Actions</span>
-                  </div>
-                  {loading && <div className="admin-empty">Loading users...</div>}
-                  {!loading && nationalAdmins.length === 0 && (
-                    <div className="admin-empty">No national administrators found.</div>
-                  )}
-                  {nationalAdmins.map((user) => {
-                    const isSelf = user.username === currentUser?.username || user.email === currentUser?.email;
-                    return (
-                      <div className="admin-table-row" key={user.id}>
-                        <div className="admin-user-cell">
-                          <div className="admin-avatar">{getInitials(user)}</div>
-                          <div>
-                            <div className="user-name">
-                              {user.full_name || `${user.first_name} ${user.last_name}`.trim() || user.username}
-                            </div>
-                            <div className="user-meta">{user.email}</div>
-                          </div>
-                        </div>
-                        <div className="user-meta">{formatRole(user.role)}</div>
-                        <div>
-                          <span className={`status-pill ${user.is_active ? "status-active" : "status-suspended"}`}>
-                            {user.is_active ? "ACTIVE" : "INACTIVE"}
-                          </span>
-                        </div>
-                        <div className="user-meta">—</div>
-                        <div className="admin-action-group">
-                          <button
-                            className="admin-action-btn"
-                            type="button"
-                            onClick={() => handleOpenEditModal(user)}
-                          >
-                            Edit
-                          </button>
-                          {!isSelf && (
-                            <>
-                              <button
-                                className="admin-action-btn warning"
-                                type="button"
-                                onClick={() => handleToggleUser(user)}
-                              >
-                                {user.is_active ? "Deactivate" : "Activate"}
-                              </button>
-                              <button
-                                className="admin-action-btn danger"
-                                type="button"
-                                onClick={() => handleOpenDeleteModal(user)}
-                              >
-                                Delete
-                              </button>
-                            </>
-                          )}
-                          {isSelf && <span className="user-meta" style={{ marginLeft: "12px" }}>(You)</span>}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </section>
 
             <section className="admin-card admin-logs">
               <div className="admin-card-header">
@@ -1095,11 +1039,8 @@ const SystemAdminDashboard = () => {
             </section>
           </>
         )}
-
-        {activeTab === "classrooms" && <AdminClassrooms />}
         {activeTab === "teachers" && <AdminTeachers />}
         {activeTab === "students" && <AdminStudents />}
-
         {activeTab === "schools" && <AdminSchools />}
 
         {/* User Creation Modal */}
@@ -1765,68 +1706,7 @@ const SystemAdminDashboard = () => {
 
         {activeTab === "logs" && (
           <section className="admin-card admin-logs" style={{ padding: "1.5rem" }}>
-            <div className="admin-card-header" style={{ marginBottom: "1rem" }}>
-              <div>
-                <div className="admin-card-title">User Logs & System Activity</div>
-                <div className="admin-card-subtitle">Real-time monitoring of administrative activity</div>
-              </div>
-              <button className="admin-secondary-btn" type="button" style={{ width: "auto", padding: "8px 16px" }}>
-                DOWNLOAD FULL AUDIT LOG (CSV)
-              </button>
-            </div>
-            
-            <div style={{ display: "flex", gap: "10px", marginBottom: "1.5rem" }}>
-              <input 
-                className="admin-filter-input" 
-                placeholder="Search audit logs..." 
-                style={{ flex: 1 }}
-                readOnly
-              />
-              <select className="admin-filter-select">
-                <option value="all">All Events</option>
-                <option value="success">Success</option>
-                <option value="blocked">Blocked</option>
-                <option value="warning">Warning</option>
-              </select>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <div className="admin-log-item" style={{ border: "1px solid var(--admin-border)", borderRadius: "8px", padding: "12px" }}>
-                <div>
-                  <div className="user-name" style={{ fontWeight: "600", fontSize: "14px" }}>Admin Panel logged in from 192.168.1.45</div>
-                  <div className="admin-log-meta" style={{ fontSize: "12px", color: "var(--admin-text-muted)" }}>June 09, 2026 - 19:42:12</div>
-                </div>
-                <div className="admin-log-status success" style={{ padding: "4px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: "700", background: "#f0fdf4", color: "#16a34a" }}>SUCCESS</div>
-              </div>
-              <div className="admin-log-item" style={{ border: "1px solid var(--admin-border)", borderRadius: "8px", padding: "12px" }}>
-                <div>
-                  <div className="user-name" style={{ fontWeight: "600", fontSize: "14px" }}>Unauthorized Access Attempt on API Endpoint /v1/students</div>
-                  <div className="admin-log-meta" style={{ fontSize: "12px", color: "var(--admin-text-muted)" }}>June 09, 2026 - 19:38:05</div>
-                </div>
-                <div className="admin-log-status blocked" style={{ padding: "4px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: "700", background: "#fef2f2", color: "#dc2626" }}>BLOCKED</div>
-              </div>
-              <div className="admin-log-item" style={{ border: "1px solid var(--admin-border)", borderRadius: "8px", padding: "12px" }}>
-                <div>
-                  <div className="user-name" style={{ fontWeight: "600", fontSize: "14px" }}>System configuration updated by Amila Samarakoon</div>
-                  <div className="admin-log-meta" style={{ fontSize: "12px", color: "var(--admin-text-muted)" }}>June 09, 2026 - 18:15:33</div>
-                </div>
-                <div className="admin-log-status" style={{ padding: "4px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: "700", background: "#f1f5f9", color: "#475569" }}>COMPLETED</div>
-              </div>
-              <div className="admin-log-item" style={{ border: "1px solid var(--admin-border)", borderRadius: "8px", padding: "12px" }}>
-                <div>
-                  <div className="user-name" style={{ fontWeight: "600", fontSize: "14px" }}>New School Admin assigned to Central College Kandy</div>
-                  <div className="admin-log-meta" style={{ fontSize: "12px", color: "var(--admin-text-muted)" }}>June 09, 2026 - 15:30:10</div>
-                </div>
-                <div className="admin-log-status success" style={{ padding: "4px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: "700", background: "#f0fdf4", color: "#16a34a" }}>SUCCESS</div>
-              </div>
-              <div className="admin-log-item" style={{ border: "1px solid var(--admin-border)", borderRadius: "8px", padding: "12px" }}>
-                <div>
-                  <div className="user-name" style={{ fontWeight: "600", fontSize: "14px" }}>Password reset requested for user principal@central.edu.lk</div>
-                  <div className="admin-log-meta" style={{ fontSize: "12px", color: "var(--admin-text-muted)" }}>June 09, 2026 - 12:12:04</div>
-                </div>
-                <div className="admin-log-status success" style={{ padding: "4px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: "700", background: "#f0fdf4", color: "#16a34a" }}>SUCCESS</div>
-              </div>
-            </div>
+             <p>Access logs are now displayed on the main dashboard.</p>
           </section>
         )}
     </>

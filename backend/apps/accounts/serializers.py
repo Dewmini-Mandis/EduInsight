@@ -17,6 +17,7 @@ class RoleSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
 	role = serializers.SlugRelatedField(read_only=True, slug_field="role_name")
 	school_id = serializers.PrimaryKeyRelatedField(source="school", read_only=True)
+	school_name = serializers.CharField(source="school.name", read_only=True)
 	full_name = serializers.SerializerMethodField()
 	student_profile = serializers.SerializerMethodField()
 	teacher_profile = serializers.SerializerMethodField()
@@ -32,6 +33,7 @@ class UserSerializer(serializers.ModelSerializer):
 			"full_name",
 			"role",
 			"school_id",
+			"school_name",
 			"student_profile",
 			"teacher_profile",
 			"is_active",
@@ -79,6 +81,9 @@ class UserCreateSerializer(serializers.ModelSerializer):
 	subjects = serializers.ListField(
 		child=serializers.CharField(), write_only=True, required=False
 	)
+	classrooms = serializers.ListField(
+		child=serializers.IntegerField(), write_only=True, required=False
+	)
 
 	class Meta:
 		model = User
@@ -95,6 +100,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
 			"class_name",
 			"class_room_id",
 			"subjects",
+		"classrooms",
 		]
 
 	def create(self, validated_data):
@@ -151,6 +157,9 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 	subjects = serializers.ListField(
 		child=serializers.CharField(), write_only=True, required=False
 	)
+	classrooms = serializers.ListField(
+		child=serializers.IntegerField(), write_only=True, required=False
+	)
 	password = serializers.CharField(write_only=True, required=False, min_length=8)
 
 	class Meta:
@@ -168,6 +177,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 			"class_name",
 			"class_room_id",
 			"subjects",
+		"classrooms",
 		]
 
 	def update(self, instance, validated_data):
@@ -176,6 +186,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 		class_name = validated_data.pop("class_name", None)
 		class_room_id = validated_data.pop("class_room_id", None)
 		subjects = validated_data.pop("subjects", None)
+		classrooms = validated_data.pop("classrooms", None)
 		password = validated_data.pop("password", None)
 		role = validated_data.get("role") or instance.role
 
@@ -205,6 +216,17 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 			if subjects is not None:
 				teacher.subjects = subjects
 				teacher.save()
+			if classrooms is not None:
+				from apps.classes.models import SchoolClass, TeacherClassroom
+				TeacherClassroom.objects.filter(teacher=instance).update(is_active=False)
+				for class_id in classrooms:
+					try:
+						sc = SchoolClass.objects.get(id=class_id)
+						tc, _ = TeacherClassroom.objects.get_or_create(teacher=instance, classroom=sc)
+						tc.is_active = True
+						tc.save()
+					except SchoolClass.DoesNotExist:
+						pass
 		return User.objects.get(pk=instance.pk)
 
 	def to_representation(self, instance):
@@ -299,3 +321,16 @@ class NotificationSerializer(serializers.ModelSerializer):
 		model = Notification
 		fields = "__all__"
 		read_only_fields = ["user", "created_at"]
+
+
+from .models import SystemAccessLog
+class SystemAccessLogSerializer(serializers.ModelSerializer):
+	user_name = serializers.SerializerMethodField()
+	class Meta:
+		model = SystemAccessLog
+		fields = ["id", "user_name", "action", "ip_address", "status", "timestamp"]
+		
+	def get_user_name(self, obj):
+		if obj.user:
+			return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.username
+		return "System"
