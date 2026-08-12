@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from apps.attempts.models import QuizAttempt, AttemptAnswer
+from apps.attempts.models import QuizAttempt, AttemptAnswer, ManualMark, TeacherOverride
 
 class AttemptAnswerSerializer(serializers.ModelSerializer):
     class Meta:
@@ -33,3 +33,16 @@ class QuizAttemptSerializer(serializers.ModelSerializer):
             "answers",
         ]
         read_only_fields = ["student", "attempt_number", "start_time", "score"]
+
+
+class ManualMarkSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ManualMark
+        fields = "__all__"
+        read_only_fields = ["marked_at"]
+
+class TeacherOverrideSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TeacherOverride
+        fields = "__all__"
+        read_only_fields = ["created_at"]

@@ -20,18 +20,18 @@ class SchoolViewSet(viewsets.ModelViewSet):
 
 	def perform_create(self, serializer):
 		user = self.request.user
-		if not user.is_role(Role.ROLE_NATIONAL_ADMIN, Role.ROLE_SYSTEM_ADMIN):
+		if not user.is_role(Role.ROLE_SYSTEM_ADMIN):
 			raise PermissionDenied("Only national and system admins can create schools.")
 		serializer.save(created_by=user)
 
 	def perform_update(self, serializer):
 		user = self.request.user
-		if not user.is_role(Role.ROLE_NATIONAL_ADMIN, Role.ROLE_SYSTEM_ADMIN):
+		if not user.is_role(Role.ROLE_SYSTEM_ADMIN):
 			raise PermissionDenied("Only national and system admins can update schools.")
 		serializer.save()
 
 	def perform_destroy(self, instance):
 		user = self.request.user
-		if not user.is_role(Role.ROLE_NATIONAL_ADMIN, Role.ROLE_SYSTEM_ADMIN):
+		if not user.is_role(Role.ROLE_SYSTEM_ADMIN):
 			raise PermissionDenied("Only national and system admins can delete schools.")
 		instance.delete()

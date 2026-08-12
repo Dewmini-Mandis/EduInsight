@@ -14,14 +14,6 @@ class HasRole(BasePermission):
 		)
 
 
-class IsNationalAdmin(HasRole):
-	allowed_roles = (Role.ROLE_NATIONAL_ADMIN,)
-
-
-class IsSchoolAdmin(HasRole):
-	allowed_roles = (Role.ROLE_SCHOOL_ADMIN,)
-
-
 class IsTeacher(HasRole):
 	allowed_roles = (Role.ROLE_TEACHER,)
 

@@ -3,15 +3,11 @@ from django.db import models
 
 
 class Role(models.Model):
-	ROLE_NATIONAL_ADMIN = "NATIONAL_ADMIN"
-	ROLE_SCHOOL_ADMIN = "SCHOOL_ADMIN"
 	ROLE_TEACHER = "TEACHER"
 	ROLE_STUDENT = "STUDENT"
 	ROLE_SYSTEM_ADMIN = "SYSTEM_ADMIN"
 
 	ROLE_CHOICES = [
-		(ROLE_NATIONAL_ADMIN, "National Admin"),
-		(ROLE_SCHOOL_ADMIN, "School Admin"),
 		(ROLE_TEACHER, "Teacher"),
 		(ROLE_STUDENT, "Student"),
 		(ROLE_SYSTEM_ADMIN, "System Admin"),
@@ -41,3 +37,15 @@ class User(AbstractUser):
 
 	def is_role(self, *roles: str) -> bool:
 		return bool(self.role) and self.role.role_name in roles
+
+
+class Notification(models.Model):
+	user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notifications")
+	title = models.CharField(max_length=255)
+	message = models.TextField()
+	is_read = models.BooleanField(default=False)
+	created_at = models.DateTimeField(auto_now_add=True)
+	link = models.CharField(max_length=255, blank=True, null=True)
+
+	def __str__(self) -> str:
+		return f"To {self.user.username}: {self.title}"

@@ -1,8 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { getToken, getUser } from "../../auth/authUtils";
 import "../../styles/admin.css";
 
+import AdminClassrooms from "./AdminClassrooms";
+import AdminTeachers from "./AdminTeachers";
+import AdminStudents from "./AdminStudents";
+
+import AdminSchools from './AdminSchools';
 type SystemUser = {
   id: number;
   username: string;
@@ -55,7 +60,17 @@ const SystemAdminDashboard = () => {
   const [successMessage, setSuccessMessage] = useState("");
   
   // Tabs & Navigation
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'schools' | 'logs'>('dashboard');
+  const location = useLocation();
+  const activeTab = useMemo(() => {
+    const path = location.pathname;
+    if (path.includes("/classrooms")) return "classrooms";
+    if (path.includes("/teachers")) return "teachers";
+    if (path.includes("/students")) return "students";
+    if (path.includes("/schools")) return "schools";
+    if (path.includes("/logs")) return "logs";
+    if (path.includes("/users")) return "users";
+    return "dashboard";
+  }, [location.pathname]);
   const [actionLoading, setActionLoading] = useState(false);
 
   // User filter states
@@ -950,94 +965,7 @@ const SystemAdminDashboard = () => {
   }, [sortedUsers]);
 
   return (
-    <div className="admin-root">
-      <aside className="admin-sidebar">
-        <div>
-          <div className="admin-brand">
-            <div>
-              <div className="admin-brand-title">EduInsight</div>
-              <div className="admin-brand-sub">SYSTEM ADMIN</div>
-            </div>
-          </div>
-          <nav className="admin-nav">
-            <button
-              className={`admin-nav-item ${activeTab === "dashboard" ? "active" : ""}`}
-              type="button"
-              onClick={() => setActiveTab("dashboard")}
-            >
-              Dashboard
-            </button>
-            <button
-              className={`admin-nav-item ${activeTab === "users" ? "active" : ""}`}
-              type="button"
-              onClick={() => setActiveTab("users")}
-            >
-              Users
-            </button>
-            <button
-              className={`admin-nav-item ${activeTab === "schools" ? "active" : ""}`}
-              type="button"
-              onClick={() => setActiveTab("schools")}
-            >
-              Schools
-            </button>
-            <button
-              className={`admin-nav-item ${activeTab === "logs" ? "active" : ""}`}
-              type="button"
-              onClick={() => setActiveTab("logs")}
-            >
-              User Logs
-            </button>
-            <button
-              className="admin-nav-item"
-              type="button"
-              onClick={() => navigate("/dashboard/profile")}
-            >
-              Profile
-            </button>
-          </nav>
-        </div>
-        <div className="admin-sidebar-footer">
-          <div className="admin-user-card">
-            <div className="admin-user-avatar">{currentInitials}</div>
-            <div>
-              <div className="admin-user-name">{currentDisplayName}</div>
-              <div className="admin-user-email">
-                {currentUser?.email || "sysadmin@eduinsight.local"}
-              </div>
-            </div>
-          </div>
-          <button className="admin-ghost-btn" type="button" onClick={() => navigate("/logout")}>Sign Out</button>
-        </div>
-      </aside>
-
-      <main className="admin-main">
-        <div className="admin-topbar">
-          <div>
-            <div className="admin-title">
-              {activeTab === "dashboard" ? "System Administration" : activeTab === "users" ? "User Management" : activeTab === "schools" ? "Schools Management" : "User Audit Logs"}
-            </div>
-            <div className="admin-subtitle">
-              {activeTab === "dashboard"
-                ? "Overview of national system operations"
-                : activeTab === "users"
-                ? "Manage credentials and access levels across all roles"
-                : activeTab === "schools"
-                ? "Manage registered educational institutions"
-                : "View and filter real-time security and administrative logs"}
-            </div>
-          </div>
-          <div className="admin-topbar-actions">
-            <div className="admin-profile">
-              <div className="admin-profile-avatar" />
-              <div>
-                <div className="admin-user-name">Admin Panel</div>
-                <div className="admin-profile-meta">System Administrator</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
+    <>
         {activeTab === "dashboard" && (
           <>
             <section className="admin-metrics-grid admin-metrics-grid--three">
@@ -1168,261 +1096,11 @@ const SystemAdminDashboard = () => {
           </>
         )}
 
-        {activeTab === "users" && (
-          <>
-            <div className="admin-user-toolbar">
-              <div className="admin-user-filters">
-                <input
-                  className="admin-filter-input"
-                  placeholder="Search users by name or email"
-                  value={filterQuery}
-                  onChange={(event) => setFilterQuery(event.target.value)}
-                />
-                <select
-                  className="admin-filter-select"
-                  value={filterRole}
-                  onChange={(event) => setFilterRole(event.target.value)}
-                >
-                  <option value="all">All roles</option>
-                  {userRoleOptions.map((role) => (
-                    <option key={role} value={role}>
-                      {formatRole(role)}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  className="admin-filter-select"
-                  value={filterStatus}
-                  onChange={(event) => setFilterStatus(event.target.value)}
-                >
-                  <option value="all">All statuses</option>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                </select>
-              </div>
-              <button className="admin-login-btn" type="button" onClick={() => setShowCreateModal(true)}>
-                Add User
-              </button>
-            </div>
+        {activeTab === "classrooms" && <AdminClassrooms />}
+        {activeTab === "teachers" && <AdminTeachers />}
+        {activeTab === "students" && <AdminStudents />}
 
-            <section className="admin-content-grid admin-content-grid--single">
-              <div className="admin-card">
-                <div className="admin-card-header">
-                  <div>
-                    <div className="admin-card-title">User Management</div>
-                    <div className="admin-card-subtitle">Manage credentials and access levels across all roles</div>
-                  </div>
-                </div>
-                {error && <div className="admin-error">{error}</div>}
-                {successMessage && <div className="admin-success">{successMessage}</div>}
-                <div className="admin-table">
-                  <div className="admin-table-header">
-                    <span>User</span>
-                    <span>Role</span>
-                    <span>Status</span>
-                    <span>Last Login</span>
-                    <span>Actions</span>
-                  </div>
-                  {loading && <div className="admin-empty">Loading users...</div>}
-                  {!loading && filteredUsers.length === 0 && (
-                    <div className="admin-empty">No users found.</div>
-                  )}
-                  {filteredUsers.map((user) => {
-                    const isSelf = user.username === currentUser?.username || user.email === currentUser?.email;
-                    return (
-                      <div className="admin-table-row" key={user.id}>
-                        <div className="admin-user-cell">
-                          <div className="admin-avatar">{getInitials(user)}</div>
-                          <div>
-                            <div className="user-name">
-                              {user.full_name || `${user.first_name} ${user.last_name}`.trim() || user.username}
-                            </div>
-                            <div className="user-meta">{user.email}</div>
-                          </div>
-                        </div>
-                        <div className="user-meta">{formatRole(user.role)}</div>
-                        <div>
-                          <span className={`status-pill ${user.is_active ? "status-active" : "status-suspended"}`}>
-                            {user.is_active ? "ACTIVE" : "INACTIVE"}
-                          </span>
-                        </div>
-                        <div className="user-meta">—</div>
-                        <div className="admin-action-group">
-                          <button
-                            className="admin-action-btn"
-                            type="button"
-                            onClick={() => handleOpenEditModal(user)}
-                          >
-                            Edit
-                          </button>
-                          {!isSelf && (
-                            <>
-                              <button
-                                className="admin-action-btn warning"
-                                type="button"
-                                onClick={() => handleToggleUser(user)}
-                              >
-                                {user.is_active ? "Deactivate" : "Activate"}
-                              </button>
-                              <button
-                                className="admin-action-btn danger"
-                                type="button"
-                                onClick={() => handleOpenDeleteModal(user)}
-                              >
-                                Delete
-                              </button>
-                            </>
-                          )}
-                          {isSelf && <span className="user-meta" style={{ marginLeft: "12px" }}>(You)</span>}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </section>
-          </>
-        )}
-
-        {activeTab === "schools" && (
-          <>
-            <div className="admin-user-toolbar" style={{ flexDirection: "column", alignItems: "stretch", gap: "12px", height: "auto", marginBottom: "20px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
-                <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center", flex: 1 }}>
-                  <input
-                    className="admin-filter-input"
-                    placeholder="Search schools by name or address..."
-                    value={schoolsQuery}
-                    onChange={(event) => setSchoolsQuery(event.target.value)}
-                    style={{ width: "220px" }}
-                  />
-                  <select
-                    className="admin-filter-select"
-                    value={schoolsProvince}
-                    onChange={(event) => setSchoolsProvince(event.target.value)}
-                  >
-                    <option value="all">All Provinces</option>
-                    {provinceOptions.map((province) => (
-                      <option key={province} value={province}>
-                        {province}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    className="admin-filter-select"
-                    value={schoolsDistrict}
-                    onChange={(event) => setSchoolsDistrict(event.target.value)}
-                  >
-                    <option value="all">All Districts</option>
-                    {districtOptions.map((district) => (
-                      <option key={district} value={district}>
-                        {district}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    className="admin-filter-select"
-                    value={schoolsZone}
-                    onChange={(event) => setSchoolsZone(event.target.value)}
-                  >
-                    <option value="all">All Zones</option>
-                    {zoneOptions.map((zone) => (
-                      <option key={zone} value={zone}>
-                        {zone}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    className="admin-filter-select"
-                    value={schoolsEducationalZone}
-                    onChange={(event) => setSchoolsEducationalZone(event.target.value)}
-                  >
-                    <option value="all">All Educational Zones</option>
-                    {educationalZoneOptions.map((ezone) => (
-                      <option key={ezone} value={ezone}>
-                        {ezone}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    className="admin-filter-select"
-                    value={schoolsSortKey}
-                    onChange={(event) => setSchoolsSortKey(event.target.value)}
-                    style={{ border: "1px dashed var(--admin-sidebar)" }}
-                  >
-                    <option value="name_asc">Name (A-Z)</option>
-                    <option value="name_desc">Name (Z-A)</option>
-                    <option value="province_asc">Province (A-Z)</option>
-                    <option value="province_desc">Province (Z-A)</option>
-                    <option value="district_asc">District (A-Z)</option>
-                    <option value="district_desc">District (Z-A)</option>
-                    <option value="zone_asc">Zone (A-Z)</option>
-                    <option value="zone_desc">Zone (Z-A)</option>
-                    <option value="educational_zone_asc">Educational Zone (A-Z)</option>
-                    <option value="educational_zone_desc">Educational Zone (Z-A)</option>
-                  </select>
-                </div>
-                <button className="admin-login-btn" type="button" onClick={handleOpenSchoolCreateModal} style={{ width: "auto", padding: "10px 24px" }}>
-                  Add School
-                </button>
-              </div>
-            </div>
-
-            <section className="admin-content-grid admin-content-grid--single">
-              <div className="admin-card">
-                <div className="admin-card-header">
-                  <div>
-                    <div className="admin-card-title">Schools Directory</div>
-                    <div className="admin-card-subtitle">Manage registered educational institutions</div>
-                  </div>
-                </div>
-                {error && <div className="admin-error">{error}</div>}
-                {successMessage && <div className="admin-success">{successMessage}</div>}
-                <div className="admin-table">
-                  <div className="admin-table-header" style={{ gridTemplateColumns: "1.2fr 1.2fr 0.8fr 0.8fr 1fr 1fr" }}>
-                    <span>School Name</span>
-                    <span>Address</span>
-                    <span>Province</span>
-                    <span>District</span>
-                    <span>Educational Zone</span>
-                    <span>Actions</span>
-                  </div>
-                  {loading && <div className="admin-empty">Loading schools...</div>}
-                  {!loading && filteredSchools.length === 0 && (
-                    <div className="admin-empty">No schools found.</div>
-                  )}
-                  {filteredSchools.map((school) => (
-                    <div className="admin-table-row" key={school.id} style={{ gridTemplateColumns: "1.2fr 1.2fr 0.8fr 0.8fr 1fr 1fr" }}>
-                      <div>
-                        <strong className="user-name">{school.name}</strong>
-                      </div>
-                      <div className="user-meta">{school.address || school.location || "—"}</div>
-                      <div className="user-meta">{school.province || "—"}</div>
-                      <div className="user-meta">{school.district || "—"}</div>
-                      <div className="user-meta">{school.educational_zone || "—"}</div>
-                      <div className="admin-action-group">
-                        <button
-                          className="admin-action-btn"
-                          type="button"
-                          onClick={() => handleOpenSchoolEditModal(school)}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="admin-action-btn danger"
-                          type="button"
-                          onClick={() => handleOpenSchoolDeleteModal(school)}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
-          </>
-        )}
+        {activeTab === "schools" && <AdminSchools />}
 
         {/* User Creation Modal */}
         {showCreateModal && (
@@ -2151,8 +1829,7 @@ const SystemAdminDashboard = () => {
             </div>
           </section>
         )}
-      </main>
-    </div>
+    </>
   );
 };
 

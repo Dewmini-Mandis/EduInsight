@@ -4,8 +4,8 @@ from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
 
 from apps.accounts.models import Role
-from apps.attempts.models import QuizAttempt, AttemptAnswer
-from apps.attempts.serializers import QuizAttemptSerializer
+from apps.attempts.models import QuizAttempt, AttemptAnswer, ManualMark, TeacherOverride
+from apps.attempts.serializers import QuizAttemptSerializer, ManualMarkSerializer, TeacherOverrideSerializer
 from apps.classes.models import Student
 from apps.quizzes.models import Quiz, Question, Answer, CorrectAnswer
 
@@ -16,12 +16,12 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         
-        # System Admin / National Admin can view all attempts
-        if user.is_role(Role.ROLE_SYSTEM_ADMIN, Role.ROLE_NATIONAL_ADMIN):
+        # System Admin can view all attempts
+        if user.is_role(Role.ROLE_SYSTEM_ADMIN):
             return QuizAttempt.objects.all().prefetch_related("answers").order_by("-start_time")
         
-        # School Admin / Teacher can view attempts in their school
-        if user.is_role(Role.ROLE_SCHOOL_ADMIN, Role.ROLE_TEACHER):
+        # Teacher can view attempts in their school
+        if user.is_role(Role.ROLE_TEACHER):
             school_id = user.school_id
             if school_id:
                 return QuizAttempt.objects.filter(student__user__school_id=school_id).prefetch_related("answers").order_by("-start_time")
@@ -61,12 +61,21 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
         
         answers_data = request.data.get("answers", [])
         
+        start_time_str = request.data.get("start_time")
+        start_time = timezone.now()
+        if start_time_str:
+            try:
+                from dateutil.parser import parse
+                start_time = parse(start_time_str)
+            except Exception:
+                pass
+                
         # Create QuizAttempt
         attempt = QuizAttempt.objects.create(
             student=student,
             quiz=quiz,
             attempt_number=attempt_number,
-            start_time=timezone.now(),
+            start_time=start_time,
             end_time=timezone.now(),
         )
         
@@ -130,3 +139,39 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(attempt)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+class ManualMarkViewSet(viewsets.ModelViewSet):
+    serializer_class = ManualMarkSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_role(Role.ROLE_SYSTEM_ADMIN):
+            return ManualMark.objects.all()
+        if user.is_role(Role.ROLE_TEACHER):
+            return ManualMark.objects.filter(teacher=user)
+        return ManualMark.objects.none()
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if not user.is_role(Role.ROLE_TEACHER, Role.ROLE_SYSTEM_ADMIN):
+            raise PermissionDenied("Only teachers can submit manual marks.")
+        serializer.save(teacher=user)
+
+class TeacherOverrideViewSet(viewsets.ModelViewSet):
+    serializer_class = TeacherOverrideSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_role(Role.ROLE_SYSTEM_ADMIN):
+            return TeacherOverride.objects.all()
+        if user.is_role(Role.ROLE_TEACHER):
+            return TeacherOverride.objects.filter(teacher=user)
+        return TeacherOverride.objects.none()
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        if not user.is_role(Role.ROLE_TEACHER, Role.ROLE_SYSTEM_ADMIN):
+            raise PermissionDenied("Only teachers can submit overrides.")
+        serializer.save(teacher=user)

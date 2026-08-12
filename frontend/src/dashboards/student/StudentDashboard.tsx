@@ -1,7 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Map, BookOpen, Target, Trophy, Clock, CheckCircle, ChevronRight, Lock, Calendar, ChevronDown, Check } from "lucide-react";
+
 import { getToken, getUser } from "../../auth/authUtils";
 import "../../styles/admin.css";
+import "../../styles/teacher.css";
 
 type CurrentUser = {
   id?: number;
@@ -175,6 +178,7 @@ const LineChart = ({ attemptsList }: { attemptsList: any[] }) => {
 const StudentDashboard = () => {
   const navigate = useNavigate();
   const currentUser = getUser() as CurrentUser | null;
+  const [collapsed, setCollapsed] = useState(false);
 
   // Tabs: "learning-path" | "progress" (My Progress & History) | "quizzes" (Assigned Quizzes) | "recommendations"
   const [activeSection, setActiveSection] = useState<"learning-path" | "progress" | "quizzes" | "recommendations">(
@@ -187,6 +191,7 @@ const StudentDashboard = () => {
   const [quizzes, setQuizzes] = useState<any[]>([]);
   const [attempts, setAttempts] = useState<any[]>([]);
   const [lessons, setLessons] = useState<any[]>([]);
+  const [materials, setMaterials] = useState<any[]>([]);
   const [selectedTerm, setSelectedTerm] = useState<string>("1st Term");
   const [selectedLessonId, setSelectedLessonId] = useState<string>("");
   const [selectedQuiz, setSelectedQuiz] = useState<any | null>(null);
@@ -197,6 +202,10 @@ const StudentDashboard = () => {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
+  
+  // Quiz Session State
+  const [quizStartTime, setQuizStartTime] = useState<number | null>(null);
+  const [timeElapsed, setTimeElapsed] = useState<number>(0);
 
   const fullName = `${currentUser?.first_name || ""} ${currentUser?.last_name || ""}`.trim();
   const displayName = fullName || "Student";
@@ -237,6 +246,14 @@ const StudentDashboard = () => {
       if (!lessonsRes.ok) throw new Error("Unable to fetch lessons");
       const lessonsData = await lessonsRes.json();
       setLessons(lessonsData);
+
+      // Fetch materials for recommendations
+      const materialsRes = await fetch("/api/quizzes/materials/", {
+        headers: { Authorization: `Token ${token}` },
+      });
+      if (materialsRes.ok) {
+        setMaterials(await materialsRes.json());
+      }
       
       if (lessonsData.length > 0) {
         // Find default lesson for current term or first available
@@ -254,6 +271,19 @@ const StudentDashboard = () => {
     fetchData();
   }, []);
 
+  // Timer Effect
+  useEffect(() => {
+    let timerId: NodeJS.Timeout;
+    if (quizAction === "attempt" && quizStartTime !== null) {
+      timerId = setInterval(() => {
+        setTimeElapsed(Math.floor((Date.now() - quizStartTime) / 1000));
+      }, 1000);
+    }
+    return () => {
+      if (timerId) clearInterval(timerId);
+    };
+  }, [quizAction, quizStartTime]);
+
   // Compute stats for metrics
   const stats = useMemo(() => {
     const completedQuizIds = new Set(attempts.map((att) => att.quiz));
@@ -262,12 +292,30 @@ const StudentDashboard = () => {
         ? Math.round(attempts.reduce((sum, att) => sum + (att.score || 0), 0) / attempts.length)
         : 0;
 
+    // Find failed quizzes (best score < 75)
+    const quizBestScores: Record<number, number> = {};
+    attempts.forEach(att => {
+      quizBestScores[att.quiz] = Math.max(quizBestScores[att.quiz] || 0, att.score);
+    });
+
+    const failedLessonIds = new Set<number>();
+    Object.entries(quizBestScores).forEach(([quizId, bestScore]) => {
+      if (bestScore < 75) {
+        const quiz = quizzes.find(q => q.id === Number(quizId));
+        if (quiz) failedLessonIds.add(quiz.lesson);
+      }
+    });
+
+    // Recommend materials matching failed lessons
+    const recommendedMaterials = materials.filter(m => failedLessonIds.has(m.lesson));
+
     return {
       completedCount: completedQuizIds.size,
       avgScore: averageScore,
-      recommendationsCount: quizzes.length > 0 ? 3 : 0,
+      recommendationsCount: recommendedMaterials.length,
+      recommendedMaterials,
     };
-  }, [attempts, quizzes]);
+  }, [attempts, quizzes, materials]);
 
   // Derived state for the selected lesson learning path:
   const learningPathData = useMemo(() => {
@@ -359,25 +407,62 @@ const StudentDashboard = () => {
 
   const handleStartAttempt = (quiz: any) => {
     setSelectedQuiz(quiz);
-    setAttemptAnswers({});
+    
+    // Autosave Recovery
+    const savedStateStr = localStorage.getItem(`quiz_autosave_${quiz.id}`);
+    if (savedStateStr) {
+      try {
+        const savedState = JSON.parse(savedStateStr);
+        setAttemptAnswers(savedState.answers || {});
+        setHintsUsed(savedState.hints || {});
+        setQuizStartTime(savedState.startTime || Date.now());
+      } catch (e) {
+        setAttemptAnswers({});
+        setHintsUsed({});
+        setQuizStartTime(Date.now());
+      }
+    } else {
+      setAttemptAnswers({});
+      setHintsUsed({});
+      setQuizStartTime(Date.now());
+    }
+
     setError("");
     setSuccessMessage("");
     setQuizAction("attempt");
     setActiveSection("quizzes");
   };
 
-  const handleAnswerSelect = (questionId: number, answerId: number) => {
-    setAttemptAnswers((prev) => ({
-      ...prev,
-      [questionId]: { selected_answer: answerId },
+  // Autosave Function
+  const persistAutosave = (answers: any, hints: any, startTime: number | null, quizId: number) => {
+    if (!quizId) return;
+    localStorage.setItem(`quiz_autosave_${quizId}`, JSON.stringify({
+      answers,
+      hints,
+      startTime
     }));
   };
 
+  const handleAnswerSelect = (questionId: number, answerId: number) => {
+    setAttemptAnswers((prev) => {
+      const updated = {
+        ...prev,
+        [questionId]: { ...prev[questionId], selected_answer: answerId },
+      };
+      if (selectedQuiz) persistAutosave(updated, hintsUsed, quizStartTime, selectedQuiz.id);
+      return updated;
+    });
+  };
+
   const handleTypedAnswerChange = (questionId: number, val: string) => {
-    setAttemptAnswers((prev) => ({
-      ...prev,
-      [questionId]: { typed_answer: val },
-    }));
+    setAttemptAnswers((prev) => {
+      const updated = {
+        ...prev,
+        [questionId]: { ...prev[questionId], typed_answer: val },
+      };
+      if (selectedQuiz) persistAutosave(updated, hintsUsed, quizStartTime, selectedQuiz.id);
+      return updated;
+    });
   };
 
   const handleSubmitAttempt = async (e: React.FormEvent) => {
@@ -390,6 +475,7 @@ const StudentDashboard = () => {
       const token = getToken();
       const payload = {
         quiz: selectedQuiz.id,
+        start_time: quizStartTime ? new Date(quizStartTime).toISOString() : new Date().toISOString(),
         answers: selectedQuiz.questions.map((q: any) => {
           return {
             question: q.id,
@@ -418,29 +504,17 @@ const StudentDashboard = () => {
       setSelectedAttempt(resultData);
       setSuccessMessage("Quiz submitted successfully!");
 
-      let isFinalAttempt = false;
-      // refresh attempts
+      // Clear autosave
+      localStorage.removeItem(`quiz_autosave_${selectedQuiz.id}`);
+
+      setQuizAction("result");
+      
       const attemptRes = await fetch("/api/attempts/", {
         headers: { Authorization: `Token ${token}` },
       });
       if (attemptRes.ok) {
         const attemptData = await attemptRes.json();
         setAttempts(attemptData);
-        
-        const count = attemptData.filter((a: any) => a.quiz === selectedQuiz.id).length;
-        const maxAttempts = selectedQuiz.max_attempts || 3;
-        if (count >= maxAttempts) {
-          isFinalAttempt = true;
-        }
-      }
-
-      if (isFinalAttempt) {
-        setQuizAction("result");
-      } else {
-        setQuizAction("list");
-        setActiveSection("learning-path");
-        setSelectedQuiz(null);
-        setSelectedAttempt(null);
       }
     } catch (err: any) {
       setError(err.message || "Failed to submit attempt");
@@ -469,18 +543,39 @@ const StudentDashboard = () => {
   };
 
   return (
-    <div className="admin-root">
-      <aside className="admin-sidebar">
+    <div className={`teacher-app-container ${collapsed ? "teacher-sidebar-collapsed" : ""}`}>
+      <aside className={`teacher-sidebar ${collapsed ? "collapsed" : ""}`}>
         <div>
-          <div className="admin-brand">
-            <div>
-              <div className="admin-brand-title">EduInsight</div>
-              <div className="admin-brand-sub">STUDENT</div>
+          <div className="teacher-sidebar-brand" style={{ justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <div className="teacher-brand-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 3L1 9L5 11.18V17.18L12 21L19 17.18V11.18L21 10.09V17H23V9L12 3ZM20.28 9L12 13.55L3.72 9L12 4.45L20.28 9ZM17 15.99L12 18.74L7 15.99V12.27L12 15L17 12.27V15.99Z" fill="currentColor"/>
+                </svg>
+              </div>
+              <div className="teacher-brand-text">
+                <span className="teacher-brand-name">EduInsight</span>
+                <span className="teacher-brand-module">STUDENT</span>
+              </div>
             </div>
-          </div>
-          <nav className="admin-nav">
             <button
-              className={`admin-nav-item ${activeSection === "learning-path" ? "active" : ""}`}
+              onClick={() => setCollapsed(!collapsed)}
+              style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", display: "flex", padding: "4px" }}
+              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                {collapsed ? (
+                  <polyline points="13 17 18 12 13 7" />
+                ) : (
+                  <polyline points="11 17 6 12 11 7" />
+                )}
+                <line x1="18" y1="12" x2="6" y2="12" />
+              </svg>
+            </button>
+          </div>
+          <nav className="teacher-sidebar-nav">
+            <button
+              className={`teacher-nav-link ${activeSection === "learning-path" ? "active" : ""}`}
               type="button"
               onClick={() => {
                 setActiveSection("learning-path");
@@ -490,10 +585,11 @@ const StudentDashboard = () => {
                 setSelectedQuiz(null);
               }}
             >
-              Learning Path
+              <Map size={18} strokeWidth={2.5} />
+              <span className="teacher-nav-text">Learning Path</span>
             </button>
             <button
-              className={`admin-nav-item ${activeSection === "progress" ? "active" : ""}`}
+              className={`teacher-nav-link ${activeSection === "progress" ? "active" : ""}`}
               type="button"
               onClick={() => {
                 setActiveSection("progress");
@@ -502,22 +598,11 @@ const StudentDashboard = () => {
                 setSelectedQuiz(null);
               }}
             >
-              My Progress
+              <Trophy size={18} strokeWidth={2.5} />
+              <span className="teacher-nav-text">My Progress</span>
             </button>
             <button
-              className={`admin-nav-item ${activeSection === "quizzes" ? "active" : ""}`}
-              type="button"
-              onClick={() => {
-                setActiveSection("quizzes");
-                setQuizAction("list");
-                setSelectedAttempt(null);
-                setSelectedQuiz(null);
-              }}
-            >
-              Assigned Quizzes
-            </button>
-            <button
-              className={`admin-nav-item ${activeSection === "recommendations" ? "active" : ""}`}
+              className={`teacher-nav-link ${activeSection === "recommendations" ? "active" : ""}`}
               type="button"
               onClick={() => {
                 setActiveSection("recommendations");
@@ -526,31 +611,34 @@ const StudentDashboard = () => {
                 setSelectedQuiz(null);
               }}
             >
-              Recommendations
+              <Target size={18} strokeWidth={2.5} />
+              <span className="teacher-nav-text">Recommendations</span>
             </button>
           </nav>
         </div>
-        <div className="admin-sidebar-footer">
-          <div className="admin-user-card">
-            <div className="admin-user-avatar">{initials}</div>
-            <div>
-              <div className="admin-user-name">{displayName}</div>
-              <div className="admin-user-email">
+        <div className="teacher-sidebar-footer">
+          <div className="teacher-user-info-card">
+            <div className="teacher-user-avatar">{initials}</div>
+            <div className="teacher-user-details">
+              <span className="teacher-user-name">{displayName}</span>
+              <span className="teacher-user-email" style={{fontSize: "12px", color: "var(--text-muted)"}}>
                 {currentUser?.email || "student@school.edu.lk"}
-              </div>
+              </span>
             </div>
+            <svg style={{marginLeft: "auto", color: "var(--text-muted)"}} xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
           </div>
           <button
-            className="admin-ghost-btn"
+            className="teacher-signout-btn"
             type="button"
             onClick={() => navigate("/logout")}
           >
-            Sign Out
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1-2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            <span>Sign Out</span>
           </button>
         </div>
       </aside>
 
-      <main className="admin-main">
+      <main className="teacher-main-content" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: "100vh", marginLeft: collapsed ? "80px" : "260px", transition: "margin-left 0.3s ease", padding: "32px", backgroundColor: "var(--background)", boxSizing: "border-box", overflowY: "auto" }}>
         <header className="admin-header" style={{ marginBottom: "1.5rem" }}>
           <div>
             <div className="admin-title">
@@ -609,327 +697,396 @@ const StudentDashboard = () => {
 
         <section className="admin-content-grid admin-content-grid--single">
           {activeSection === "learning-path" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+            <>
               {learningPathStep === "term" && (
-                <div style={{ background: "white", padding: "40px 20px", borderRadius: "12px", border: "1px solid var(--admin-border)", textAlign: "center" }}>
-                  <h2 style={{ marginBottom: "20px", color: "var(--admin-sidebar)" }}>Select Academic Term</h2>
-                  <div style={{ display: "flex", gap: "16px", justifyContent: "center", flexWrap: "wrap" }}>
-                    {["1st Term", "2nd Term", "3rd Term"].map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => {
-                          setSelectedTerm(t);
-                          setLearningPathStep("lesson");
-                          setSelectedLessonId("");
-                        }}
-                        style={{
-                          padding: "16px 32px",
-                          fontSize: "16px",
-                          fontWeight: "700",
-                          borderRadius: "12px",
-                          background: selectedTerm === t ? "var(--admin-accent)" : "white",
-                          color: selectedTerm === t ? "white" : "var(--admin-sidebar)",
-                          border: `2px solid ${selectedTerm === t ? "var(--admin-accent)" : "var(--admin-border)"}`,
-                          cursor: "pointer",
-                          transition: "all 0.2s ease"
-                        }}
-                      >
-                        {t}
-                      </button>
-                    ))}
+                <div style={{ display: "flex", flexDirection: "column", gap: "32px", fontFamily: "'Inter', sans-serif" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px", color: "var(--navy-900)" }}>
+                    <div style={{ background: "#e0e7ff", padding: "12px", borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Map size={24} color="#4338ca" />
+                    </div>
+                    <div>
+                      <h2 style={{ margin: 0, fontSize: "28px", fontWeight: "700" }}>Academic Learning Path</h2>
+                      <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: "14px" }}>Follow your structured curriculum, unlock quiz levels, and master academic terms.</p>
+                    </div>
+                  </div>
+
+                  <div style={{ background: "white", padding: "40px", borderRadius: "16px", border: "1px solid #e2e8f0", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)", textAlign: "center" }}>
+                    <h3 style={{ margin: "0 0 8px", fontSize: "20px", fontWeight: "700", color: "var(--navy-900)" }}>Select an Academic Term</h3>
+                    <p style={{ margin: "0 0 32px", color: "#64748b", fontSize: "14px" }}>Choose a term to explore lessons and continue your learning journey.</p>
+                    
+                    <div style={{ display: "flex", gap: "24px", justifyContent: "center", flexWrap: "wrap" }}>
+                      {[
+                        { title: "1st Term", subtitle: "Start Learning" },
+                        { title: "2nd Term", subtitle: "Continue Your Journey" },
+                        { title: "3rd Term", subtitle: "Advanced Learning" }
+                      ].map((t) => {
+                        const isActive = selectedTerm === t.title;
+                        return (
+                          <button
+                            key={t.title}
+                            type="button"
+                            onClick={() => {
+                              setSelectedTerm(t.title);
+                              setLearningPathStep("lesson");
+                              setSelectedLessonId("");
+                            }}
+                            style={{
+                              position: "relative",
+                              display: "flex",
+                              flexDirection: "column",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              width: "240px",
+                              padding: "32px 24px",
+                              borderRadius: "16px",
+                              background: isActive ? "#3b82f6" : "white",
+                              color: isActive ? "white" : "var(--navy-900)",
+                              border: `1px solid ${isActive ? "#3b82f6" : "#e2e8f0"}`,
+                              boxShadow: isActive ? "0 10px 15px -3px rgba(59, 130, 246, 0.4)" : "0 4px 6px -1px rgba(0, 0, 0, 0.05)",
+                              cursor: "pointer",
+                              transition: "all 0.3s ease"
+                            }}
+                          >
+                            {isActive && (
+                              <div style={{ position: "absolute", top: "16px", right: "16px", background: "white", borderRadius: "50%", padding: "2px", display: "flex" }}>
+                                <CheckCircle size={16} color="#3b82f6" />
+                              </div>
+                            )}
+                            <Calendar size={32} color={isActive ? "white" : "#64748b"} style={{ marginBottom: "16px" }} />
+                            <div style={{ fontSize: "20px", fontWeight: "700", marginBottom: "8px" }}>{t.title}</div>
+                            <div style={{ fontSize: "13px", color: isActive ? "rgba(255,255,255,0.8)" : "#64748b" }}>{t.subtitle}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "24px", background: "white", padding: "24px", borderRadius: "16px", border: "1px solid #e2e8f0", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "16px", padding: "0 16px" }}>
+                      <div style={{ background: "#f1f5f9", padding: "12px", borderRadius: "50%" }}>
+                        <BookOpen size={24} color="#3b82f6" />
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: "700", color: "var(--navy-900)", fontSize: "15px" }}>Structured Curriculum</div>
+                        <div style={{ fontSize: "13px", color: "#64748b", marginTop: "4px" }}>Step-by-step learning aligned to syllabus</div>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "16px", padding: "0 16px", borderLeft: "1px solid #e2e8f0" }}>
+                      <div style={{ background: "#f1f5f9", padding: "12px", borderRadius: "50%" }}>
+                        <Target size={24} color="#3b82f6" />
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: "700", color: "var(--navy-900)", fontSize: "15px" }}>Master Concepts</div>
+                        <div style={{ fontSize: "13px", color: "#64748b", marginTop: "4px" }}>Practice with quizzes and strengthen understanding</div>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "16px", padding: "0 16px", borderLeft: "1px solid #e2e8f0" }}>
+                      <div style={{ background: "#f1f5f9", padding: "12px", borderRadius: "50%" }}>
+                        <Trophy size={24} color="#3b82f6" />
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: "700", color: "var(--navy-900)", fontSize: "15px" }}>Track Progress</div>
+                        <div style={{ fontSize: "13px", color: "#64748b", marginTop: "4px" }}>Monitor your growth and achieve your goals</div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
 
               {learningPathStep === "lesson" && (
-                <div style={{ background: "white", padding: "20px", borderRadius: "12px", border: "1px solid var(--admin-border)" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-                    <h2 style={{ margin: 0, color: "var(--admin-sidebar)" }}>Academic Lessons for {selectedTerm}</h2>
-                    <button 
-                      onClick={() => setLearningPathStep("term")}
-                      className="admin-secondary-btn"
-                      style={{ width: "auto", padding: "8px 16px" }}
-                    >
-                      &larr; Back to Terms
-                    </button>
+                <div style={{ display: "flex", flexDirection: "column", gap: "24px", fontFamily: "'Inter', sans-serif" }}>
+                  <div style={{ fontSize: "13px", color: "#64748b", display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span style={{ cursor: "pointer" }} onClick={() => setLearningPathStep("term")}>Home</span>
+                    <ChevronRight size={14} />
+                    <span style={{ cursor: "pointer" }} onClick={() => setLearningPathStep("term")}>Learning Path</span>
+                    <ChevronRight size={14} />
+                    <span style={{ fontWeight: "600", color: "#3b82f6" }}>{selectedTerm}</span>
+                    <ChevronRight size={14} />
+                    <span style={{ fontWeight: "600", color: "var(--navy-900)" }}>Lessons</span>
                   </div>
                   
-                  {learningPathData.termLessons.length === 0 ? (
-                    <div style={{ padding: "40px", textAlign: "center", color: "#94a3b8", fontSize: "14px", fontStyle: "italic" }}>
-                      No lessons created for {selectedTerm} yet.
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px", color: "var(--navy-900)" }}>
+                    <div style={{ background: "#e0e7ff", padding: "12px", borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <BookOpen size={24} color="#4338ca" />
                     </div>
-                  ) : (
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: "16px" }}>
-                      {learningPathData.termLessons.map((lesson) => {
-                        const status = learningPathData.getLessonStatus(lesson.id);
-                        let badgeStyle = { backgroundColor: "#f1f5f9", color: "#64748b" }; // Pending
-                        if (status === "In Progress") badgeStyle = { backgroundColor: "#fef3c7", color: "#d97706" };
-                        if (status === "Completed") badgeStyle = { backgroundColor: "#ecfdf5", color: "#047857" };
+                    <div>
+                      <h2 style={{ margin: 0, fontSize: "28px", fontWeight: "700" }}>Academic Learning Path</h2>
+                      <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: "14px" }}>Follow your structured curriculum, unlock quiz levels, and master academic terms.</p>
+                    </div>
+                  </div>
 
-                        return (
-                          <button
-                            key={lesson.id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedLessonId(lesson.id.toString());
-                              setLearningPathStep("level");
-                            }}
-                            style={{
-                              textAlign: "left",
-                              padding: "20px",
-                              borderRadius: "12px",
-                              border: "2px solid var(--admin-border)",
-                              background: "white",
-                              cursor: "pointer",
-                              transition: "all 0.2s ease",
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: "8px"
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.borderColor = "var(--admin-accent)"}
-                            onMouseLeave={(e) => e.currentTarget.style.borderColor = "var(--admin-border)"}
-                          >
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", width: "100%" }}>
-                              <div style={{ fontWeight: "800", fontSize: "16px", color: "var(--admin-sidebar)" }}>
-                                {lesson.title}
-                              </div>
-                              <span style={{ fontSize: "11px", fontWeight: "700", padding: "4px 8px", borderRadius: "20px", ...badgeStyle }}>
-                                {status}
-                              </span>
-                            </div>
-                          </button>
-                        );
-                      })}
+                  <div style={{ background: "white", padding: "32px", borderRadius: "16px", border: "1px solid #e2e8f0", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px" }}>
+                      <div>
+                        <h3 style={{ margin: "0 0 8px", fontSize: "20px", fontWeight: "700", color: "var(--navy-900)" }}>Academic Lessons for {selectedTerm}</h3>
+                        <p style={{ margin: 0, color: "#64748b", fontSize: "14px" }}>Explore your lessons, track progress, and strengthen your understanding.</p>
+                      </div>
+                      <button 
+                        onClick={() => setLearningPathStep("term")}
+                        style={{ background: "white", border: "1px solid #e2e8f0", padding: "8px 16px", borderRadius: "8px", color: "var(--navy-900)", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px", fontSize: "13px" }}
+                      >
+                        &larr; Back to Terms
+                      </button>
                     </div>
-                  )}
+                    
+                    {learningPathData.termLessons.length === 0 ? (
+                      <div style={{ padding: "40px", textAlign: "center", color: "#94a3b8", fontSize: "14px", fontStyle: "italic" }}>
+                        No lessons created for {selectedTerm} yet.
+                      </div>
+                    ) : (
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "24px" }}>
+                        {learningPathData.termLessons.map((lesson, idx) => {
+                          const status = learningPathData.getLessonStatus(lesson.id);
+                          const lessonQuizzes = quizzes.filter(q => q.lesson === lesson.id);
+                          const totalQuizzes = lessonQuizzes.length;
+                          const completedQuizzes = lessonQuizzes.filter(q => attempts.some(att => att.quiz === q.id && att.score >= 75)).length;
+                          const progress = totalQuizzes > 0 ? Math.round((completedQuizzes / totalQuizzes) * 100) : 0;
+                          
+                          let badgeBg = "#f1f5f9", badgeColor = "#64748b", iconBg = "#f1f5f9", iconColor = "#64748b", progColor = "#cbd5e1";
+                          if (status === "In Progress") { badgeBg = "#e0e7ff"; badgeColor = "#3b82f6"; iconBg = "#eff6ff"; iconColor = "#3b82f6"; progColor = "#3b82f6"; }
+                          if (status === "Completed") { badgeBg = "#dcfce7"; badgeColor = "#16a34a"; iconBg = "#f0fdf4"; iconColor = "#16a34a"; progColor = "#16a34a"; }
+
+                          return (
+                            <div key={lesson.id} style={{ padding: "24px", borderRadius: "16px", border: "1px solid #e2e8f0", boxShadow: "0 2px 4px rgba(0,0,0,0.02)", display: "flex", flexDirection: "column", gap: "20px" }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+                                  <div style={{ background: iconBg, padding: "12px", borderRadius: "50%", display: "flex" }}>
+                                    <BookOpen size={20} color={iconColor} />
+                                  </div>
+                                  <div style={{ fontWeight: "700", fontSize: "18px", color: "var(--navy-900)" }}>{lesson.title}</div>
+                                </div>
+                                <span style={{ fontSize: "11px", fontWeight: "700", padding: "4px 10px", borderRadius: "20px", background: badgeBg, color: badgeColor }}>
+                                  {status}
+                                </span>
+                              </div>
+
+                              <div>
+                                <div style={{ width: "100%", background: "#f1f5f9", height: "6px", borderRadius: "3px", overflow: "hidden", marginBottom: "8px" }}>
+                                  <div style={{ width: `${progress}%`, background: progColor, height: "100%", transition: "width 0.5s ease" }} />
+                                </div>
+                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "#64748b", fontWeight: "600" }}>
+                                  <span />
+                                  <span>{progress}% Complete {status === "Completed" && <CheckCircle size={12} color="#16a34a" style={{ display: "inline", verticalAlign: "middle", marginLeft: "2px", marginBottom: "2px" }} />}</span>
+                                </div>
+                              </div>
+
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px dashed #e2e8f0", paddingTop: "16px" }}>
+                                <div style={{ display: "flex", gap: "16px", color: "#64748b", fontSize: "13px", fontWeight: "500" }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}><Target size={16} /> {totalQuizzes} Quizzes</div>
+                                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}><Clock size={16} /> ~{totalQuizzes * 15}m</div>
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    setSelectedLessonId(lesson.id.toString());
+                                    setLearningPathStep("level");
+                                  }}
+                                  style={{ background: "transparent", border: "1px solid #e2e8f0", borderRadius: "8px", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center", color: "#3b82f6", cursor: "pointer", transition: "all 0.2s" }}
+                                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#3b82f6"; e.currentTarget.style.background = "#eff6ff"; }}
+                                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#e2e8f0"; e.currentTarget.style.background = "transparent"; }}
+                                >
+                                  <ChevronRight size={18} />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
               {learningPathStep === "level" && learningPathData.activeLesson && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <h2 style={{ margin: 0, color: "var(--admin-sidebar)", fontSize: "1.5rem" }}>
-                      {learningPathData.activeLesson.title} - {learningPathData.currentLevel}
-                    </h2>
+                <div style={{ display: "flex", flexDirection: "column", gap: "24px", fontFamily: "'Inter', sans-serif" }}>
+                  <div style={{ fontSize: "13px", color: "#64748b", display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span style={{ cursor: "pointer" }} onClick={() => setLearningPathStep("term")}>Home</span>
+                    <ChevronRight size={14} />
+                    <span style={{ cursor: "pointer" }} onClick={() => setLearningPathStep("term")}>Learning Path</span>
+                    <ChevronRight size={14} />
+                    <span style={{ fontWeight: "600", color: "#3b82f6", cursor: "pointer" }} onClick={() => setLearningPathStep("lesson")}>{selectedTerm}</span>
+                    <ChevronRight size={14} />
+                    <span style={{ fontWeight: "600", color: "var(--navy-900)" }}>{learningPathData.activeLesson.title}</span>
+                  </div>
+                  
+                  <div style={{ display: "flex", alignItems: "center", gap: "16px", color: "var(--navy-900)" }}>
+                    <div style={{ background: "#e0e7ff", padding: "16px", borderRadius: "16px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Map size={32} color="#4338ca" />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <h2 style={{ margin: 0, fontSize: "32px", fontWeight: "700" }}>{learningPathData.activeLesson.title}</h2>
+                      <p style={{ margin: "4px 0 0", color: "#64748b", fontSize: "15px" }}>{learningPathData.activeLesson.description || "Master the fundamentals of this topic."}</p>
+                    </div>
                     <button 
                       onClick={() => setLearningPathStep("lesson")}
-                      className="admin-secondary-btn"
-                      style={{ width: "auto", padding: "8px 16px" }}
+                      style={{ background: "white", border: "1px solid #e2e8f0", padding: "10px 20px", borderRadius: "8px", color: "var(--navy-900)", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px", fontSize: "14px" }}
                     >
                       &larr; Back to Lessons
                     </button>
                   </div>
 
-                  {/* Overall Progress Bar */}
-                  <div style={{ background: "white", padding: "16px 20px", borderRadius: "12px", border: "1px solid var(--admin-border)" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                      <span style={{ fontSize: "12px", fontWeight: "700", color: "#64748b" }}>Overall Progress</span>
-                      <span style={{ fontSize: "14px", fontWeight: "800", color: "var(--admin-sidebar)" }}>
+                  <div style={{ background: "white", padding: "24px 32px", borderRadius: "16px", border: "1px solid #e2e8f0", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                      <span style={{ fontSize: "16px", fontWeight: "700", color: "var(--navy-900)" }}>Overall Progress</span>
+                      <span style={{ fontSize: "24px", fontWeight: "800", color: "var(--navy-900)" }}>
                         {learningPathData.overallProgress}%
                       </span>
                     </div>
-                    <div style={{ width: "100%", background: "#f1f5f9", height: "8px", borderRadius: "4px", overflow: "hidden" }}>
-                      <div style={{ width: `${learningPathData.overallProgress}%`, background: "linear-gradient(90deg, #3b82f6 0%, #10b981 100%)", height: "100%", transition: "width 0.5s ease" }} />
+                    <div style={{ width: "100%", background: "#f1f5f9", height: "12px", borderRadius: "6px", overflow: "hidden", marginBottom: "12px" }}>
+                      <div style={{ width: `${learningPathData.overallProgress}%`, background: "#3b82f6", height: "100%", transition: "width 0.5s ease" }} />
                     </div>
-                    <div style={{ fontSize: "11px", color: "#64748b", marginTop: "8px", textAlign: "right" }}>
-                      {learningPathData.completedQuizzes} / {learningPathData.totalQuizzes} Quizzes Completed
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#64748b", fontWeight: "500" }}>
+                      <span><CheckCircle size={14} color="#3b82f6" style={{ display: "inline", verticalAlign: "middle", marginRight: "6px", marginBottom: "2px" }} /> {learningPathData.completedQuizzes} / {learningPathData.totalQuizzes} Quizzes Completed</span>
+                      <span>Keep going! You're making great progress.</span>
                     </div>
                   </div>
 
-                  {/* Level Unlocking & Quiz Grid */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
                     
                     {/* Beginner Level */}
-                    <div style={{ display: "flex", flexDirection: "column", background: "white", border: "1px solid var(--admin-border)", borderRadius: "12px", padding: "16px" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", borderBottom: "1px solid #f1f5f9", paddingBottom: "8px" }}>
-                        <span style={{ fontWeight: "800", fontSize: "16px", color: "var(--admin-sidebar)" }}>Beginner Level</span>
-                        {learningPathData.beginnerCompleted ? (
-                          <span style={{ fontSize: "11px", color: "#047857", backgroundColor: "#ecfdf5", padding: "4px 12px", borderRadius: "20px", fontWeight: "700" }}>
-                            Passed 🏆
-                          </span>
-                        ) : (
-                          <span style={{ fontSize: "11px", color: "#d97706", backgroundColor: "#fef3c7", padding: "4px 12px", borderRadius: "20px", fontWeight: "700" }}>
-                            In Progress
-                          </span>
-                        )}
+                    <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: "16px", padding: "24px", boxShadow: "0 2px 4px rgba(0,0,0,0.02)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px" }}>
+                        <div style={{ display: "flex", gap: "16px" }}>
+                          <div style={{ background: "#eff6ff", padding: "16px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <Map size={24} color="#3b82f6" />
+                          </div>
+                          <div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "4px" }}>
+                              <h3 style={{ margin: 0, fontSize: "20px", fontWeight: "700", color: "var(--navy-900)" }}>Beginner Level</h3>
+                              {learningPathData.beginnerCompleted ? (
+                                <span style={{ fontSize: "11px", color: "#16a34a", backgroundColor: "#dcfce7", padding: "4px 10px", borderRadius: "20px", fontWeight: "600" }}>Completed</span>
+                              ) : (
+                                <span style={{ fontSize: "11px", color: "#3b82f6", backgroundColor: "#e0e7ff", padding: "4px 10px", borderRadius: "20px", fontWeight: "600" }}>In Progress</span>
+                              )}
+                            </div>
+                            <p style={{ margin: 0, color: "#64748b", fontSize: "14px" }}>Learn the basics and simple operations.</p>
+                          </div>
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <div style={{ fontSize: "18px", fontWeight: "700", color: "#3b82f6", marginBottom: "4px" }}>{learningPathData.beginnerQuizzes.filter(q => learningPathData.isQuizCompleted(q.id)).length} / {learningPathData.beginnerQuizzes.length}</div>
+                          <div style={{ fontSize: "12px", color: "#64748b" }}>Quizzes Completed</div>
+                        </div>
                       </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
                         {learningPathData.beginnerQuizzes.map((quiz, index, arr) => {
                           const isCompleted = learningPathData.isQuizCompleted(quiz.id);
-                          const score = learningPathData.getBestScore(quiz.id);
                           const isUnlocked = index === 0 || learningPathData.isQuizCompleted(arr[index - 1].id);
-                          const attemptsCount = attempts.filter((att) => att.quiz === quiz.id).length;
-                          const maxAttempts = quiz.max_attempts || 3;
-                          const isLimitReached = attemptsCount >= maxAttempts;
-                          const canAttempt = isUnlocked && !isLimitReached;
                           return (
-                            <div key={quiz.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0", opacity: isUnlocked ? 1 : 0.6 }}>
-                              <div>
-                                <div style={{ fontSize: "14px", fontWeight: "700", color: "#334155", marginBottom: "4px" }}>
-                                  {quiz.title} {!isUnlocked && <span style={{ fontSize: "12px", marginLeft: "4px" }}>🔒</span>}
+                            <div key={quiz.id} onClick={() => isUnlocked ? handleStartAttempt(quiz) : null} style={{ padding: "16px", border: `1px solid ${isCompleted ? "#dcfce7" : "#e2e8f0"}`, borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: isUnlocked ? "pointer" : "not-allowed", opacity: isUnlocked ? 1 : 0.6, background: "white", transition: "all 0.2s" }} onMouseEnter={isUnlocked ? (e) => e.currentTarget.style.borderColor = "#3b82f6" : undefined} onMouseLeave={isUnlocked ? (e) => e.currentTarget.style.borderColor = isCompleted ? "#dcfce7" : "#e2e8f0" : undefined}>
+                              <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                                <div style={{ background: isCompleted ? "#3b82f6" : "#f1f5f9", borderRadius: "50%", width: "40px", height: "40px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                  {isCompleted ? <Check size={20} color="white" /> : <Calendar size={20} color="#3b82f6" />}
                                 </div>
-                                <div style={{ fontSize: "12px", color: "#64748b" }}>
-                                  {score !== null ? `Best Score: ${score}% (${attemptsCount}/${maxAttempts} attempts)` : isUnlocked ? `Not attempted yet (0/${maxAttempts} attempts)` : "Pending"}
+                                <div>
+                                  <div style={{ fontSize: "14px", fontWeight: "700", color: "var(--navy-900)", marginBottom: "4px" }}>{quiz.title}</div>
+                                  <div style={{ fontSize: "12px", color: isCompleted ? "#16a34a" : "#3b82f6", fontWeight: "500" }}>Quiz {index + 1} &bull; {isCompleted ? "Completed" : "In Progress"}</div>
                                 </div>
                               </div>
-                              <button
-                                type="button"
-                                className="admin-action-btn"
-                                onClick={() => isLimitReached ? handleViewAnswers(quiz) : handleStartAttempt(quiz)}
-                                disabled={!isUnlocked}
-                                style={{ 
-                                  width: "auto", 
-                                  padding: "6px 16px", 
-                                  fontSize: "12px",
-                                  opacity: isUnlocked ? 1 : 0.5,
-                                  cursor: isUnlocked ? "pointer" : "not-allowed"
-                                }}
-                              >
-                                {isLimitReached ? "View Answers" : isCompleted ? "Re-attempt" : isUnlocked ? "Start" : "Locked"}
-                              </button>
+                              <div style={{ width: "24px", height: "24px", borderRadius: "50%", border: `1px solid ${isCompleted ? "#16a34a" : "#e2e8f0"}`, display: "flex", alignItems: "center", justifyContent: "center", background: isCompleted ? "#dcfce7" : "transparent" }}>
+                                {isCompleted ? <Check size={14} color="#16a34a" /> : <ChevronRight size={14} color="#94a3b8" />}
+                              </div>
                             </div>
                           );
                         })}
-                        {learningPathData.beginnerQuizzes.length === 0 && (
-                          <div style={{ textAlign: "center", padding: "10px", color: "#94a3b8", fontSize: "12px" }}>No beginner quizzes.</div>
-                        )}
                       </div>
                     </div>
 
                     {/* Intermediate Level */}
-                    <div style={{ display: "flex", flexDirection: "column", background: "white", border: "1px solid var(--admin-border)", borderRadius: "12px", padding: "16px", opacity: learningPathData.intermediateUnlocked ? 1 : 0.65 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", borderBottom: "1px solid #f1f5f9", paddingBottom: "8px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <span style={{ fontWeight: "800", fontSize: "16px", color: "var(--admin-sidebar)" }}>Intermediate Level</span>
-                          {!learningPathData.intermediateUnlocked && <span style={{ fontSize: "14px" }}>🔒</span>}
+                    <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: "16px", padding: "24px", boxShadow: "0 2px 4px rgba(0,0,0,0.02)", opacity: learningPathData.intermediateUnlocked ? 1 : 0.6 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: learningPathData.intermediateUnlocked ? "24px" : "0" }}>
+                        <div style={{ display: "flex", gap: "16px" }}>
+                          <div style={{ background: learningPathData.intermediateUnlocked ? "#f5f3ff" : "#f1f5f9", padding: "16px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            {learningPathData.intermediateUnlocked ? <Map size={24} color="#8b5cf6" /> : <Lock size={24} color="#94a3b8" />}
+                          </div>
+                          <div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "4px" }}>
+                              <h3 style={{ margin: 0, fontSize: "20px", fontWeight: "700", color: "var(--navy-900)" }}>Intermediate Level</h3>
+                              {!learningPathData.intermediateUnlocked && (
+                                <span style={{ fontSize: "11px", color: "#64748b", backgroundColor: "#f1f5f9", padding: "4px 10px", borderRadius: "20px", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}><Lock size={10} /> Locked</span>
+                              )}
+                            </div>
+                            <p style={{ margin: 0, color: "#64748b", fontSize: "14px" }}>Unlock after completing all Beginner Level quizzes.</p>
+                          </div>
                         </div>
-                        {learningPathData.intermediateCompleted ? (
-                          <span style={{ fontSize: "11px", color: "#047857", backgroundColor: "#ecfdf5", padding: "4px 12px", borderRadius: "20px", fontWeight: "700" }}>
-                            Passed 🏆
-                          </span>
-                        ) : learningPathData.intermediateUnlocked ? (
-                          <span style={{ fontSize: "11px", color: "#d97706", backgroundColor: "#fef3c7", padding: "4px 12px", borderRadius: "20px", fontWeight: "700" }}>
-                            Unlocked
-                          </span>
-                        ) : (
-                          <span style={{ fontSize: "11px", color: "#64748b", backgroundColor: "#f1f5f9", padding: "4px 12px", borderRadius: "20px", fontWeight: "700" }}>
-                            Locked
-                          </span>
-                        )}
+                        <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "#f8fafc", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <ChevronDown size={18} color="#94a3b8" />
+                        </div>
                       </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                        {learningPathData.intermediateQuizzes.map((quiz, index, arr) => {
-                          const isCompleted = learningPathData.isQuizCompleted(quiz.id);
-                          const score = learningPathData.getBestScore(quiz.id);
-                          const isUnlocked = learningPathData.intermediateUnlocked && (index === 0 || learningPathData.isQuizCompleted(arr[index - 1].id));
-                          const attemptsCount = attempts.filter((att) => att.quiz === quiz.id).length;
-                          const maxAttempts = quiz.max_attempts || 3;
-                          const isLimitReached = attemptsCount >= maxAttempts;
-                          const canAttempt = isUnlocked && !isLimitReached;
-                          return (
-                            <div key={quiz.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0", opacity: isUnlocked ? 1 : 0.6 }}>
-                              <div>
-                                <div style={{ fontSize: "14px", fontWeight: "700", color: "#334155", marginBottom: "4px" }}>
-                                  {quiz.title} {!isUnlocked && <span style={{ fontSize: "12px", marginLeft: "4px" }}>🔒</span>}
+                      {learningPathData.intermediateUnlocked && (
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
+                          {learningPathData.intermediateQuizzes.map((quiz, index, arr) => {
+                            const isCompleted = learningPathData.isQuizCompleted(quiz.id);
+                            const isUnlocked = index === 0 || learningPathData.isQuizCompleted(arr[index - 1].id);
+                            return (
+                              <div key={quiz.id} onClick={() => isUnlocked ? handleStartAttempt(quiz) : null} style={{ padding: "16px", border: `1px solid ${isCompleted ? "#dcfce7" : "#e2e8f0"}`, borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: isUnlocked ? "pointer" : "not-allowed", opacity: isUnlocked ? 1 : 0.6, background: "white", transition: "all 0.2s" }}>
+                                <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                                  <div style={{ background: isCompleted ? "#8b5cf6" : "#f1f5f9", borderRadius: "50%", width: "40px", height: "40px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                    {isCompleted ? <Check size={20} color="white" /> : <Calendar size={20} color="#8b5cf6" />}
+                                  </div>
+                                  <div>
+                                    <div style={{ fontSize: "14px", fontWeight: "700", color: "var(--navy-900)", marginBottom: "4px" }}>{quiz.title}</div>
+                                    <div style={{ fontSize: "12px", color: isCompleted ? "#16a34a" : "#8b5cf6", fontWeight: "500" }}>Quiz {index + 1} &bull; {isCompleted ? "Completed" : "In Progress"}</div>
+                                  </div>
                                 </div>
-                                <div style={{ fontSize: "12px", color: "#64748b" }}>
-                                  {score !== null ? `Best Score: ${score}% (${attemptsCount}/${maxAttempts} attempts)` : isUnlocked ? `Not attempted yet (0/${maxAttempts} attempts)` : "Pending"}
+                                <div style={{ width: "24px", height: "24px", borderRadius: "50%", border: `1px solid ${isCompleted ? "#16a34a" : "#e2e8f0"}`, display: "flex", alignItems: "center", justifyContent: "center", background: isCompleted ? "#dcfce7" : "transparent" }}>
+                                  {isCompleted ? <Check size={14} color="#16a34a" /> : <ChevronRight size={14} color="#94a3b8" />}
                                 </div>
                               </div>
-                              <button
-                                type="button"
-                                className="admin-action-btn"
-                                onClick={() => isLimitReached ? handleViewAnswers(quiz) : handleStartAttempt(quiz)}
-                                disabled={!isUnlocked}
-                                style={{ 
-                                  width: "auto", 
-                                  padding: "6px 16px", 
-                                  fontSize: "12px", 
-                                  opacity: isUnlocked ? 1 : 0.5,
-                                  cursor: isUnlocked ? "pointer" : "not-allowed"
-                                }}
-                              >
-                                {isLimitReached ? "View Answers" : isCompleted ? "Re-attempt" : isUnlocked ? "Start" : "Locked"}
-                              </button>
-                            </div>
-                          );
-                        })}
-                        {learningPathData.intermediateQuizzes.length === 0 && (
-                          <div style={{ textAlign: "center", padding: "10px", color: "#94a3b8", fontSize: "12px" }}>No intermediate quizzes.</div>
-                        )}
-                      </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
 
                     {/* Advanced Level */}
-                    <div style={{ display: "flex", flexDirection: "column", background: "white", border: "1px solid var(--admin-border)", borderRadius: "12px", padding: "16px", opacity: learningPathData.advancedUnlocked ? 1 : 0.65 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", borderBottom: "1px solid #f1f5f9", paddingBottom: "8px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <span style={{ fontWeight: "800", fontSize: "16px", color: "var(--admin-sidebar)" }}>Advanced Level</span>
-                          {!learningPathData.advancedUnlocked && <span style={{ fontSize: "14px" }}>🔒</span>}
+                    <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: "16px", padding: "24px", boxShadow: "0 2px 4px rgba(0,0,0,0.02)", opacity: learningPathData.advancedUnlocked ? 1 : 0.6 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: learningPathData.advancedUnlocked ? "24px" : "0" }}>
+                        <div style={{ display: "flex", gap: "16px" }}>
+                          <div style={{ background: learningPathData.advancedUnlocked ? "#fff7ed" : "#f1f5f9", padding: "16px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            {learningPathData.advancedUnlocked ? <Map size={24} color="#f97316" /> : <Lock size={24} color="#94a3b8" />}
+                          </div>
+                          <div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "4px" }}>
+                              <h3 style={{ margin: 0, fontSize: "20px", fontWeight: "700", color: "var(--navy-900)" }}>Advanced Level</h3>
+                              {!learningPathData.advancedUnlocked && (
+                                <span style={{ fontSize: "11px", color: "#64748b", backgroundColor: "#f1f5f9", padding: "4px 10px", borderRadius: "20px", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}><Lock size={10} /> Locked</span>
+                              )}
+                            </div>
+                            <p style={{ margin: 0, color: "#64748b", fontSize: "14px" }}>Unlock after completing all Intermediate Level quizzes.</p>
+                          </div>
                         </div>
-                        {learningPathData.advancedCompleted ? (
-                          <span style={{ fontSize: "11px", color: "#047857", backgroundColor: "#ecfdf5", padding: "4px 12px", borderRadius: "20px", fontWeight: "700" }}>
-                            Passed 🏆
-                          </span>
-                        ) : learningPathData.advancedUnlocked ? (
-                          <span style={{ fontSize: "11px", color: "#d97706", backgroundColor: "#fef3c7", padding: "4px 12px", borderRadius: "20px", fontWeight: "700" }}>
-                            Unlocked
-                          </span>
-                        ) : (
-                          <span style={{ fontSize: "11px", color: "#64748b", backgroundColor: "#f1f5f9", padding: "4px 12px", borderRadius: "20px", fontWeight: "700" }}>
-                            Locked
-                          </span>
-                        )}
+                        <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "#f8fafc", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <ChevronDown size={18} color="#94a3b8" />
+                        </div>
                       </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                        {learningPathData.advancedQuizzes.map((quiz, index, arr) => {
-                          const isCompleted = learningPathData.isQuizCompleted(quiz.id);
-                          const score = learningPathData.getBestScore(quiz.id);
-                          const isUnlocked = learningPathData.advancedUnlocked && (index === 0 || learningPathData.isQuizCompleted(arr[index - 1].id));
-                          const attemptsCount = attempts.filter((att) => att.quiz === quiz.id).length;
-                          const maxAttempts = quiz.max_attempts || 3;
-                          const isLimitReached = attemptsCount >= maxAttempts;
-                          const canAttempt = isUnlocked && !isLimitReached;
-                          return (
-                            <div key={quiz.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0", opacity: isUnlocked ? 1 : 0.6 }}>
-                              <div>
-                                <div style={{ fontSize: "14px", fontWeight: "700", color: "#334155", marginBottom: "4px" }}>
-                                  {quiz.title} {!isUnlocked && <span style={{ fontSize: "12px", marginLeft: "4px" }}>🔒</span>}
+                      {learningPathData.advancedUnlocked && (
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
+                          {learningPathData.advancedQuizzes.map((quiz, index, arr) => {
+                            const isCompleted = learningPathData.isQuizCompleted(quiz.id);
+                            const isUnlocked = index === 0 || learningPathData.isQuizCompleted(arr[index - 1].id);
+                            return (
+                              <div key={quiz.id} onClick={() => isUnlocked ? handleStartAttempt(quiz) : null} style={{ padding: "16px", border: `1px solid ${isCompleted ? "#dcfce7" : "#e2e8f0"}`, borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: isUnlocked ? "pointer" : "not-allowed", opacity: isUnlocked ? 1 : 0.6, background: "white", transition: "all 0.2s" }}>
+                                <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                                  <div style={{ background: isCompleted ? "#f97316" : "#f1f5f9", borderRadius: "50%", width: "40px", height: "40px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                    {isCompleted ? <Check size={20} color="white" /> : <Calendar size={20} color="#f97316" />}
+                                  </div>
+                                  <div>
+                                    <div style={{ fontSize: "14px", fontWeight: "700", color: "var(--navy-900)", marginBottom: "4px" }}>{quiz.title}</div>
+                                    <div style={{ fontSize: "12px", color: isCompleted ? "#16a34a" : "#f97316", fontWeight: "500" }}>Quiz {index + 1} &bull; {isCompleted ? "Completed" : "In Progress"}</div>
+                                  </div>
                                 </div>
-                                <div style={{ fontSize: "12px", color: "#64748b" }}>
-                                  {score !== null ? `Best Score: ${score}% (${attemptsCount}/${maxAttempts} attempts)` : isUnlocked ? `Not attempted yet (0/${maxAttempts} attempts)` : "Pending"}
+                                <div style={{ width: "24px", height: "24px", borderRadius: "50%", border: `1px solid ${isCompleted ? "#16a34a" : "#e2e8f0"}`, display: "flex", alignItems: "center", justifyContent: "center", background: isCompleted ? "#dcfce7" : "transparent" }}>
+                                  {isCompleted ? <Check size={14} color="#16a34a" /> : <ChevronRight size={14} color="#94a3b8" />}
                                 </div>
                               </div>
-                              <button
-                                type="button"
-                                className="admin-action-btn"
-                                onClick={() => isLimitReached ? handleViewAnswers(quiz) : handleStartAttempt(quiz)}
-                                disabled={!isUnlocked}
-                                style={{ 
-                                  width: "auto", 
-                                  padding: "6px 16px", 
-                                  fontSize: "12px", 
-                                  opacity: isUnlocked ? 1 : 0.5,
-                                  cursor: isUnlocked ? "pointer" : "not-allowed"
-                                }}
-                              >
-                                {isLimitReached ? "View Answers" : isCompleted ? "Re-attempt" : isUnlocked ? "Start" : "Locked"}
-                              </button>
-                            </div>
-                          );
-                        })}
-                        {learningPathData.advancedQuizzes.length === 0 && (
-                          <div style={{ textAlign: "center", padding: "10px", color: "#94a3b8", fontSize: "12px" }}>No advanced quizzes.</div>
-                        )}
-                      </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   </div>
-
-
                 </div>
               )}
-            </div>
+            </>
           )}
 
           {activeSection === "progress" && (
@@ -1234,6 +1391,16 @@ const StudentDashboard = () => {
 
               {quizAction === "attempt" && selectedQuiz && (
                 <form className="admin-form" onSubmit={handleSubmitAttempt} style={{ padding: "1.5rem" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem", background: "#f8fafc", padding: "12px 20px", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
+                    <div style={{ fontSize: "14px", fontWeight: "600", color: "#64748b", display: "flex", alignItems: "center", gap: "8px" }}>
+                      <Clock size={16} />
+                      Time Elapsed
+                    </div>
+                    <div style={{ fontSize: "20px", fontWeight: "700", color: "var(--navy-900)" }}>
+                      {Math.floor(timeElapsed / 60).toString().padStart(2, "0")}:{(timeElapsed % 60).toString().padStart(2, "0")}
+                    </div>
+                  </div>
+
                   <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
                     {selectedQuiz.questions?.map((q: any, qIdx: number) => (
                       <div
@@ -1319,7 +1486,9 @@ const StudentDashboard = () => {
                                 onClick={() => {
                                   const currentCount = hintsUsed[q.id] || 0;
                                   if (currentCount < q.hints.length) {
-                                    setHintsUsed(prev => ({ ...prev, [q.id]: currentCount + 1 }));
+                                    const updatedHints = { ...hintsUsed, [q.id]: currentCount + 1 };
+                                    setHintsUsed(updatedHints);
+                                    if (selectedQuiz) persistAutosave(attemptAnswers, updatedHints, quizStartTime, selectedQuiz.id);
                                   }
                                 }}
                                 disabled={(hintsUsed[q.id] || 0) >= q.hints.length}
@@ -1504,19 +1673,36 @@ const StudentDashboard = () => {
                   </div>
 
                   <div style={{ marginTop: "2rem" }}>
-                    <button
-                      className="admin-primary-btn"
-                      onClick={() => {
-                        setQuizAction("list");
-                        setActiveSection("learning-path");
-                        setSelectedQuiz(null);
-                        setSelectedAttempt(null);
-                        setError("");
-                        setSuccessMessage("");
-                      }}
-                    >
-                      Return to Quiz List
-                    </button>
+                    {selectedAttempt.score >= 75 ? (
+                      <button
+                        className="admin-primary-btn"
+                        onClick={() => {
+                          setQuizAction("list");
+                          setActiveSection("learning-path");
+                          setSelectedQuiz(null);
+                          setSelectedAttempt(null);
+                          setError("");
+                          setSuccessMessage("");
+                        }}
+                      >
+                        Proceed to Next Quiz
+                      </button>
+                    ) : (
+                      <button
+                        className="admin-primary-btn"
+                        style={{ backgroundColor: "#f59e0b", borderColor: "#f59e0b" }}
+                        onClick={() => {
+                          setQuizAction("list");
+                          setActiveSection("learning-path");
+                          setSelectedQuiz(null);
+                          setSelectedAttempt(null);
+                          setError("");
+                          setSuccessMessage("");
+                        }}
+                      >
+                        Return to Lessons (Study Required)
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -1658,37 +1844,32 @@ const StudentDashboard = () => {
                 </div>
               </div>
               <div style={{ padding: "1.5rem" }}>
-                {attempts.length === 0 ? (
+                {stats.recommendedMaterials.length === 0 ? (
                   <div className="admin-empty">
-                    Complete at least one quiz to generate personalized recommendations!
+                    Great job! You have no pending recommendations right now.
                   </div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                    <div style={{ padding: "1.25rem", border: "1px solid var(--admin-border)", borderRadius: "12px", background: "#f8fafc" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-                        <strong style={{ fontSize: "1rem" }}>Mathematics: Algebra Fundamentals</strong>
-                        <span className="status-pill status-active" style={{ fontSize: "11px" }}>High Priority</span>
+                    {stats.recommendedMaterials.map((material: any) => (
+                      <div key={material.id} style={{ padding: "1.25rem", border: "1px solid var(--admin-border)", borderRadius: "12px", background: "#f8fafc" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                          <strong style={{ fontSize: "1rem" }}>{material.title}</strong>
+                          <span className="status-pill status-active" style={{ fontSize: "11px", backgroundColor: "#fef3c7", color: "#d97706" }}>Remedial Material</span>
+                        </div>
+                        <p style={{ fontSize: "13px", color: "#64748b", margin: "0 0 1rem 0" }}>
+                          {material.material_type === "TEXT" ? "Theory & Summary" : material.material_type === "VIDEO" ? "Video Lesson" : "Document"}
+                        </p>
+                        {material.material_type === "TEXT" ? (
+                          <div style={{ fontSize: "13px", color: "#334155", background: "white", padding: "12px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                            {material.content}
+                          </div>
+                        ) : (
+                          <a href={material.content} target="_blank" rel="noopener noreferrer" className="admin-secondary-btn" style={{ width: "auto", fontSize: "12px", padding: "6px 12px", textDecoration: "none", display: "inline-block" }}>
+                            Open Material
+                          </a>
+                        )}
                       </div>
-                      <p style={{ fontSize: "13px", color: "#64748b", margin: "0 0 1rem 0" }}>
-                        Based on your attempt on "Algebra Basics", we recommend reviewing polynomial expressions.
-                      </p>
-                      <button className="admin-secondary-btn" style={{ width: "auto", fontSize: "12px", padding: "6px 12px" }}>
-                        Start Lesson
-                      </button>
-                    </div>
-
-                    <div style={{ padding: "1.25rem", border: "1px solid var(--admin-border)", borderRadius: "12px", background: "#f8fafc" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-                        <strong style={{ fontSize: "1rem" }}>Science: Chemical Bonds</strong>
-                        <span className="status-pill status-active" style={{ fontSize: "11px", backgroundColor: "#fef3c7", color: "#d97706" }}>Medium Priority</span>
-                      </div>
-                      <p style={{ fontSize: "13px", color: "#64748b", margin: "0 0 1rem 0" }}>
-                        Review ionic and covalent bonding concepts to improve your Chemistry Term Test scores.
-                      </p>
-                      <button className="admin-secondary-btn" style={{ width: "auto", fontSize: "12px", padding: "6px 12px" }}>
-                        Start Lesson
-                      </button>
-                    </div>
+                    ))}
                   </div>
                 )}
               </div>

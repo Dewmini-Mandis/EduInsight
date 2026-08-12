@@ -1,5 +1,6 @@
 from django.contrib.auth import authenticate
 from rest_framework import serializers
+from .models import Role, User, Notification
 
 from apps.classes.models import Student, TeacherProfile
 from apps.schools.models import School
@@ -47,6 +48,7 @@ class UserSerializer(serializers.ModelSerializer):
 			"index_no": profile.index_no,
 			"grade": profile.grade,
 			"class_name": profile.class_name,
+			"class_room": {"id": profile.class_room.id, "name": profile.class_room.name} if profile.class_room else None,
 		}
 
 	def get_teacher_profile(self, obj: User):
@@ -55,6 +57,7 @@ class UserSerializer(serializers.ModelSerializer):
 		profile = obj.teacher_profile
 		return {
 			"subjects": profile.subjects,
+			"classrooms": [{"id": c.classroom.id, "name": c.classroom.name} for c in obj.teacherclassroom_set.filter(is_active=True).select_related("classroom")],
 		}
 
 
@@ -71,9 +74,8 @@ class UserCreateSerializer(serializers.ModelSerializer):
 	)
 	index_no = serializers.CharField(write_only=True, required=False, allow_blank=True)
 	grade = serializers.CharField(write_only=True, required=False, allow_blank=True)
-	class_name = serializers.CharField(
-		write_only=True, required=False, allow_blank=True
-	)
+	class_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
+	class_room_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
 	subjects = serializers.ListField(
 		child=serializers.CharField(), write_only=True, required=False
 	)
@@ -91,6 +93,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
 			"index_no",
 			"grade",
 			"class_name",
+			"class_room_id",
 			"subjects",
 		]
 
@@ -102,15 +105,24 @@ class UserCreateSerializer(serializers.ModelSerializer):
 		index_no = validated_data.pop("index_no", "")
 		grade = validated_data.pop("grade", "")
 		class_name = validated_data.pop("class_name", "")
+		class_room_id = validated_data.pop("class_room_id", None)
 		subjects = validated_data.pop("subjects", [])
 		user = User.objects.create_user(password=password, **validated_data)
 		if role and role.role_name == Role.ROLE_STUDENT:
-			Student.objects.create(
+			student = Student.objects.create(
 				user=user,
 				index_no=index_no,
 				grade=grade,
 				class_name=class_name,
 			)
+			if class_room_id:
+				from apps.classes.models import SchoolClass
+				try:
+					sc = SchoolClass.objects.get(id=class_room_id)
+					student.class_room = sc
+					student.save()
+				except SchoolClass.DoesNotExist:
+					pass
 		if role and role.role_name == Role.ROLE_TEACHER:
 			TeacherProfile.objects.create(user=user, subjects=subjects or [])
 		return user
@@ -134,24 +146,27 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 	)
 	index_no = serializers.CharField(write_only=True, required=False, allow_blank=True)
 	grade = serializers.CharField(write_only=True, required=False, allow_blank=True)
-	class_name = serializers.CharField(
-		write_only=True, required=False, allow_blank=True
-	)
+	class_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
+	class_room_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
 	subjects = serializers.ListField(
 		child=serializers.CharField(), write_only=True, required=False
 	)
+	password = serializers.CharField(write_only=True, required=False, min_length=8)
 
 	class Meta:
 		model = User
 		fields = [
 			"first_name",
 			"last_name",
+			"email",
+			"password",
 			"role",
 			"school_id",
 			"is_active",
 			"index_no",
 			"grade",
 			"class_name",
+			"class_room_id",
 			"subjects",
 		]
 
@@ -159,10 +174,16 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 		index_no = validated_data.pop("index_no", None)
 		grade = validated_data.pop("grade", None)
 		class_name = validated_data.pop("class_name", None)
+		class_room_id = validated_data.pop("class_room_id", None)
 		subjects = validated_data.pop("subjects", None)
+		password = validated_data.pop("password", None)
 		role = validated_data.get("role") or instance.role
 
 		instance = super().update(instance, validated_data)
+
+		if password:
+			instance.set_password(password)
+			instance.save(update_fields=["password"])
 
 		if role and role.role_name == Role.ROLE_STUDENT:
 			student, _ = Student.objects.get_or_create(user=instance)
@@ -172,15 +193,19 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 				student.grade = grade
 			if class_name is not None:
 				student.class_name = class_name
+			if class_room_id is not None:
+				from apps.classes.models import SchoolClass
+				try:
+					student.class_room = SchoolClass.objects.get(id=class_room_id)
+				except SchoolClass.DoesNotExist:
+					student.class_room = None
 			student.save()
 		elif role and role.role_name == Role.ROLE_TEACHER:
 			teacher, _ = TeacherProfile.objects.get_or_create(user=instance)
 			if subjects is not None:
 				teacher.subjects = subjects
 				teacher.save()
-
-		instance.refresh_from_db()
-		return instance
+		return User.objects.get(pk=instance.pk)
 
 	def to_representation(self, instance):
 		return UserSerializer(instance, context=self.context).data
@@ -189,10 +214,15 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 class ProfileUpdateSerializer(serializers.ModelSerializer):
 	current_password = serializers.CharField(write_only=True, required=False)
 	new_password = serializers.CharField(write_only=True, required=False)
+	classrooms = serializers.ListField(
+		child=serializers.CharField(max_length=100),
+		write_only=True,
+		required=False
+	)
 
 	class Meta:
 		model = User
-		fields = ["first_name", "last_name", "current_password", "new_password"]
+		fields = ["first_name", "last_name", "current_password", "new_password", "classrooms"]
 
 	def validate(self, attrs):
 		current_password = attrs.get("current_password")
@@ -211,10 +241,27 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
 	def update(self, instance, validated_data):
 		validated_data.pop("current_password", None)
 		new_password = validated_data.pop("new_password", None)
+		classrooms = validated_data.pop("classrooms", None)
+		
 		instance = super().update(instance, validated_data)
+		
 		if new_password:
 			instance.set_password(new_password)
 			instance.save(update_fields=["password"])
+			
+		if classrooms is not None and instance.is_role(Role.ROLE_TEACHER):
+			from apps.classes.models import SchoolClass, TeacherClassroom
+			
+			TeacherClassroom.objects.filter(teacher=instance).update(is_active=False)
+			for class_id in classrooms:
+				try:
+					school_class = SchoolClass.objects.get(id=class_id)
+					tc, created = TeacherClassroom.objects.get_or_create(teacher=instance, classroom=school_class)
+					tc.is_active = True
+					tc.save()
+				except SchoolClass.DoesNotExist:
+					pass
+				
 		return instance
 
 
@@ -246,3 +293,9 @@ class LoginSerializer(serializers.Serializer):
 
 		attrs["user"] = user
 		return attrs
+
+class NotificationSerializer(serializers.ModelSerializer):
+	class Meta:
+		model = Notification
+		fields = "__all__"
+		read_only_fields = ["user", "created_at"]

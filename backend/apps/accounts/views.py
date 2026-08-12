@@ -13,7 +13,9 @@ from .serializers import (
 	UserCreateSerializer,
 	UserSerializer,
 	UserUpdateSerializer,
+	NotificationSerializer,
 )
+from .models import Role, User, Notification
 
 
 class RegisterView(generics.CreateAPIView):
@@ -77,14 +79,11 @@ class UserViewSet(viewsets.ModelViewSet):
 		queryset = self.queryset.all()
 		if user.is_role(Role.ROLE_SYSTEM_ADMIN):
 			return queryset
-		if user.is_role(Role.ROLE_NATIONAL_ADMIN):
+		if user.is_role(Role.ROLE_TEACHER):
+			active_classrooms = [tc.classroom.id for tc in user.teacherclassroom_set.filter(is_active=True)]
 			return queryset.filter(
-				role__role_name__in=[Role.ROLE_SCHOOL_ADMIN, Role.ROLE_TEACHER, Role.ROLE_STUDENT]
-			)
-		if user.is_role(Role.ROLE_SCHOOL_ADMIN):
-			return queryset.filter(
-				role__role_name__in=[Role.ROLE_TEACHER, Role.ROLE_STUDENT],
-				school=user.school,
+				role__role_name=Role.ROLE_STUDENT,
+				student_profile__class_room__id__in=active_classrooms
 			)
 		return queryset.none()
 
@@ -100,6 +99,12 @@ class UserViewSet(viewsets.ModelViewSet):
 		requester = request.user
 		if user.is_role(Role.ROLE_SYSTEM_ADMIN) and not requester.is_role(Role.ROLE_SYSTEM_ADMIN):
 			raise PermissionDenied("System admin accounts cannot be modified by non-system admins.")
+		if requester.is_role(Role.ROLE_TEACHER):
+			if not user.is_role(Role.ROLE_STUDENT):
+				raise PermissionDenied("You can only modify students.")
+			active_classrooms = [tc.classroom.id for tc in requester.teacherclassroom_set.filter(is_active=True)]
+			if not hasattr(user, 'student_profile') or user.student_profile.class_room_id not in active_classrooms:
+				raise PermissionDenied("You can only modify students in your assigned classrooms.")
 		return super().update(request, *args, **kwargs)
 
 	def partial_update(self, request, *args, **kwargs):
@@ -107,6 +112,12 @@ class UserViewSet(viewsets.ModelViewSet):
 		requester = request.user
 		if user.is_role(Role.ROLE_SYSTEM_ADMIN) and not requester.is_role(Role.ROLE_SYSTEM_ADMIN):
 			raise PermissionDenied("System admin accounts cannot be modified by non-system admins.")
+		if requester.is_role(Role.ROLE_TEACHER):
+			if not user.is_role(Role.ROLE_STUDENT):
+				raise PermissionDenied("You can only modify students.")
+			active_classrooms = [tc.classroom.id for tc in requester.teacherclassroom_set.filter(is_active=True)]
+			if not hasattr(user, 'student_profile') or user.student_profile.class_room_id not in active_classrooms:
+				raise PermissionDenied("You can only modify students in your assigned classrooms.")
 		return super().partial_update(request, *args, **kwargs)
 
 	def destroy(self, request, *args, **kwargs):
@@ -114,6 +125,12 @@ class UserViewSet(viewsets.ModelViewSet):
 		requester = request.user
 		if user.is_role(Role.ROLE_SYSTEM_ADMIN) and not requester.is_role(Role.ROLE_SYSTEM_ADMIN):
 			raise PermissionDenied("System admin accounts cannot be deleted by non-system admins.")
+		if requester.is_role(Role.ROLE_TEACHER):
+			if not user.is_role(Role.ROLE_STUDENT):
+				raise PermissionDenied("You can only delete students.")
+			active_classrooms = [tc.classroom.id for tc in requester.teacherclassroom_set.filter(is_active=True)]
+			if not hasattr(user, 'student_profile') or user.student_profile.class_room_id not in active_classrooms:
+				raise PermissionDenied("You can only delete students in your assigned classrooms.")
 		return super().destroy(request, *args, **kwargs)
 
 	def perform_create(self, serializer):
@@ -123,24 +140,22 @@ class UserViewSet(viewsets.ModelViewSet):
 			raise ValidationError({"role": "Role is required."})
 
 		if requester.is_role(Role.ROLE_SYSTEM_ADMIN):
-			allowed_roles = {Role.ROLE_SYSTEM_ADMIN, Role.ROLE_NATIONAL_ADMIN, Role.ROLE_SCHOOL_ADMIN, Role.ROLE_TEACHER, Role.ROLE_STUDENT}
-		elif requester.is_role(Role.ROLE_NATIONAL_ADMIN):
-			allowed_roles = {Role.ROLE_SCHOOL_ADMIN, Role.ROLE_TEACHER, Role.ROLE_STUDENT}
-		elif requester.is_role(Role.ROLE_SCHOOL_ADMIN):
-			allowed_roles = {Role.ROLE_TEACHER, Role.ROLE_STUDENT}
+			allowed_roles = {Role.ROLE_SYSTEM_ADMIN, Role.ROLE_TEACHER, Role.ROLE_STUDENT}
+		elif requester.is_role(Role.ROLE_TEACHER):
+			allowed_roles = {Role.ROLE_STUDENT}
 		else:
 			raise PermissionDenied("You do not have permission to create users.")
 
 		if role.role_name not in allowed_roles:
 			raise PermissionDenied("You are not allowed to create this role.")
 
-		if role.role_name in (Role.ROLE_SCHOOL_ADMIN, Role.ROLE_TEACHER, Role.ROLE_STUDENT):
-			if not requester.is_role(Role.ROLE_SCHOOL_ADMIN) and not serializer.validated_data.get("school"):
+		if role.role_name in (Role.ROLE_TEACHER, Role.ROLE_STUDENT):
+			if not requester.is_role(Role.ROLE_TEACHER) and not serializer.validated_data.get("school"):
 				raise ValidationError({"school_id": "School is required."})
 
-		if requester.is_role(Role.ROLE_SCHOOL_ADMIN):
+		if requester.is_role(Role.ROLE_TEACHER):
 			if not requester.school:
-				raise ValidationError("School admin must belong to a school.")
+				raise ValidationError("Teacher must belong to a school.")
 			serializer.validated_data["school"] = requester.school
 
 		if role.role_name != Role.ROLE_STUDENT:
@@ -153,13 +168,20 @@ class UserViewSet(viewsets.ModelViewSet):
 	def perform_update(self, serializer):
 		requester = self.request.user
 		target = self.get_object()
-		if requester.is_role(Role.ROLE_NATIONAL_ADMIN) and not target.is_role(
-			Role.ROLE_SCHOOL_ADMIN, Role.ROLE_TEACHER, Role.ROLE_STUDENT
-		):
-			raise PermissionDenied("You can only manage school admins, teachers, and students.")
-		if requester.is_role(Role.ROLE_SCHOOL_ADMIN):
-			if not target.is_role(Role.ROLE_TEACHER, Role.ROLE_STUDENT):
-				raise PermissionDenied("You can only manage teachers and students.")
-			if target.school_id != requester.school_id:
-				raise PermissionDenied("You can only manage your school users.")
+		if requester.is_role(Role.ROLE_TEACHER):
+			if not target.is_role(Role.ROLE_STUDENT):
+				raise PermissionDenied("You can only manage students.")
+			active_classrooms = [tc.classroom.id for tc in requester.teacherclassroom_set.filter(is_active=True)]
+			if not hasattr(target, 'student_profile') or target.student_profile.class_room_id not in active_classrooms:
+				raise PermissionDenied("You can only manage students in your assigned classrooms.")
 		serializer.save()
+
+class NotificationViewSet(viewsets.ModelViewSet):
+	serializer_class = NotificationSerializer
+	permission_classes = [IsAuthenticated]
+
+	def get_queryset(self):
+		return Notification.objects.filter(user=self.request.user).order_by('-created_at')
+
+	def perform_create(self, serializer):
+		serializer.save(user=self.request.user)

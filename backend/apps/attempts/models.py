@@ -80,3 +80,52 @@ class AttemptAnswer(models.Model):
 
 	def __str__(self) -> str:
 		return f"Answer {self.id}"
+
+
+class ManualMark(models.Model):
+	attempt_answer = models.OneToOneField(
+		AttemptAnswer,
+		on_delete=models.CASCADE,
+		related_name="manual_mark"
+	)
+	teacher = models.ForeignKey(
+		"accounts.User",
+		on_delete=models.SET_NULL,
+		null=True,
+		related_name="manual_marks"
+	)
+	original_mark = models.FloatField(null=True, blank=True)
+	updated_mark = models.FloatField()
+	feedback = models.TextField(blank=True)
+	reason_for_change = models.TextField(blank=True)
+	marked_at = models.DateTimeField(auto_now_add=True)
+	is_draft = models.BooleanField(default=False)
+
+	def __str__(self) -> str:
+		return f"Mark for Answer {self.attempt_answer_id}"
+
+class TeacherOverride(models.Model):
+	teacher = models.ForeignKey(
+		"accounts.User",
+		on_delete=models.SET_NULL,
+		null=True,
+		related_name="granted_overrides"
+	)
+	student = models.ForeignKey(
+		"classes.Student",
+		on_delete=models.CASCADE,
+		related_name="overrides"
+	)
+	quiz = models.ForeignKey(
+		"quizzes.Quiz",
+		on_delete=models.CASCADE,
+		related_name="overrides"
+	)
+	override_type = models.CharField(max_length=50) # e.g. "EXTRA_ATTEMPT", "EXTEND_DEADLINE", "REOPEN"
+	previous_value = models.CharField(max_length=255, null=True, blank=True)
+	new_value = models.CharField(max_length=255)
+	reason = models.TextField()
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	def __str__(self) -> str:
+		return f"Override {self.override_type} for {self.student_id} on {self.quiz_id}"

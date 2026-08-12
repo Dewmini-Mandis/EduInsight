@@ -1,11 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { getToken, getUser, setUser } from "../auth/authUtils";
-import NationalAdminDashboard from "../dashboards/national/NationalAdminDashboard";
-import SchoolAdminDashboard from "../dashboards/school/SchoolAdminDashboard";
-import StudentDashboard from "../dashboards/student/StudentDashboard";
-import SystemAdminDashboard from "../dashboards/system/SystemAdminDashboard";
-import TeacherDashboard from "../dashboards/teacher/TeacherDashboard";
 
 type UserProfile = {
   id: number;
@@ -59,15 +54,11 @@ const DashboardRouter = () => {
 
   switch (user.role) {
     case "SYSTEM_ADMIN":
-      return <SystemAdminDashboard />;
-    case "NATIONAL_ADMIN":
-      return <NationalAdminDashboard />;
-    case "SCHOOL_ADMIN":
-      return <SchoolAdminDashboard />;
+      return <Navigate to="/system-admin/dashboard" replace />;
     case "TEACHER":
-      return <TeacherDashboard />;
+      return <Navigate to="/teacher/dashboard" replace />;
     case "STUDENT":
-      return <StudentDashboard />;
+      return <Navigate to="/student/dashboard" replace />;
     default:
       return <Navigate to="/login" replace />;
   }

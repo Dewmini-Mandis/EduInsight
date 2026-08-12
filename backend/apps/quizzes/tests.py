@@ -3,17 +3,19 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 from apps.accounts.models import User, Role
 from apps.schools.models import School
-from apps.quizzes.models import Quiz, Question, Answer, CorrectAnswer
+from apps.quizzes.models import Quiz, Question, Answer, CorrectAnswer, AcademicTerm, Lesson
 
 
 class QuizAPITests(APITestCase):
     def setUp(self):
         # Create roles
         self.sys_admin_role, _ = Role.objects.get_or_create(role_name=Role.ROLE_SYSTEM_ADMIN)
-        self.nat_admin_role, _ = Role.objects.get_or_create(role_name=Role.ROLE_NATIONAL_ADMIN)
-        self.school_admin_role, _ = Role.objects.get_or_create(role_name=Role.ROLE_SCHOOL_ADMIN)
         self.teacher_role, _ = Role.objects.get_or_create(role_name=Role.ROLE_TEACHER)
         self.student_role, _ = Role.objects.get_or_create(role_name=Role.ROLE_STUDENT)
+        self.student_role, _ = Role.objects.get_or_create(role_name=Role.ROLE_STUDENT)
+
+        # Create Academic Terms
+        self.term1 = AcademicTerm.objects.create(name="1st Term", order=1)
 
         # Create schools
         self.school_a = School.objects.create(
@@ -39,17 +41,11 @@ class QuizAPITests(APITestCase):
         self.sys_admin = User.objects.create_user(
             username="sys_admin", email="sys@test.com", password="password123", role=self.sys_admin_role
         )
-        self.nat_admin = User.objects.create_user(
-            username="nat_admin", email="nat@test.com", password="password123", role=self.nat_admin_role
-        )
-        self.school_admin_a = User.objects.create_user(
-            username="school_admin_a", email="sa_a@test.com", password="password123", role=self.school_admin_role, school=self.school_a
-        )
-        self.school_admin_b = User.objects.create_user(
-            username="school_admin_b", email="sa_b@test.com", password="password123", role=self.school_admin_role, school=self.school_b
-        )
         self.teacher_a = User.objects.create_user(
             username="teacher_a", email="t_a@test.com", password="password123", role=self.teacher_role, school=self.school_a
+        )
+        self.teacher_b = User.objects.create_user(
+            username="teacher_b", email="t_b@test.com", password="password123", role=self.teacher_role, school=self.school_b
         )
         self.student_a = User.objects.create_user(
             username="student_a", email="s_a@test.com", password="password123", role=self.student_role, school=self.school_a
@@ -58,15 +54,15 @@ class QuizAPITests(APITestCase):
         # URL for listing/creating quizzes
         self.list_url = "/api/quizzes/"
 
-    def test_national_admin_create_quiz_nested(self):
+    def test_system_admin_create_quiz_nested(self):
         """
-        Verify that a National Admin can create a quiz with nested MCQ and Numeric questions in a single request.
+        Verify that a System Admin can create a quiz with nested MCQ and Numeric questions in a single request.
         """
-        self.client.force_authenticate(user=self.nat_admin)
+        self.client.force_authenticate(user=self.sys_admin)
         
         payload = {
             "title": "Maths and Science Diagnostic",
-            "description": "National level baseline diagnostic.",
+            "description": "System level baseline diagnostic.",
             "school": None,  # National quiz
             "questions": [
                 {
@@ -95,8 +91,7 @@ class QuizAPITests(APITestCase):
         self.assertEqual(Quiz.objects.count(), 1)
         quiz = Quiz.objects.first()
         self.assertEqual(quiz.title, "Maths and Science Diagnostic")
-        self.assertEqual(quiz.created_by, self.nat_admin)
-        self.assertNil = False
+        self.assertEqual(quiz.created_by, self.sys_admin)
         self.assertEqual(quiz.school, None)
         
         # Verify questions
@@ -117,27 +112,27 @@ class QuizAPITests(APITestCase):
     def test_queryset_filtering_by_role(self):
         """
         Verify role-based filtering:
-        - System and National Admin see everything.
-        - School Admin/Teacher only see their school's quizzes, national quizzes (school is null), or quizzes they created.
+        - System Admin sees everything.
+        - Teacher only sees their school's quizzes, national quizzes (school is null), or quizzes they created.
         - Students only see their school's quizzes or national quizzes (school is null).
         """
         # Create a national quiz
-        quiz_nat = Quiz.objects.create(title="National Quiz", created_by=self.nat_admin, school=None)
+        quiz_nat = Quiz.objects.create(title="National Quiz", created_by=self.sys_admin, school=None)
         
         # Create a school A quiz
-        quiz_a = Quiz.objects.create(title="School A Quiz", created_by=self.school_admin_a, school=self.school_a)
+        quiz_a = Quiz.objects.create(title="School A Quiz", created_by=self.teacher_a, school=self.school_a)
         
         # Create a school B quiz
-        quiz_b = Quiz.objects.create(title="School B Quiz", created_by=self.school_admin_b, school=self.school_b)
+        quiz_b = Quiz.objects.create(title="School B Quiz", created_by=self.teacher_b, school=self.school_b)
 
-        # 1. National Admin sees all 3 quizzes
-        self.client.force_authenticate(user=self.nat_admin)
+        # 1. System Admin sees all 3 quizzes
+        self.client.force_authenticate(user=self.sys_admin)
         res = self.client.get(self.list_url)
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(len(res.data), 3)
 
-        # 2. School Admin A sees National Quiz and School A Quiz (2 quizzes)
-        self.client.force_authenticate(user=self.school_admin_a)
+        # 2. Teacher A sees National Quiz and School A Quiz (2 quizzes)
+        self.client.force_authenticate(user=self.teacher_a)
         res = self.client.get(self.list_url)
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(len(res.data), 2)
@@ -156,7 +151,7 @@ class QuizAPITests(APITestCase):
         """
         Verify deleting a quiz cascadingly deletes nested questions, answers, and correct answers.
         """
-        quiz = Quiz.objects.create(title="Quiz to Delete", created_by=self.nat_admin)
+        quiz = Quiz.objects.create(title="Quiz to Delete", created_by=self.sys_admin)
         question = Question.objects.create(quiz=quiz, question_text="Q1", question_type="MCQ")
         Answer.objects.create(question=question, answer_text="Option 1", is_correct=True)
         
@@ -168,7 +163,7 @@ class QuizAPITests(APITestCase):
         self.assertEqual(Answer.objects.count(), 1)
         self.assertEqual(CorrectAnswer.objects.count(), 1)
 
-        self.client.force_authenticate(user=self.nat_admin)
+        self.client.force_authenticate(user=self.sys_admin)
         res = self.client.delete(f"{self.list_url}{quiz.id}/")
         self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
 
@@ -191,7 +186,7 @@ class QuizAPITests(APITestCase):
 
     def test_lesson_crud_permissions(self):
         """
-        Verify that only System/National Admins can create, edit, delete lessons.
+        Verify that System Admin and Teachers can create, edit, delete lessons.
         """
         lesson_url = "/api/quizzes/lessons/"
         
@@ -200,14 +195,14 @@ class QuizAPITests(APITestCase):
         payload = {
             "title": "Student Lesson",
             "description": "Attempted by student",
-            "term": "1st Term"
+            "term": self.term1.id
         }
         res = self.client.post(lesson_url, payload, format="json")
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
-        # National Admin can create a lesson
-        self.client.force_authenticate(user=self.nat_admin)
-        payload["title"] = "National Admin Lesson"
+        # System Admin can create a lesson
+        self.client.force_authenticate(user=self.sys_admin)
+        payload["title"] = "System Admin Lesson"
         res = self.client.post(lesson_url, payload, format="json")
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
         lesson_id = res.data["id"]
@@ -217,8 +212,8 @@ class QuizAPITests(APITestCase):
         res = self.client.patch(f"{lesson_url}{lesson_id}/", {"title": "Hacked Title"}, format="json")
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
-        # National Admin can update the lesson
-        self.client.force_authenticate(user=self.nat_admin)
+        # Teacher can update the lesson
+        self.client.force_authenticate(user=self.teacher_a)
         res = self.client.patch(f"{lesson_url}{lesson_id}/", {"title": "Updated Title"}, format="json")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertEqual(res.data["title"], "Updated Title")
@@ -228,8 +223,8 @@ class QuizAPITests(APITestCase):
         res = self.client.delete(f"{lesson_url}{lesson_id}/")
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
-        # National Admin can delete the lesson
-        self.client.force_authenticate(user=self.nat_admin)
+        # Teacher can delete the lesson
+        self.client.force_authenticate(user=self.teacher_a)
         res = self.client.delete(f"{lesson_url}{lesson_id}/")
         self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
 
@@ -237,12 +232,11 @@ class QuizAPITests(APITestCase):
         """
         Verify that quizzes can be filtered by the lesson query parameter.
         """
-        from apps.quizzes.models import Lesson
-        lesson_1 = Lesson.objects.create(title="Lesson 1", term="1st Term", created_by=self.nat_admin)
-        lesson_2 = Lesson.objects.create(title="Lesson 2", term="1st Term", created_by=self.nat_admin)
+        lesson_1 = Lesson.objects.create(title="Lesson 1", term=self.term1, created_by=self.sys_admin)
+        lesson_2 = Lesson.objects.create(title="Lesson 2", term=self.term1, created_by=self.sys_admin)
 
-        quiz_1 = Quiz.objects.create(title="Quiz 1", created_by=self.nat_admin, lesson=lesson_1)
-        quiz_2 = Quiz.objects.create(title="Quiz 2", created_by=self.nat_admin, lesson=lesson_2)
+        quiz_1 = Quiz.objects.create(title="Quiz 1", created_by=self.sys_admin, lesson=lesson_1)
+        quiz_2 = Quiz.objects.create(title="Quiz 2", created_by=self.sys_admin, lesson=lesson_2)
 
         self.client.force_authenticate(user=self.student_a)
         
@@ -267,4 +261,3 @@ class QuizAPITests(APITestCase):
         filtered_ids = [q["id"] for q in res.data]
         self.assertIn(quiz_2.id, filtered_ids)
         self.assertNotIn(quiz_1.id, filtered_ids)
-

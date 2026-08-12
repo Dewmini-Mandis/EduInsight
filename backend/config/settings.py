@@ -25,6 +25,7 @@ INSTALLED_APPS = [
 	"apps.attempts",
 	"apps.analytics",
 	"apps.recommendations",
+	"apps.audit",
 ]
 
 MIDDLEWARE = [

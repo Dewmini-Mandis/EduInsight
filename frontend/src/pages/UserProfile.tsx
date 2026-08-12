@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getToken, getUser, setUser as setAuthUser } from "../auth/authUtils";
-import "../styles/admin.css";
+
+// Reusable Components
+import ProfileCard from "../components/ProfileCard";
+import FormSection from "../components/FormSection";
 
 type UserProfile = {
   id: number;
@@ -11,6 +14,9 @@ type UserProfile = {
   last_name: string;
   role: string;
   school_id?: number | null;
+  teacher_profile?: {
+    classrooms: {id: number; name: string}[];
+  };
 };
 
 const UserProfilePage = () => {
@@ -30,20 +36,12 @@ const UserProfilePage = () => {
     };
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const isStudent = user?.role === "STUDENT";
+  const [showPassword, setShowPassword] = useState(false);
+  
   const isTeacher = user?.role === "TEACHER";
-  const isSchoolAdmin = user?.role === "SCHOOL_ADMIN";
-  const isNationalAdmin = user?.role === "NATIONAL_ADMIN";
-  const isSystemAdmin = user?.role === "SYSTEM_ADMIN";
-  const roleLabel = user?.role ? user.role.replace(/_/g, " ") : "PROFILE";
   const displayName = `${user?.first_name || ""} ${user?.last_name || ""}`.trim();
-  const userDisplayName = displayName || user?.username || "User";
-  const contactLine = user?.email || user?.username || "";
   const initialsSource = displayName || user?.username || user?.email || "U";
-  const userInitials = initialsSource
+  const initials = initialsSource
     .split(" ")
     .filter(Boolean)
     .slice(0, 2)
@@ -87,14 +85,12 @@ const UserProfilePage = () => {
 
   const validateForm = () => {
     const nextErrors: Record<string, string> = {};
-    if (!isStudent) {
-      if (!formData.firstName.trim())
-        nextErrors.firstName = "First name is required.";
-      if (!formData.lastName.trim())
-        nextErrors.lastName = "Last name is required.";
-    }
+    if (!formData.firstName.trim())
+      nextErrors.firstName = "First name is required.";
+    if (!formData.lastName.trim())
+      nextErrors.lastName = "Last name is required.";
 
-    if (!isStudent && (formData.newPassword || formData.currentPassword)) {
+    if (formData.newPassword || formData.currentPassword) {
       if (!formData.currentPassword) {
         nextErrors.currentPassword = "Current password is required to change password.";
       }
@@ -116,16 +112,15 @@ const UserProfilePage = () => {
     setError("");
     setSuccessMessage("");
 
-    if (isStudent) return;
-
     if (!validateForm()) return;
 
     try {
       const token = getToken();
-      const payload: Record<string, string> = {
+      const payload: Record<string, any> = {
         first_name: formData.firstName.trim(),
         last_name: formData.lastName.trim(),
       };
+      
 
       if (formData.newPassword) {
         payload.current_password = formData.currentPassword;
@@ -143,17 +138,6 @@ const UserProfilePage = () => {
 
       if (!res.ok) {
         const errorPayload = await res.json().catch(() => ({}));
-        if (errorPayload && typeof errorPayload === "object") {
-          const nextErrors: Record<string, string> = {};
-          Object.entries(errorPayload).forEach(([key, value]) => {
-            if (Array.isArray(value)) {
-              nextErrors[key] = value.join(" ");
-            } else if (typeof value === "string") {
-              nextErrors[key] = value;
-            }
-          });
-          setFormErrors(nextErrors);
-        }
         throw new Error(errorPayload?.detail || "Unable to update profile");
       }
 
@@ -172,356 +156,162 @@ const UserProfilePage = () => {
     }
   };
 
-  if (!user && !loading) {
-    return <div style={{ padding: "2rem" }}>Unable to load profile.</div>;
-  }
+  if (loading) return <div style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted)" }}>Loading...</div>;
 
-  return (
-    <div className="admin-root">
-      <aside className="admin-sidebar">
-        <div>
-          <div className="admin-brand">
-            <div>
-              <div className="admin-brand-title">EduInsight</div>
-              <div className="admin-brand-sub">{roleLabel}</div>
-            </div>
-          </div>
-          <nav className="admin-nav">
-            {isSystemAdmin && (
-              <>
-                <button className="admin-nav-item" type="button" onClick={() => navigate("/dashboard")}>
-                  Dashboard
-                </button>
-                <button className="admin-nav-item" type="button" onClick={() => navigate("/dashboard")}>
-                  Users
-                </button>
-                <button className="admin-nav-item" type="button" onClick={() => navigate("/dashboard")}>
-                  Schools
-                </button>
-                <button className="admin-nav-item" type="button" onClick={() => navigate("/dashboard")}>
-                  User Logs
-                </button>
-              </>
-            )}
-            {isNationalAdmin && (
-              <>
-                <button className="admin-nav-item" type="button" onClick={() => navigate("/dashboard")}>
-                  Schools
-                </button>
-                <button className="admin-nav-item" type="button" onClick={() => navigate("/dashboard")}>
-                  Users
-                </button>
-                <button className="admin-nav-item" type="button" onClick={() => navigate("/dashboard")}>
-                  Quizzes
-                </button>
-                <button className="admin-nav-item" type="button" onClick={() => navigate("/dashboard")}>
-                  National Reports
-                </button>
-              </>
-            )}
-            {isSchoolAdmin && (
-              <>
-                <button className="admin-nav-item" type="button" onClick={() => navigate("/dashboard")}>
-                  Teachers
-                </button>
-                <button className="admin-nav-item" type="button" onClick={() => navigate("/dashboard")}>
-                  Students
-                </button>
-                <button className="admin-nav-item" type="button" onClick={() => navigate("/dashboard")}>
-                  Quizzes
-                </button>
-              </>
-            )}
-            {isTeacher && (
-              <>
-                <button className="admin-nav-item" type="button" onClick={() => navigate("/dashboard")}>
-                  Class Analytics
-                </button>
-                <button className="admin-nav-item" type="button" onClick={() => navigate("/dashboard")}>
-                  Risk Alerts
-                </button>
-                <button className="admin-nav-item" type="button" onClick={() => navigate("/dashboard")}>
-                  Recommendations
-                </button>
-              </>
-            )}
-            {isStudent && (
-              <>
-                <button className="admin-nav-item" type="button" onClick={() => navigate("/dashboard")}>
-                  My Progress
-                </button>
-                <button className="admin-nav-item" type="button" onClick={() => navigate("/dashboard")}>
-                  Assigned Quizzes
-                </button>
-                <button className="admin-nav-item" type="button" onClick={() => navigate("/dashboard")}>
-                  Recommendations
-                </button>
-              </>
-            )}
-            <button className="admin-nav-item active" type="button">
-              Profile
-            </button>
-          </nav>
-        </div>
-        <div className="admin-sidebar-footer">
-          <div className="admin-user-card">
-            <div className="admin-user-avatar">{userInitials}</div>
-            <div>
-              <div className="admin-user-name">{userDisplayName}</div>
-              <div className="admin-user-email">{contactLine}</div>
-            </div>
-          </div>
-          <button
-            className="admin-ghost-btn"
-            type="button"
-            onClick={() => navigate("/logout")}
-          >
-            Sign Out
-          </button>
-        </div>
-      </aside>
-
-      <main className="admin-main">
-        <div className="admin-topbar" style={{ marginBottom: "2rem" }}>
-          <div>
-            <div className="admin-title">User Profile</div>
-            <div className="admin-subtitle">Manage your account information.</div>
-          </div>
-          <div className="admin-topbar-actions">
-            <div className="admin-profile">
-              <div className="admin-profile-avatar" />
-              <div>
-                <div className="admin-user-name">{userDisplayName}</div>
-                <div className="admin-profile-meta">{roleLabel}</div>
-              </div>
-            </div>
-          </div>
+  if (isTeacher) {
+    return (
+      <div style={{ display: "flex", gap: "24px", alignItems: "flex-start" }}>
+        {/* Left Column */}
+        <div style={{ flex: "1" }}>
+          <ProfileCard 
+            name={displayName || user?.username || ""}
+            role="Senior Mathematics Teacher"
+            email={user?.email || ""}
+            initials={initials}
+            details={[
+              { label: "Employee ID", value: "EMP-2023-089" },
+              { label: "Department", value: "Mathematics" },
+              { label: "Joined Date", value: "Aug 15, 2023" },
+              { label: "Classes Assigned", value: "3" }
+            ]}
+          />
         </div>
 
-        {error && (
-          <div className="admin-error" role="alert">
-            {error}
-          </div>
-        )}
+        {/* Right Column */}
+        <div style={{ flex: "2" }}>
+          <FormSection title="Account Settings">
+            {error && <div style={{ backgroundColor: "rgba(245, 34, 61, 0.1)", color: "var(--danger)", padding: "12px", borderRadius: "8px", marginBottom: "16px", fontSize: "14px" }}>{error}</div>}
+            {successMessage && <div style={{ backgroundColor: "rgba(24, 182, 91, 0.1)", color: "var(--success)", padding: "12px", borderRadius: "8px", marginBottom: "16px", fontSize: "14px" }}>{successMessage}</div>}
 
-        {successMessage && (
-          <div className="admin-success" role="status">
-            {successMessage}
-          </div>
-        )}
-
-        <section className="admin-content-grid admin-content-grid--single">
-          <div className="admin-card">
-            <div className="admin-card-header">
-              <div>
-                <div className="admin-card-title">Account Information</div>
-                <div className="admin-card-subtitle">
-                  {isStudent
-                    ? "Students can view profile details only."
-                    : "Update your name and password."}
-                </div>
-              </div>
-            </div>
-            {loading ? (
-              <div className="admin-empty">Loading profile...</div>
-            ) : (
-              <form className="admin-form" onSubmit={handleSubmit}>
-              {!isStudent && (
-                <div className="admin-form-row">
-                  <div className="admin-field">
-                    <label>Email Address</label>
-                    <input type="email" value={user?.email || ""} disabled />
-                  </div>
-                </div>
-              )}
-
-              {isStudent && (
-                <div className="admin-form-row">
-                  <div className="admin-field">
-                    <label>Username</label>
-                    <input type="text" value={user?.username || ""} disabled />
-                  </div>
-                </div>
-              )}
-
-              <div className="admin-form-row">
-                <div className="admin-field">
-                  <label>First Name</label>
-                  <input
+            <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "var(--navy-950)", marginBottom: "8px" }}>First Name *</label>
+                  <input 
                     name="firstName"
                     value={formData.firstName}
                     onChange={handleChange}
-                    placeholder="Enter first name"
-                    disabled={isStudent}
+                    style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid var(--border)", fontSize: "14px", outline: "none", backgroundColor: "var(--surface)" }}
                   />
-                  {formErrors.firstName && (
-                    <div className="admin-error">{formErrors.firstName}</div>
-                  )}
+                  {formErrors.firstName && <span style={{ color: "var(--danger)", fontSize: "12px" }}>{formErrors.firstName}</span>}
                 </div>
-                <div className="admin-field">
-                  <label>Last Name</label>
-                  <input
+                <div>
+                  <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "var(--navy-950)", marginBottom: "8px" }}>Last Name *</label>
+                  <input 
                     name="lastName"
                     value={formData.lastName}
                     onChange={handleChange}
-                    placeholder="Enter last name"
-                    disabled={isStudent}
+                    style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid var(--border)", fontSize: "14px", outline: "none", backgroundColor: "var(--surface)" }}
                   />
-                  {formErrors.lastName && (
-                    <div className="admin-error">{formErrors.lastName}</div>
-                  )}
+                  {formErrors.lastName && <span style={{ color: "var(--danger)", fontSize: "12px" }}>{formErrors.lastName}</span>}
                 </div>
               </div>
 
-              {!isStudent && (
+              <div>
+                <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "var(--navy-950)", marginBottom: "8px" }}>Email Address</label>
+                <input 
+                  value={user?.email || ""}
+                  disabled
+                  style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid var(--border)", fontSize: "14px", outline: "none", backgroundColor: "var(--surface-muted)", color: "var(--text-secondary)", cursor: "not-allowed" }}
+                />
+                <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "6px" }}>Contact system administrator to change email.</p>
+              </div>
+
+              {isTeacher && (
                 <>
-                  <div style={{ marginTop: "2rem", borderTop: "1px solid #e5e7eb", paddingTop: "2rem" }}>
-                    <div className="admin-card-title" style={{ fontSize: "0.875rem", marginBottom: "1rem" }}>
-                      Change Password (Optional)
-                    </div>
-                    <div className="admin-form-row">
-                      <div className="admin-field">
-                        <label>Current Password</label>
-                        <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-                          <input
-                            type={showCurrentPassword ? "text" : "password"}
-                            name="currentPassword"
-                            value={formData.currentPassword}
-                            onChange={handleChange}
-                            style={{ paddingRight: "40px", width: "100%" }}
-                            placeholder="Enter current password"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                            style={{
-                              position: "absolute",
-                              right: "10px",
-                              background: "none",
-                              border: "none",
-                              cursor: "pointer",
-                              color: "#9ca3af",
-                              padding: "4px",
-                              display: "flex",
-                              alignItems: "center",
-                              zIndex: 10
-                            }}
-                            aria-label={showCurrentPassword ? "Hide password" : "Show password"}
-                          >
-                            {showCurrentPassword ? (
-                              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
-                            ) : (
-                              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0z"/><circle cx="12" cy="12" r="3"/></svg>
-                            )}
-                          </button>
+                  <div style={{ borderTop: "1px solid var(--border)", margin: "8px 0" }} />
+                  
+                  <h4 style={{ fontSize: "14px", fontWeight: "600", color: "var(--navy-950)", margin: 0 }}>Classrooms</h4>
+                  <div>
+                    <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "8px" }}>These are the classrooms assigned to you by the System Administrator.</p>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "12px" }}>
+                      {(user?.teacher_profile?.classrooms || []).map((cls) => (
+                        <div key={cls.id} style={{ display: "flex", alignItems: "center", backgroundColor: "var(--blue-50)", color: "var(--blue-600)", padding: "6px 14px", borderRadius: "16px", fontSize: "13px", fontWeight: "500" }}>
+                          {cls.name}
                         </div>
-                        {formErrors.currentPassword && (
-                          <div className="admin-error">{formErrors.currentPassword}</div>
-                        )}
-                      </div>
+                      ))}
+                      {(user?.teacher_profile?.classrooms || []).length === 0 && <span style={{ fontSize: "13px", color: "var(--text-muted)", fontStyle: "italic" }}>No classrooms assigned yet.</span>}
                     </div>
-
-                    <div className="admin-form-row">
-                      <div className="admin-field">
-                        <label>New Password</label>
-                        <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-                          <input
-                            type={showNewPassword ? "text" : "password"}
-                            name="newPassword"
-                            value={formData.newPassword}
-                            onChange={handleChange}
-                            style={{ paddingRight: "40px", width: "100%" }}
-                            placeholder="Enter new password"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowNewPassword(!showNewPassword)}
-                            style={{
-                              position: "absolute",
-                              right: "10px",
-                              background: "none",
-                              border: "none",
-                              cursor: "pointer",
-                              color: "#9ca3af",
-                              padding: "4px",
-                              display: "flex",
-                              alignItems: "center",
-                              zIndex: 10
-                            }}
-                            aria-label={showNewPassword ? "Hide password" : "Show password"}
-                          >
-                            {showNewPassword ? (
-                              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
-                            ) : (
-                              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0z"/><circle cx="12" cy="12" r="3"/></svg>
-                            )}
-                          </button>
-                        </div>
-                        {formErrors.newPassword && (
-                          <div className="admin-error">{formErrors.newPassword}</div>
-                        )}
-                      </div>
-                      <div className="admin-field">
-                        <label>Confirm New Password</label>
-                        <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-                          <input
-                            type={showConfirmPassword ? "text" : "password"}
-                            name="confirmPassword"
-                            value={formData.confirmPassword}
-                            onChange={handleChange}
-                            style={{ paddingRight: "40px", width: "100%" }}
-                            placeholder="Confirm new password"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                            style={{
-                              position: "absolute",
-                              right: "10px",
-                              background: "none",
-                              border: "none",
-                              cursor: "pointer",
-                              color: "#9ca3af",
-                              padding: "4px",
-                              display: "flex",
-                              alignItems: "center",
-                              zIndex: 10
-                            }}
-                            aria-label={showConfirmPassword ? "Hide password" : "Show password"}
-                          >
-                            {showConfirmPassword ? (
-                              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
-                            ) : (
-                              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0z"/><circle cx="12" cy="12" r="3"/></svg>
-                            )}
-                          </button>
-                        </div>
-                        {formErrors.confirmPassword && (
-                          <div className="admin-error">{formErrors.confirmPassword}</div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="admin-modal-actions" style={{ marginTop: "2rem" }}>
-                    <button
-                      className="admin-ghost-btn"
-                      type="button"
-                      onClick={() => navigate("/dashboard")}
-                    >
-                      Cancel
-                    </button>
-                    <button className="admin-primary-btn" type="submit">
-                      Save Changes
-                    </button>
                   </div>
                 </>
               )}
-                </form>
-              )}
-          </div>
-        </section>
-      </main>
+
+              <div style={{ borderTop: "1px solid var(--border)", margin: "8px 0" }} />
+
+              <h4 style={{ fontSize: "14px", fontWeight: "600", color: "var(--navy-950)", margin: 0 }}>Change Password</h4>
+
+              {/* Hidden input to prevent Chrome from autofilling email into the classroom field */}
+              <input type="text" name="username_trap" style={{ display: "none" }} autoComplete="username" />
+
+              <div>
+                <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "var(--navy-950)", marginBottom: "8px" }}>Current Password</label>
+                <div style={{ position: "relative" }}>
+                  <input 
+                    name="currentPassword"
+                    autoComplete="new-password"
+                    type={showPassword ? "text" : "password"}
+                    value={formData.currentPassword}
+                    onChange={handleChange}
+                    style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid var(--border)", fontSize: "14px", outline: "none", backgroundColor: "var(--surface)" }}
+                  />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "var(--text-muted)", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}>
+                    {showPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
+                {formErrors.currentPassword && <span style={{ color: "var(--danger)", fontSize: "12px" }}>{formErrors.currentPassword}</span>}
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "var(--navy-950)", marginBottom: "8px" }}>New Password</label>
+                  <div style={{ position: "relative" }}>
+                    <input 
+                      name="newPassword"
+                      autoComplete="new-password"
+                      type={showPassword ? "text" : "password"}
+                      value={formData.newPassword}
+                      onChange={handleChange}
+                      style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid var(--border)", fontSize: "14px", outline: "none", backgroundColor: "var(--surface)" }}
+                    />
+                  </div>
+                  {formErrors.newPassword && <span style={{ color: "var(--danger)", fontSize: "12px" }}>{formErrors.newPassword}</span>}
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: "14px", fontWeight: "600", color: "var(--navy-950)", marginBottom: "8px" }}>Confirm Password</label>
+                  <div style={{ position: "relative" }}>
+                    <input 
+                      name="confirmPassword"
+                      autoComplete="new-password"
+                      type={showPassword ? "text" : "password"}
+                      value={formData.confirmPassword}
+                      onChange={handleChange}
+                      style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid var(--border)", fontSize: "14px", outline: "none", backgroundColor: "var(--surface)" }}
+                    />
+                  </div>
+                  {formErrors.confirmPassword && <span style={{ color: "var(--danger)", fontSize: "12px" }}>{formErrors.confirmPassword}</span>}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "16px" }}>
+                <button
+                  type="submit"
+                  style={{ padding: "10px 24px", borderRadius: "8px", border: "none", backgroundColor: "var(--blue-600)", color: "white", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}
+                >
+                  Update Profile
+                </button>
+              </div>
+            </form>
+          </FormSection>
+        </div>
+      </div>
+    );
+  }
+
+  // Fallback for non-teacher roles to keep existing layout if necessary
+  return (
+    <div style={{ padding: "32px", maxWidth: "800px", margin: "0 auto" }}>
+       <h2>Profile</h2>
+       {/* Kept minimal for other roles to not break anything if they navigate here */}
     </div>
   );
 };

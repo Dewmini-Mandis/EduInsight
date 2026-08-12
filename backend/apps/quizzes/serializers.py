@@ -1,5 +1,39 @@
 from rest_framework import serializers
-from .models import Quiz, Question, Answer, CorrectAnswer, Hint, Lesson
+from .models import Quiz, Question, Answer, CorrectAnswer, Hint, Lesson, AcademicTerm, Topic, Skill, QuizLevel, DifficultyLevel, LearningMaterial
+
+class AcademicTermSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AcademicTerm
+        fields = "__all__"
+
+class TopicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Topic
+        fields = "__all__"
+
+class SkillSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Skill
+        fields = "__all__"
+
+class QuizLevelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuizLevel
+        fields = "__all__"
+
+class DifficultyLevelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DifficultyLevel
+        fields = "__all__"
+
+class LearningMaterialSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.CharField(source="created_by.get_full_name", read_only=True)
+    lesson_title = serializers.CharField(source="lesson.title", read_only=True)
+
+    class Meta:
+        model = LearningMaterial
+        fields = "__all__"
+        read_only_fields = ["created_by"]
 
 class LessonSerializer(serializers.ModelSerializer):
     created_by_name = serializers.CharField(source="created_by.get_full_name", read_only=True)
@@ -14,6 +48,7 @@ class LessonSerializer(serializers.ModelSerializer):
             "created_by",
             "created_by_name",
             "created_at",
+            "is_active",
         ]
         read_only_fields = ["created_by"]
 
@@ -78,7 +113,12 @@ class QuizSerializer(serializers.ModelSerializer):
             "description",
             "lesson",
             "lesson_title",
-            "learning_level",
+            "topic",
+            "skill",
+            "quiz_level",
+            "difficulty",
+            "pass_mark",
+            "estimated_time_minutes",
             "school",
             "school_name",
             "created_by",
@@ -88,6 +128,20 @@ class QuizSerializer(serializers.ModelSerializer):
             "max_attempts",
         ]
         read_only_fields = ["created_by"]
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        import random
+        # If there's a blueprint, pick random questions from the bank
+        if hasattr(instance, 'blueprint') and instance.blueprint and instance.blueprint.question_bank:
+            bp = instance.blueprint
+            bank_qs = instance.blueprint.question_bank.questions.all()
+            questions_list = list(bank_qs)
+            random.shuffle(questions_list)
+            selected = questions_list[:bp.total_questions]
+            ret['questions'] = QuestionSerializer(selected, many=True, context=self.context).data
+        return ret
+
 
     def create(self, validated_data):
         questions_data = validated_data.pop("questions", [])
@@ -123,7 +177,12 @@ class QuizSerializer(serializers.ModelSerializer):
         instance.school = validated_data.get("school", instance.school)
         instance.max_attempts = validated_data.get("max_attempts", instance.max_attempts)
         instance.lesson = validated_data.get("lesson", instance.lesson)
-        instance.learning_level = validated_data.get("learning_level", instance.learning_level)
+        instance.topic = validated_data.get("topic", instance.topic)
+        instance.skill = validated_data.get("skill", instance.skill)
+        instance.quiz_level = validated_data.get("quiz_level", instance.quiz_level)
+        instance.difficulty = validated_data.get("difficulty", instance.difficulty)
+        instance.pass_mark = validated_data.get("pass_mark", instance.pass_mark)
+        instance.estimated_time_minutes = validated_data.get("estimated_time_minutes", instance.estimated_time_minutes)
         instance.save()
 
 
