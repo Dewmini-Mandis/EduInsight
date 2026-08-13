@@ -74,6 +74,7 @@ const Toggle = ({ checked, onChange, label }: any) => (
 
 const CreateQuiz = () => {
   const [lessons, setLessons] = useState<any[]>([]);
+  const [lessonsLoading, setLessonsLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
@@ -96,7 +97,7 @@ const CreateQuiz = () => {
   const [shuffleAnswers, setShuffleAnswers] = useState(true);
   const [passMark, setPassMark] = useState("70");
 
-  const [assignTo, setAssignTo] = useState(teacherClassrooms.length > 0 ? teacherClassrooms[0] : "");
+  const [assignTo, setAssignTo] = useState(teacherClassrooms.length > 0 ? (teacherClassrooms[0].id || teacherClassrooms[0]) : "");
   const [startDate, setStartDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [scheduleQuiz, setScheduleQuiz] = useState(true);
@@ -112,18 +113,14 @@ const CreateQuiz = () => {
 
   // Metadata arrays
   const [termsList, setTermsList] = useState<any[]>([]);
-  const [topicsList, setTopicsList] = useState<any[]>([]);
-  const [skillsList, setSkillsList] = useState<any[]>([]);
   const [quizLevels, setQuizLevels] = useState<any[]>([]);
   const [diffLevels, setDiffLevels] = useState<any[]>([]);
   
   // Field states
   const [termId, setTermId] = useState("");
-  const [skillId, setSkillId] = useState("");
-  const [topicId, setTopicId] = useState("");
   const [quizLevelId, setQuizLevelId] = useState("");
   const [diffLevelId, setDiffLevelId] = useState("");
-
+  const [order, setOrder] = useState("1");
   useEffect(() => {
     fetchMetadata();
   }, []);
@@ -153,45 +150,20 @@ const CreateQuiz = () => {
     }
     const fetchFilteredLessons = async () => {
       const token = getToken();
+      setLessonsLoading(true);
       try {
         const res = await fetch(`/api/quizzes/lessons/?term=${termId}`, { headers: { Authorization: `Token ${token}` } });
         if (res.ok) setLessons(await res.json());
-      } catch (err) { console.error(err); }
+      } catch (err) { console.error(err); } finally {
+        setLessonsLoading(false);
+      }
     };
     fetchFilteredLessons();
   }, [termId]);
 
-  useEffect(() => {
-    if (!lessonId) {
-      setTopicsList([]);
-      setTopicId("");
-      return;
-    }
-    const fetchFilteredTopics = async () => {
-      const token = getToken();
-      try {
-        const res = await fetch(`/api/quizzes/topics/?lesson=${lessonId}`, { headers: { Authorization: `Token ${token}` } });
-        if (res.ok) setTopicsList(await res.json());
-      } catch (err) { console.error(err); }
-    };
-    fetchFilteredTopics();
-  }, [lessonId]);
+  
 
-  useEffect(() => {
-    if (!topicId) {
-      setSkillsList([]);
-      setSkillId("");
-      return;
-    }
-    const fetchFilteredSkills = async () => {
-      const token = getToken();
-      try {
-        const res = await fetch(`/api/quizzes/skills/?topic=${topicId}`, { headers: { Authorization: `Token ${token}` } });
-        if (res.ok) setSkillsList(await res.json());
-      } catch (err) { console.error(err); }
-    };
-    fetchFilteredSkills();
-  }, [topicId]);
+  
 
   const handlePublish = async () => {
     const token = getToken();
@@ -233,13 +205,13 @@ const CreateQuiz = () => {
       title,
       description,
       lesson: lessonId ? parseInt(lessonId) : null,
-      topic: topicId ? parseInt(topicId) : null,
-      skill: skillId ? parseInt(skillId) : null,
       quiz_level: quizLevelId ? parseInt(quizLevelId) : null,
       difficulty: diffLevelId ? parseInt(diffLevelId) : null,
+      order: parseInt(order) || 1,
       pass_mark: parseInt(passMark) || 50,
       estimated_time_minutes: parseInt(estimatedTime) || 10,
       max_attempts: parseInt(attemptLimit) || 3,
+      assigned_class: assignTo ? parseInt(assignTo) : null,
       questions: formattedQuestions,
     };
 
@@ -332,27 +304,12 @@ const CreateQuiz = () => {
             <div>
               <Label>Lesson</Label>
               <Select value={lessonId} onChange={(e: any) => setLessonId(e.target.value)} disabled={!termId}>
-                <option value="">Select Lesson</option>
+                <option value="">{lessonsLoading ? "Loading..." : "Select Lesson"}</option>
                 {lessons.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
               </Select>
             </div>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-            <div>
-              <Label>Topic</Label>
-              <Select value={topicId} onChange={(e: any) => setTopicId(e.target.value)} disabled={!lessonId}>
-                <option value="">Select Topic</option>
-                {topicsList.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </Select>
-            </div>
-            <div>
-              <Label>Skill</Label>
-              <Select value={skillId} onChange={(e: any) => setSkillId(e.target.value)} disabled={!topicId}>
-                <option value="">Select Skill</option>
-                {skillsList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </Select>
-            </div>
-          </div>
+          
           <div>
             <Label>Estimated Time</Label>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -387,7 +344,10 @@ const CreateQuiz = () => {
                 {diffLevels.map(dl => <option key={dl.id} value={dl.id}>{dl.name}</option>)}
             </Select>
           </div>
-          
+          <div>
+            <Label>Order</Label>
+            <input type="number" value={order} onChange={(e: any) => setOrder(e.target.value)} style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "13px", outline: "none" }} min="1" />
+          </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "8px" }}>
             <Toggle checked={enableHints} onChange={setEnableHints} label="Enable hints during quiz" />
             <Toggle checked={shuffleAnswers} onChange={setShuffleAnswers} label="Shuffle answers" />
@@ -416,8 +376,8 @@ const CreateQuiz = () => {
             {teacherClassrooms.length > 0 ? (
               <Select value={assignTo} onChange={(e: any) => { setAssignTo(e.target.value); setFieldErrors({...fieldErrors, assignTo: null}); }}>
                 <option value="">Select class</option>
-                {teacherClassrooms.map((cls: string) => (
-                  <option key={cls} value={cls}>{cls}</option>
+                {teacherClassrooms.map((cls: any) => (
+                  <option key={cls.id || cls} value={cls.id || cls}>{cls.name || cls}</option>
                 ))}
               </Select>
             ) : (

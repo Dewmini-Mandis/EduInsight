@@ -43,12 +43,13 @@ const StudentProgress = () => {
         }
 
         const studentData = await studentRes.json() as StudentProfile;
-        const attemptsData = await attemptsRes.json() as any[];
+        const attemptsData = await attemptsRes.json();
+        const rawAttempts = Array.isArray(attemptsData) ? attemptsData : (attemptsData.results || []);
 
         // Filter and map attempts
-        const studentAttempts = attemptsData
-          .filter(att => att.student === parseInt(studentId || "0", 10))
-          .map(att => ({
+        const studentAttempts = rawAttempts
+          .filter((att: any) => att.student === parseInt(studentId || "0", 10))
+          .map((att: any) => ({
             id: att.id,
             quiz_title: att.quiz_title,
             attempt_number: att.attempt_number,
@@ -56,7 +57,7 @@ const StudentProgress = () => {
             start_time: att.start_time,
             end_time: att.end_time
           }))
-          .sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
+          .sort((a: any, b: any) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
 
         setStudent(studentData);
         setAttempts(studentAttempts);

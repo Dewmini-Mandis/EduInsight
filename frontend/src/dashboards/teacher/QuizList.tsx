@@ -13,7 +13,9 @@ type QuizItem = {
   description: string;
   lesson: number;
   lesson_title: string;
-  learning_level: string;
+  learning_level?: string;
+  quiz_level_name?: string;
+  difficulty_name?: string;
   created_at: string;
   questions: any[];
 };
@@ -53,10 +55,13 @@ const QuizList = () => {
     }
   };
 
-  const getDifficultyStatus = (level: string) => {
+  const getDifficultyStatus = (level?: string) => {
+    if (!level) return "Medium";
     switch (level.toLowerCase()) {
       case "beginner": return "Low";
+      case "easy": return "Low";
       case "advanced": return "High";
+      case "hard": return "High";
       default: return "Medium";
     }
   };
@@ -64,7 +69,7 @@ const QuizList = () => {
   const filteredQuizzes = quizzes.filter(quiz => {
     const matchesSearch = quiz.title.toLowerCase().includes(search.toLowerCase());
     const matchesLesson = filterLesson === "All Topics" || quiz.lesson_title === filterLesson;
-    const matchesLevel = filterDifficulty === "All Levels" || quiz.learning_level === filterDifficulty;
+    const matchesLevel = filterDifficulty === "All Levels" || (quiz.quiz_level_name === filterDifficulty || quiz.learning_level === filterDifficulty);
     return matchesSearch && matchesLesson && matchesLevel;
   });
 
@@ -151,7 +156,7 @@ const QuizList = () => {
 
                 <div style={{ display: "flex", gap: "8px" }}>
                   <span style={{ padding: "4px 8px", borderRadius: "4px", backgroundColor: "var(--surface-muted)", color: "var(--text-secondary)", fontSize: "12px", fontWeight: "500" }}>Grade 10</span>
-                  <StatusBadge status={getDifficultyStatus(quiz.learning_level)} />
+                  <StatusBadge status={getDifficultyStatus(quiz.difficulty_name || quiz.quiz_level_name || quiz.learning_level)} />
                 </div>
               </div>
             </div>

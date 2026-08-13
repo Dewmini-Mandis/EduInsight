@@ -190,6 +190,7 @@ const StudentDashboard = () => {
 
   const [quizzes, setQuizzes] = useState<any[]>([]);
   const [attempts, setAttempts] = useState<any[]>([]);
+  const [lessonProgress, setLessonProgress] = useState<any[]>([]);
   const [lessons, setLessons] = useState<any[]>([]);
   const [materials, setMaterials] = useState<any[]>([]);
   const [selectedTerm, setSelectedTerm] = useState<string>("1st Term");
@@ -406,6 +407,27 @@ const StudentDashboard = () => {
   }, [lessons, quizzes, attempts, selectedTerm, selectedLessonId]);
 
   const handleStartAttempt = (quiz: any) => {
+    // Check for remediation
+    const quizAttempts = attempts.filter(att => att.quiz === quiz.id).sort((a,b) => b.attempt_number - a.attempt_number);
+    if (quizAttempts.length > 0) {
+      const lastAttempt = quizAttempts[0];
+      if (lastAttempt.score !== null && lastAttempt.score < (quiz.pass_mark || 75)) {
+        // They failed the last attempt. Check if required remedial lessons are completed.
+        const requiredLessons = quiz.remedial_lessons || []; // backend might need to provide this in quiz serializer, or we check if lesson.quiz == quiz.id
+        // As a fallback, check if ANY lesson linked to this quiz is incomplete
+        const linkedLessons = lessons.filter((l: any) => l.quiz === quiz.id);
+        const incompleteLessons = linkedLessons.filter((l: any) => {
+          const prog = lessonProgress.find((p: any) => p.lesson === l.id);
+          return !prog || prog.status !== "COMPLETED";
+        });
+        
+        if (incompleteLessons.length > 0) {
+          setError(`You must complete the required remedial lessons before retaking this quiz.`);
+          return;
+        }
+      }
+    }
+
     setSelectedQuiz(quiz);
     
     // Autosave Recovery
@@ -978,7 +1000,7 @@ const StudentDashboard = () => {
                                 </div>
                                 <div>
                                   <div style={{ fontSize: "14px", fontWeight: "700", color: "var(--navy-900)", marginBottom: "4px" }}>{quiz.title}</div>
-                                  <div style={{ fontSize: "12px", color: isCompleted ? "#16a34a" : "#3b82f6", fontWeight: "500" }}>Quiz {index + 1} &bull; {isCompleted ? "Completed" : "In Progress"}</div>
+                                  <div style={{ fontSize: "12px", color: isCompleted ? "#16a34a" : "#3b82f6", fontWeight: "500" }}>Quiz {quiz.order || index + 1} &bull; {isCompleted ? "Completed" : "In Progress"}</div>
                                 </div>
                               </div>
                               <div style={{ width: "24px", height: "24px", borderRadius: "50%", border: `1px solid ${isCompleted ? "#16a34a" : "#e2e8f0"}`, display: "flex", alignItems: "center", justifyContent: "center", background: isCompleted ? "#dcfce7" : "transparent" }}>
@@ -1024,7 +1046,7 @@ const StudentDashboard = () => {
                                   </div>
                                   <div>
                                     <div style={{ fontSize: "14px", fontWeight: "700", color: "var(--navy-900)", marginBottom: "4px" }}>{quiz.title}</div>
-                                    <div style={{ fontSize: "12px", color: isCompleted ? "#16a34a" : "#8b5cf6", fontWeight: "500" }}>Quiz {index + 1} &bull; {isCompleted ? "Completed" : "In Progress"}</div>
+                                    <div style={{ fontSize: "12px", color: isCompleted ? "#16a34a" : "#8b5cf6", fontWeight: "500" }}>Quiz {quiz.order || index + 1} &bull; {isCompleted ? "Completed" : "In Progress"}</div>
                                   </div>
                                 </div>
                                 <div style={{ width: "24px", height: "24px", borderRadius: "50%", border: `1px solid ${isCompleted ? "#16a34a" : "#e2e8f0"}`, display: "flex", alignItems: "center", justifyContent: "center", background: isCompleted ? "#dcfce7" : "transparent" }}>
@@ -1071,7 +1093,7 @@ const StudentDashboard = () => {
                                   </div>
                                   <div>
                                     <div style={{ fontSize: "14px", fontWeight: "700", color: "var(--navy-900)", marginBottom: "4px" }}>{quiz.title}</div>
-                                    <div style={{ fontSize: "12px", color: isCompleted ? "#16a34a" : "#f97316", fontWeight: "500" }}>Quiz {index + 1} &bull; {isCompleted ? "Completed" : "In Progress"}</div>
+                                    <div style={{ fontSize: "12px", color: isCompleted ? "#16a34a" : "#f97316", fontWeight: "500" }}>Quiz {quiz.order || index + 1} &bull; {isCompleted ? "Completed" : "In Progress"}</div>
                                   </div>
                                 </div>
                                 <div style={{ width: "24px", height: "24px", borderRadius: "50%", border: `1px solid ${isCompleted ? "#16a34a" : "#e2e8f0"}`, display: "flex", alignItems: "center", justifyContent: "center", background: isCompleted ? "#dcfce7" : "transparent" }}>
@@ -1864,9 +1886,9 @@ const StudentDashboard = () => {
                             {material.content}
                           </div>
                         ) : (
-                          <a href={material.content} target="_blank" rel="noopener noreferrer" className="admin-secondary-btn" style={{ width: "auto", fontSize: "12px", padding: "6px 12px", textDecoration: "none", display: "inline-block" }}>
-                            Open Material
-                          </a>
+                          <button onClick={() => navigate(`/student/lessons/${material.lesson}`)} className="admin-secondary-btn" style={{ width: "auto", fontSize: "12px", padding: "6px 12px" }}>
+                            Open Lesson
+                          </button>
                         )}
                       </div>
                     ))}

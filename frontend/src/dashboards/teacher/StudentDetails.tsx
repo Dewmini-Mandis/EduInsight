@@ -15,6 +15,7 @@ type StudentProfile = {
     index_no: string;
     class_name: string;
     grade: string;
+    class_room?: { id: number; name: string };
   };
 };
 
@@ -29,6 +30,8 @@ const StudentDetails = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [successMsg, setSuccessMsg] = useState("");
   const [editForm, setEditForm] = useState<Partial<StudentProfile> & { password?: string, index_no?: string, class_name?: string }>({});
 
   useEffect(() => {
@@ -81,6 +84,9 @@ const StudentDetails = () => {
   };
 
   const handleSave = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    setSuccessMsg("");
     const token = getToken();
     try {
       const res = await fetch(`/api/accounts/users/${studentId}/`, {
@@ -114,8 +120,12 @@ const StudentDetails = () => {
         class_name: updatedProfile.student_profile?.class_name || ""
       });
       setIsEditing(false);
+      setSuccessMsg("Student profile updated successfully.");
+      setTimeout(() => setSuccessMsg(""), 3000);
     } catch (err: any) {
       alert(err.message || "Failed to update profile.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -136,11 +146,16 @@ const StudentDetails = () => {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "600px", margin: "0 auto" }}>
       <div className="teacher-card">
+                {successMsg && (
+          <div style={{ padding: "12px", marginBottom: "16px", backgroundColor: "var(--success-light, #d1fae5)", color: "var(--success-dark, #065f46)", borderRadius: "8px", fontSize: "14px", fontWeight: "500" }}>
+            {successMsg}
+          </div>
+        )}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "20px" }}>
           <div>
             <span className="teacher-badge success" style={{ marginBottom: "8px" }}>STUDENT</span>
             <h2 className="teacher-card-title" style={{ fontSize: "22px" }}>{profile.full_name || `${profile.first_name} ${profile.last_name}`}</h2>
-            <span style={{ fontSize: "13px", color: "#64748b" }}>Username: <strong>{profile.username}</strong></span>
+            
           </div>
           
           <div style={{ display: "flex", gap: "8px" }}>
@@ -153,7 +168,7 @@ const StudentDetails = () => {
                   index_no: profile.student_profile?.index_no || "",
                   class_name: profile.student_profile?.class_name || ""
                 }); }}>Cancel</button>
-                <button className="teacher-btn-primary" onClick={handleSave}>Save Changes</button>
+                <button className="teacher-btn-primary" onClick={handleSave} disabled={isSaving} style={{ opacity: isSaving ? 0.7 : 1, cursor: isSaving ? "not-allowed" : "pointer" }}>{isSaving ? "Saving..." : "Save Changes"}</button>
               </>
             ) : (
               <>
@@ -192,8 +207,8 @@ const StudentDetails = () => {
                     style={{ padding: "8px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "14px", fontFamily: '"Inter", sans-serif', backgroundColor: "var(--surface)" }}
                   >
                     <option value="">Select a classroom...</option>
-                    {teacherClassrooms.map((cls: string) => (
-                      <option key={cls} value={cls}>{cls}</option>
+                    {teacherClassrooms.map((cls: any) => (
+                      <option key={cls.id || cls} value={cls.name || cls}>{cls.name || cls}</option>
                     ))}
                   </select>
                 ) : (
@@ -222,7 +237,7 @@ const StudentDetails = () => {
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "14px" }}>
                 <span style={{ color: "#64748b" }}>Classroom Assignment:</span>
-                <span style={{ fontWeight: 600 }}>{profile.student_profile?.class_name || "N/A"}</span>
+                <span style={{ fontWeight: 600 }}>{profile.student_profile?.class_room?.name || profile.student_profile?.class_name || "N/A"}</span>
               </div>
             </>
           )}

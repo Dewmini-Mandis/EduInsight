@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Quiz, Question, Answer, CorrectAnswer, Hint, Lesson, AcademicTerm, Topic, Skill, QuizLevel, DifficultyLevel, LearningMaterial
+from .models import EngagementQuestion, Quiz, Question, Answer, CorrectAnswer, Hint, Lesson, AcademicTerm, Topic, Skill, QuizLevel, DifficultyLevel, LearningMaterial
 
 class AcademicTermSerializer(serializers.ModelSerializer):
     class Meta:
@@ -26,9 +26,20 @@ class DifficultyLevelSerializer(serializers.ModelSerializer):
         model = DifficultyLevel
         fields = "__all__"
 
+
+class EngagementQuestionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EngagementQuestion
+        fields = "__all__"
+
 class LearningMaterialSerializer(serializers.ModelSerializer):
     created_by_name = serializers.CharField(source="created_by.get_full_name", read_only=True)
     lesson_title = serializers.CharField(source="lesson.title", read_only=True)
+    assigned_class_name = serializers.CharField(source="assigned_class.name", read_only=True, allow_null=True)
+    quiz_level_name = serializers.CharField(source="quiz_level.name", read_only=True, allow_null=True)
+    difficulty_name = serializers.CharField(source="difficulty.name", read_only=True, allow_null=True)
+
+    engagement_questions = EngagementQuestionSerializer(many=True, read_only=True)
 
     class Meta:
         model = LearningMaterial
@@ -49,6 +60,8 @@ class LessonSerializer(serializers.ModelSerializer):
             "created_by_name",
             "created_at",
             "is_active",
+            "quiz",
+            "order",
         ]
         read_only_fields = ["created_by"]
 
@@ -104,6 +117,9 @@ class QuizSerializer(serializers.ModelSerializer):
     created_by_name = serializers.CharField(source="created_by.get_full_name", read_only=True)
     school_name = serializers.CharField(source="school.name", read_only=True)
     lesson_title = serializers.CharField(source="lesson.title", read_only=True)
+    assigned_class_name = serializers.CharField(source="assigned_class.name", read_only=True, allow_null=True)
+    quiz_level_name = serializers.CharField(source="quiz_level.name", read_only=True, allow_null=True)
+    difficulty_name = serializers.CharField(source="difficulty.name", read_only=True, allow_null=True)
 
     class Meta:
         model = Quiz
@@ -113,10 +129,15 @@ class QuizSerializer(serializers.ModelSerializer):
             "description",
             "lesson",
             "lesson_title",
+            "assigned_class",
+            "assigned_class_name",
+            "quiz_level_name",
+            "difficulty_name",
             "topic",
             "skill",
             "quiz_level",
             "difficulty",
+            "order",
             "pass_mark",
             "estimated_time_minutes",
             "school",
@@ -181,6 +202,8 @@ class QuizSerializer(serializers.ModelSerializer):
         instance.skill = validated_data.get("skill", instance.skill)
         instance.quiz_level = validated_data.get("quiz_level", instance.quiz_level)
         instance.difficulty = validated_data.get("difficulty", instance.difficulty)
+        instance.assigned_class = validated_data.get("assigned_class", instance.assigned_class)
+        instance.order = validated_data.get("order", instance.order)
         instance.pass_mark = validated_data.get("pass_mark", instance.pass_mark)
         instance.estimated_time_minutes = validated_data.get("estimated_time_minutes", instance.estimated_time_minutes)
         instance.save()

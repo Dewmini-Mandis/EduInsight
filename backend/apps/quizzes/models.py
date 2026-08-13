@@ -27,6 +27,14 @@ class Lesson(models.Model):
 	created_at = models.DateTimeField(auto_now_add=True)
 	is_active = models.BooleanField(default=True)
 
+	quiz = models.ForeignKey(
+		"Quiz",
+		on_delete=models.SET_NULL,
+		null=True,
+		blank=True,
+		related_name="remedial_lessons",
+	)
+	order = models.PositiveIntegerField(default=1)
 	def __str__(self) -> str:
 		return f"{self.title} ({self.term})"
 
@@ -89,6 +97,8 @@ class LearningMaterial(models.Model):
 	)
 	created_at = models.DateTimeField(auto_now_add=True)
 	
+	order = models.PositiveIntegerField(default=1)
+	is_required = models.BooleanField(default=True)
 	def __str__(self) -> str:
 		return self.title
 
@@ -107,6 +117,7 @@ class Quiz(models.Model):
 	skill = models.ForeignKey(Skill, on_delete=models.SET_NULL, null=True, blank=True, related_name="quizzes")
 	quiz_level = models.ForeignKey(QuizLevel, on_delete=models.SET_NULL, null=True, blank=True, related_name="quizzes")
 	difficulty = models.ForeignKey(DifficultyLevel, on_delete=models.SET_NULL, null=True, blank=True, related_name="quizzes")
+	order = models.PositiveIntegerField(default=1)
 	pass_mark = models.PositiveIntegerField(default=50)
 	estimated_time_minutes = models.PositiveIntegerField(default=10)
 	created_by = models.ForeignKey(
@@ -114,6 +125,13 @@ class Quiz(models.Model):
 		on_delete=models.SET_NULL,
 		null=True,
 		related_name="quizzes_created",
+	)
+	assigned_class = models.ForeignKey(
+		"classes.SchoolClass",
+		on_delete=models.SET_NULL,
+		null=True,
+		blank=True,
+		related_name="quizzes",
 	)
 	school = models.ForeignKey(
 		"schools.School",
@@ -243,3 +261,25 @@ class Hint(models.Model):
 
 	def __str__(self) -> str:
 		return f"Hint {self.sequence_no}"
+
+class EngagementQuestion(models.Model):
+	TYPE_MCQ = "MCQ"
+	TYPE_TF = "TF"
+	QUESTION_TYPES = [
+		(TYPE_MCQ, "Multiple Choice"),
+		(TYPE_TF, "True/False"),
+	]
+
+	material = models.ForeignKey(LearningMaterial, on_delete=models.CASCADE, related_name="engagement_questions")
+	question_text = models.TextField()
+	question_type = models.CharField(max_length=10, choices=QUESTION_TYPES)
+	options = models.JSONField(default=dict, blank=True)
+	correct_answer = models.CharField(max_length=255)
+	timestamp = models.PositiveIntegerField(null=True, blank=True)
+	position = models.PositiveIntegerField(null=True, blank=True)
+	explanation = models.TextField(blank=True)
+	is_required = models.BooleanField(default=True)
+	order = models.PositiveIntegerField(default=1)
+
+	def __str__(self) -> str:
+		return f"Engagement: {self.question_text[:30]}"

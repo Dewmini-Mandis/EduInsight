@@ -7,6 +7,7 @@ import { getToken, getUser } from "./auth/authUtils";
 import DashboardRouter from "./routes/DashboardRouter";
 import SystemAdminDashboard from "./dashboards/system/SystemAdminDashboard";
 import StudentDashboard from "./dashboards/student/StudentDashboard";
+import StudentLessonViewer from "./dashboards/student/StudentLessonViewer";
 import TeacherLayout from "./layouts/TeacherLayout";
 import SystemLayout from "./layouts/SystemLayout";
 import "./styles/auth.css";
@@ -82,6 +83,7 @@ function App() {
             <RequireRole role="STUDENT">
               <Routes>
                 <Route path="dashboard" element={<StudentDashboard />} />
+                <Route path="lessons/:lessonId" element={<StudentLessonViewer />} />
                 <Route path="*" element={<Navigate to="dashboard" replace />} />
               </Routes>
             </RequireRole>

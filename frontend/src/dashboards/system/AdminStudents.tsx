@@ -31,6 +31,8 @@ const AdminStudents = () => {
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
+  const [modalError, setModalError] = useState("");
+  const [modalSuccess, setModalSuccess] = useState("");
   const [success, setSuccess] = useState("");
   
   const [search, setSearch] = useState("");
@@ -98,12 +100,16 @@ const AdminStudents = () => {
 
   const handleOpenCreate = () => {
     setModalMode("create");
+    setModalError("");
+    setModalSuccess("");
     setFormData({ firstName: "", lastName: "", email: "", password: "", schoolId: "", indexNo: "", classRoomId: "", isActive: true });
     setShowModal(true);
   };
 
   const handleOpenEdit = (student: Student) => {
     setModalMode("edit");
+    setModalError("");
+    setModalSuccess("");
     setSelectedStudent(student);
     setFormData({ 
       firstName: student.first_name, 
@@ -127,9 +133,11 @@ const AdminStudents = () => {
     e.preventDefault();
     if (actionLoading) return;
     if (!formData.email.trim() || !formData.firstName.trim() || !formData.lastName.trim() || (modalMode === "create" && !formData.password) || !formData.schoolId || !formData.classRoomId) {
-      setError("Please fill in all required fields, including Class Assignment.");
+      setModalError("Please fill in all required fields, including Class Assignment.");
       return;
     }
+    setModalError("");
+    setModalSuccess("");
     setError("");
     setSuccess("");
     const token = getToken();
@@ -167,11 +175,12 @@ const AdminStudents = () => {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.detail || errData.email?.[0] || "Failed to save student.");
       }
-      setSuccess(modalMode === "create" ? "Student created successfully." : "Student updated successfully.");
-      setShowModal(false);
+      setModalSuccess(modalMode === "create" ? "Student created successfully." : "Student updated successfully.");
       fetchData();
+      setShowModal(false);
+      setModalSuccess("");
     } catch (err: any) {
-      setError(err.message);
+      setModalError(err.message);
     } finally {
       setActionLoading(false);
     }
@@ -191,7 +200,7 @@ const AdminStudents = () => {
       setShowDeleteModal(false);
       fetchData();
     } catch (err: any) {
-      setError(err.message);
+      setModalError(err.message);
     } finally {
       setDeleteLoading(false);
     }
@@ -285,6 +294,8 @@ const AdminStudents = () => {
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
           <div style={{ backgroundColor: "white", padding: "32px", borderRadius: "12px", width: "500px", maxWidth: "90%", maxHeight: "90vh", overflowY: "auto" }}>
             <h3 style={{ margin: "0 0 24px 0" }}>{modalMode === "create" ? "Create Student" : "Edit Student"}</h3>
+            {modalError && <div style={{ marginBottom: "16px", padding: "12px", backgroundColor: "var(--danger-light, #fee2e2)", color: "var(--danger-dark, #991b1b)", borderRadius: "8px" }}>{modalError}</div>}
+            {modalSuccess && <div style={{ marginBottom: "16px", padding: "12px", backgroundColor: "var(--success-light, #d1fae5)", color: "var(--success-dark, #065f46)", borderRadius: "8px" }}>{modalSuccess}</div>}
             <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               <div style={{ display: "flex", gap: "16px" }}>
                 <div style={{ flex: 1 }}>
@@ -315,7 +326,7 @@ const AdminStudents = () => {
                 <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: "500" }}>School *</label>
                 <select required value={formData.schoolId} onChange={e => setFormData({ ...formData, schoolId: e.target.value, classRoomId: "" })} style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid var(--border)", outline: "none" }}>
                   <option value="">Select a school</option>
-                  {schools.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  {schools.map(s => <option key={s.id} value={s.id.toString()}>{s.name}</option>)}
                 </select>
               </div>
 
@@ -324,7 +335,7 @@ const AdminStudents = () => {
                   <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: "500" }}>Class Assignment *</label>
                   <select required value={formData.classRoomId} onChange={e => setFormData({ ...formData, classRoomId: e.target.value })} style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid var(--border)", outline: "none" }}>
                     <option value="">Select a classroom</option>
-                    {filteredFormClassrooms.map(c => <option key={c.id} value={c.id}>{c.name} {c.grade ? `(Grade ${c.grade})` : ""}</option>)}
+                    {filteredFormClassrooms.map(c => <option key={c.id} value={c.id.toString()}>{c.name} {c.grade ? `(Grade ${c.grade})` : ""}</option>)}
                   </select>
                 </div>
               )}

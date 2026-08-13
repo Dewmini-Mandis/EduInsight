@@ -46,3 +46,23 @@ class TeacherOverrideSerializer(serializers.ModelSerializer):
         model = TeacherOverride
         fields = "__all__"
         read_only_fields = ["created_at"]
+
+from .models import StudentLessonProgress, StudentContentProgress, StudentEngagementAnswer
+
+class StudentLessonProgressSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StudentLessonProgress
+        fields = "__all__"
+        read_only_fields = ["student"]
+
+class StudentContentProgressSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StudentContentProgress
+        fields = "__all__"
+        read_only_fields = ["student"]
+
+class StudentEngagementAnswerSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StudentEngagementAnswer
+        fields = "__all__"
+        read_only_fields = ["student", "answered_at"]

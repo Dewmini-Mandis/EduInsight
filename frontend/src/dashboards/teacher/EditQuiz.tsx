@@ -28,6 +28,7 @@ type QuestionForm = {
 const EditQuiz = () => {
   const { quizId } = useParams();
   const [lessons, setLessons] = useState<any[]>([]);
+  const [lessonsLoading, setLessonsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -40,12 +41,13 @@ const EditQuiz = () => {
   const [description, setDescription] = useState("");
   const [lessonId, setLessonId] = useState("");
   const [learningLevel, setLearningLevel] = useState("Beginner");
-  const [assignTo, setAssignTo] = useState(teacherClassrooms.length > 0 ? teacherClassrooms[0] : "");
+  const [assignTo, setAssignTo] = useState(teacherClassrooms.length > 0 ? (teacherClassrooms[0].id || teacherClassrooms[0]) : "");
   const [startDate, setStartDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [scheduleQuiz, setScheduleQuiz] = useState(true);
   const [releaseTime, setReleaseTime] = useState("");
   const [attemptLimit, setAttemptLimit] = useState("");
+  const [order, setOrder] = useState("1");
   const [questions, setQuestions] = useState<QuestionForm[]>([]);
   const [fieldErrors, setFieldErrors] = useState<any>({});
 
@@ -198,8 +200,8 @@ const EditQuiz = () => {
     e.preventDefault();
     setError("");
 
-    if (!title.trim() || !description.trim() || !lessonId || !assignTo) {
-      setError("Quiz title, description, lesson, and assigned class are required.");
+    if (!title.trim() || !lessonId || !assignTo) {
+      setError("Quiz title, lesson, and assigned class are required.");
       return;
     }
 
@@ -240,6 +242,7 @@ const EditQuiz = () => {
       lesson: parseInt(lessonId, 10),
       learning_level: learningLevel,
       max_attempts: parseInt(attemptLimit) || 3,
+      assigned_class: assignTo ? parseInt(assignTo) : null,
       questions: questions.map(q => {
         const questionPayload: any = {
           question_text: q.question_text,
@@ -325,11 +328,10 @@ const EditQuiz = () => {
             style={{ minHeight: "80px", fontFamily: "inherit" }}
             value={description}
             onChange={(e) => { setError(""); setDescription(e.target.value); }}
-            required
           />
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
           <div className="teacher-form-group">
             <label className="teacher-form-label">Related Lesson</label>
             <select
@@ -357,6 +359,17 @@ const EditQuiz = () => {
               <option value="Advanced">Advanced</option>
             </select>
           </div>
+          <div className="teacher-form-group">
+            <label className="teacher-form-label">Order</label>
+            <input
+              type="number"
+              className="teacher-form-input"
+              value={order}
+              onChange={(e) => setOrder(e.target.value)}
+              min="1"
+            />
+          </div>
+
         </div>
 
         <hr style={{ border: "none", borderTop: "1px solid var(--teacher-border)", margin: "32px 0" }} />
@@ -368,8 +381,8 @@ const EditQuiz = () => {
           {teacherClassrooms.length > 0 ? (
             <select className="teacher-dropdown-filter" style={{ width: "100%" }} value={assignTo} onChange={(e: any) => { setAssignTo(e.target.value); setFieldErrors({...fieldErrors, assignTo: null}); }}>
               <option value="">Select class</option>
-              {teacherClassrooms.map((cls: string) => (
-                <option key={cls} value={cls}>{cls}</option>
+              {teacherClassrooms.map((cls: any) => (
+                <option key={cls.id || cls} value={cls.id || cls}>{cls.name || cls}</option>
               ))}
             </select>
           ) : (
@@ -383,7 +396,7 @@ const EditQuiz = () => {
           {fieldErrors.assignTo && <span style={{ color: "#ef4444", fontSize: "11px", marginTop: "4px", display: "block" }}>{fieldErrors.assignTo}</span>}
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
           <div className="teacher-form-group">
             <label className="teacher-form-label">Start Date</label>
             <input type="date" className="teacher-form-input" value={startDate} onChange={(e: any) => setStartDate(e.target.value)} />
@@ -394,7 +407,7 @@ const EditQuiz = () => {
           </div>
         </div>
         
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
           <div className="teacher-form-group">
             <label className="teacher-form-label">Release Time</label>
             <input type="time" className="teacher-form-input" value={releaseTime} onChange={(e: any) => setReleaseTime(e.target.value)} />
@@ -435,7 +448,7 @@ const EditQuiz = () => {
               />
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
               <div className="teacher-form-group">
                 <label className="teacher-form-label">Question Type</label>
                 <select

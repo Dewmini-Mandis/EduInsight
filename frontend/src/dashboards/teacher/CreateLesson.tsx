@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { getToken } from "../../auth/authUtils";
 import "../../styles/teacher.css";
 
@@ -10,6 +10,9 @@ const CreateLesson = () => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const location = useLocation();
+  const queryParams = new URLSearchParams(location.search);
+  const quizId = queryParams.get("quizId");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,11 +26,14 @@ const CreateLesson = () => {
     setSubmitting(true);
     const token = getToken();
 
-    const payload = {
+    const payload: any = {
       title,
       description,
       term
     };
+    if (quizId) {
+      payload.quiz = quizId;
+    }
 
     try {
       const res = await fetch("/api/quizzes/lessons/", {
@@ -45,7 +51,11 @@ const CreateLesson = () => {
       }
 
       alert("Lesson topic created successfully.");
-      navigate("/teacher/lessons");
+      if (quizId) {
+        navigate(`/teacher/quizzes/${quizId}/edit`);
+      } else {
+        navigate("/teacher/lessons");
+      }
     } catch (err: any) {
       setError(err.message || "Failed to create lesson.");
     } finally {
@@ -55,7 +65,9 @@ const CreateLesson = () => {
 
   return (
     <div className="teacher-card" style={{ maxWidth: "600px", margin: "0 auto" }}>
-      <h2 className="teacher-card-title" style={{ fontSize: "20px", marginBottom: "24px" }}>Add Syllabus Lesson</h2>
+      <h2 className="teacher-card-title" style={{ fontSize: "20px", marginBottom: "24px" }}>
+        {quizId ? "Add Remedial Lesson" : "Add Syllabus Lesson"}
+      </h2>
       
       {error && <div className="teacher-badge danger" style={{ width: "100%", padding: "12px", marginBottom: "20px" }}>{error}</div>}
 

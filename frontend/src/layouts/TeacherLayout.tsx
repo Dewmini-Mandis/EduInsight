@@ -23,6 +23,7 @@ import CreateStudent from "../dashboards/teacher/CreateStudent";
 import StudentDetails from "../dashboards/teacher/StudentDetails";
 import StudentProgress from "../dashboards/teacher/StudentProgress";
 import CreateMaterial from "../dashboards/teacher/CreateMaterial";
+import LessonBuilder from "../dashboards/teacher/LessonBuilder";
 import UserProfilePage from "../pages/UserProfile";
 const TeacherLayout = () => {
   const [collapsed, setCollapsed] = useState(false);
@@ -95,6 +96,7 @@ const TeacherLayout = () => {
             
             <Route path="lessons" element={<LessonList />} />
             <Route path="lessons/create" element={<CreateLesson />} />
+            <Route path="lessons/:lessonId/builder" element={<LessonBuilder />} />
             
             <Route path="materials/create" element={<CreateMaterial />} />
             

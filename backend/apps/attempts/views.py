@@ -4,8 +4,8 @@ from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
 
 from apps.accounts.models import Role
-from apps.attempts.models import QuizAttempt, AttemptAnswer, ManualMark, TeacherOverride
-from apps.attempts.serializers import QuizAttemptSerializer, ManualMarkSerializer, TeacherOverrideSerializer
+from apps.attempts.models import QuizAttempt, AttemptAnswer, ManualMark, TeacherOverride, StudentLessonProgress, StudentContentProgress, StudentEngagementAnswer
+from apps.attempts.serializers import QuizAttemptSerializer, ManualMarkSerializer, TeacherOverrideSerializer, StudentLessonProgressSerializer, StudentContentProgressSerializer, StudentEngagementAnswerSerializer
 from apps.classes.models import Student
 from apps.quizzes.models import Quiz, Question, Answer, CorrectAnswer
 
@@ -50,13 +50,34 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
         except Quiz.DoesNotExist:
             return Response({"detail": "Quiz not found."}, status=status.HTTP_404_NOT_FOUND)
         
-        # Calculate attempt number
-        existing_attempts_count = QuizAttempt.objects.filter(student=student, quiz=quiz).count()
+        # Check existing attempts and remediation logic
+        existing_attempts = QuizAttempt.objects.filter(student=student, quiz=quiz).order_by("-attempt_number")
+        existing_attempts_count = existing_attempts.count()
+        
         if existing_attempts_count >= quiz.max_attempts:
             return Response(
                 {"detail": f"You have reached the maximum limit of {quiz.max_attempts} attempts for this quiz."},
                 status=status.HTTP_400_BAD_REQUEST
             )
+            
+        if existing_attempts_count > 0:
+            last_attempt = existing_attempts.first()
+            if last_attempt.score is not None and last_attempt.score < quiz.pass_mark:
+                # Failed last attempt, check if all remedial lessons are completed
+                required_lessons = quiz.remedial_lessons.all()
+                incomplete_lessons = []
+                for lesson in required_lessons:
+                    progress, _ = StudentLessonProgress.objects.get_or_create(student=student, lesson=lesson)
+                    if progress.status != StudentLessonProgress.STATUS_COMPLETED:
+                        incomplete_lessons.append(lesson.id)
+                
+                if incomplete_lessons:
+                    return Response({
+                        "detail": "You must complete the required remedial lessons before retaking this quiz.",
+                        "remediation_required": True,
+                        "incomplete_lessons": incomplete_lessons
+                    }, status=status.HTTP_403_FORBIDDEN)
+                    
         attempt_number = existing_attempts_count + 1
         
         answers_data = request.data.get("answers", [])
@@ -175,3 +196,60 @@ class TeacherOverrideViewSet(viewsets.ModelViewSet):
         if not user.is_role(Role.ROLE_TEACHER, Role.ROLE_SYSTEM_ADMIN):
             raise PermissionDenied("Only teachers can submit overrides.")
         serializer.save(teacher=user)
+
+class StudentLessonProgressViewSet(viewsets.ModelViewSet):
+    serializer_class = StudentLessonProgressSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_role(Role.ROLE_SYSTEM_ADMIN):
+            return StudentLessonProgress.objects.all()
+        if user.is_role(Role.ROLE_TEACHER):
+            return StudentLessonProgress.objects.filter(lesson__created_by=user)
+        if user.is_role(Role.ROLE_STUDENT):
+            return StudentLessonProgress.objects.filter(student__user=user)
+        return StudentLessonProgress.objects.none()
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        student, _ = Student.objects.get_or_create(user=user)
+        serializer.save(student=student)
+
+class StudentContentProgressViewSet(viewsets.ModelViewSet):
+    serializer_class = StudentContentProgressSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_role(Role.ROLE_SYSTEM_ADMIN):
+            return StudentContentProgress.objects.all()
+        if user.is_role(Role.ROLE_TEACHER):
+            return StudentContentProgress.objects.filter(material__lesson__created_by=user)
+        if user.is_role(Role.ROLE_STUDENT):
+            return StudentContentProgress.objects.filter(student__user=user)
+        return StudentContentProgress.objects.none()
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        student, _ = Student.objects.get_or_create(user=user)
+        serializer.save(student=student)
+
+class StudentEngagementAnswerViewSet(viewsets.ModelViewSet):
+    serializer_class = StudentEngagementAnswerSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_role(Role.ROLE_SYSTEM_ADMIN):
+            return StudentEngagementAnswer.objects.all()
+        if user.is_role(Role.ROLE_TEACHER):
+            return StudentEngagementAnswer.objects.filter(question__material__lesson__created_by=user)
+        if user.is_role(Role.ROLE_STUDENT):
+            return StudentEngagementAnswer.objects.filter(student__user=user)
+        return StudentEngagementAnswer.objects.none()
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        student, _ = Student.objects.get_or_create(user=user)
+        serializer.save(student=student)

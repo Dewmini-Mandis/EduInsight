@@ -4,7 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.db import models
 
 from apps.accounts.models import Role
-from .models import Quiz, Lesson, AcademicTerm, Topic, Skill, QuizLevel, DifficultyLevel, LearningMaterial
+from .models import EngagementQuestion, Quiz, Lesson, AcademicTerm, Topic, Skill, QuizLevel, DifficultyLevel, LearningMaterial
 from .serializers import (
     QuizSerializer, 
     LessonSerializer, 
@@ -13,7 +13,8 @@ from .serializers import (
     SkillSerializer, 
     QuizLevelSerializer, 
     DifficultyLevelSerializer,
-    LearningMaterialSerializer
+    LearningMaterialSerializer,
+    EngagementQuestionSerializer
 )
 
 class LearningMaterialViewSet(viewsets.ModelViewSet):
@@ -177,3 +178,15 @@ class QuizViewSet(viewsets.ModelViewSet):
                 raise PermissionDenied("You do not have permission to delete this quiz.")
         else:
             raise PermissionDenied("You do not have permission to delete quizzes.")
+
+class EngagementQuestionViewSet(viewsets.ModelViewSet):
+    queryset = EngagementQuestion.objects.all().order_by("order")
+    serializer_class = EngagementQuestionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        material_id = self.request.query_params.get("material")
+        if material_id:
+            qs = qs.filter(material_id=material_id)
+        return qs
