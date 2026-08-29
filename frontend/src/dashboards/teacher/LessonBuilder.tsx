@@ -19,6 +19,7 @@ const LessonBuilder = () => {
   
   // New Material State
   const [isAddingMaterial, setIsAddingMaterial] = useState(false);
+  const [editMaterialId, setEditMaterialId] = useState<number | null>(null);
   const [newTitle, setNewTitle] = useState("");
   const [newType, setNewType] = useState("VIDEO");
   const [newContent, setNewContent] = useState("");
@@ -63,8 +64,10 @@ const LessonBuilder = () => {
     e.preventDefault();
     const token = getToken();
     try {
-      const res = await fetch("/api/quizzes/materials/", {
-        method: "POST",
+      const url = editMaterialId ? `/api/quizzes/materials/${editMaterialId}/` : "/api/quizzes/materials/";
+      const method = editMaterialId ? "PUT" : "POST";
+      const res = await fetch(url, {
+        method: method,
         headers: {
           "Content-Type": "application/json",
           Authorization: `Token ${token}`
@@ -79,15 +82,25 @@ const LessonBuilder = () => {
       });
       if (res.ok) {
         setIsAddingMaterial(false);
+        setEditMaterialId(null);
         setNewTitle("");
         setNewContent("");
         fetchLessonData();
       } else {
-        alert("Failed to add material.");
+        alert("Failed to save material.");
       }
     } catch (e) {
-      alert("Error adding material.");
+      alert("Error saving material.");
     }
+  };
+
+  const handleEditMaterial = (material: any) => {
+    setEditMaterialId(material.id);
+    setNewTitle(material.title);
+    setNewType(material.material_type);
+    setNewContent(material.content);
+    setIsRequired(material.is_required);
+    setIsAddingMaterial(true);
   };
 
   const handleDeleteMaterial = async (id: number) => {
@@ -214,7 +227,7 @@ const LessonBuilder = () => {
                 Required for completion
               </label>
               <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-                <button type="button" onClick={() => setIsAddingMaterial(false)} className="teacher-btn-secondary">Cancel</button>
+                <button type="button" onClick={() => { setIsAddingMaterial(false); setEditMaterialId(null); setNewTitle(""); setNewContent(""); }} className="teacher-btn-secondary">Cancel</button>
                 <button type="submit" className="teacher-btn-primary">Save Material</button>
               </div>
             </form>

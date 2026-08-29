@@ -1,267 +1,302 @@
 import React, { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { getToken, getUser } from "../../auth/authUtils";
-import "../../styles/teacher.css";
 
 type AnswerOption = {
-  id?: number;
   answer_text: string;
   is_correct: boolean;
-};
-
-type HintItem = {
-  id?: number;
-  hint_text: string;
-  sequence_no: number;
 };
 
 type QuestionForm = {
   id?: number;
   question_text: string;
-  question_type: "MCQ" | "NUMERIC";
+  question_type: "MCQ" | "True / False" | "Short Answer" | "Fill in the Blank" | "Matching";
   difficulty_level: "Easy" | "Medium" | "Hard";
   answers: AnswerOption[];
   correct_value: string;
-  hints: HintItem[];
+  points: number;
 };
 
+const Card = ({ children, style }: any) => (
+  <div style={{ backgroundColor: "#ffffff", borderRadius: "12px", border: "1px solid #f0f0f0", padding: "20px", display: "flex", flexDirection: "column", gap: "16px", ...style }}>
+    {children}
+  </div>
+);
+
+const CardTitle = ({ title, icon }: any) => (
+  <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#1e293b", fontSize: "15px", fontWeight: "600", marginBottom: "4px" }}>
+    {icon}
+    {title}
+  </div>
+);
+
+const Label = ({ children }: any) => (
+  <div style={{ fontSize: "12px", fontWeight: "600", color: "#64748b", marginBottom: "6px" }}>{children}</div>
+);
+
+const Input = ({ ...props }: any) => (
+  <input style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "13px", outline: "none", color: "#1e293b" }} {...props} />
+);
+
+const Select = ({ children, ...props }: any) => (
+  <select style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "13px", outline: "none", color: "#1e293b", backgroundColor: "#fff" }} {...props}>
+    {children}
+  </select>
+);
+
+const SegmentedControl = ({ options, value, onChange }: any) => (
+  <div style={{ display: "flex", borderRadius: "6px", border: "1px solid #e2e8f0", overflow: "hidden", backgroundColor: "#f8fafc" }}>
+    {options.map((opt: string) => (
+      <button
+        key={opt}
+        onClick={() => onChange(opt)}
+        style={{
+          flex: 1, padding: "8px", border: "none", borderRight: "1px solid #e2e8f0",
+          backgroundColor: value === opt ? "#e0e7ff" : "transparent",
+          color: value === opt ? "#4338ca" : "#64748b",
+          fontSize: "12px", fontWeight: "600", cursor: "pointer",
+          outline: "none"
+        }}
+      >
+        {opt}
+      </button>
+    ))}
+  </div>
+);
+
+const Toggle = ({ checked, onChange, label }: any) => (
+  <div style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }} onClick={() => onChange(!checked)}>
+    <div style={{ width: "36px", height: "20px", borderRadius: "10px", backgroundColor: checked ? "#3b82f6" : "#cbd5e1", position: "relative", transition: "all 0.2s" }}>
+      <div style={{ width: "16px", height: "16px", borderRadius: "50%", backgroundColor: "white", position: "absolute", top: "2px", left: checked ? "18px" : "2px", transition: "all 0.2s" }} />
+    </div>
+    <span style={{ fontSize: "13px", color: "#475569" }}>{label}</span>
+  </div>
+);
+
 const EditQuiz = () => {
-  const { quizId } = useParams();
   const [lessons, setLessons] = useState<any[]>([]);
+  const [skillsList, setSkillsList] = useState<any[]>([]);
   const [lessonsLoading, setLessonsLoading] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
+  const { quizId } = useParams();
   const user = getUser() as any;
   const teacherClassrooms = user?.teacher_profile?.classrooms || [];
+
+  const [fieldErrors, setFieldErrors] = useState<any>({});
 
   // Form State
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [academicTerm, setAcademicTerm] = useState("");
   const [lessonId, setLessonId] = useState("");
-  const [learningLevel, setLearningLevel] = useState("Beginner");
+  const [skillId, setSkillId] = useState("");
+  const [topicId, setTopicId] = useState("");
+  const [estimatedTime, setEstimatedTime] = useState("");
+  
+  const [level, setLevel] = useState("Beginner");
+  const [difficulty, setDifficulty] = useState("Easy");
+  const [enableHints, setEnableHints] = useState(false);
+  const [shuffleAnswers, setShuffleAnswers] = useState(true);
+  const [passMark, setPassMark] = useState("70");
+
   const [assignTo, setAssignTo] = useState(teacherClassrooms.length > 0 ? (teacherClassrooms[0].id || teacherClassrooms[0]) : "");
   const [startDate, setStartDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [scheduleQuiz, setScheduleQuiz] = useState(true);
   const [releaseTime, setReleaseTime] = useState("");
   const [attemptLimit, setAttemptLimit] = useState("");
-  const [order, setOrder] = useState("1");
+
+  const [randomizeOrder, setRandomizeOrder] = useState(true);
+  const [autoGrade, setAutoGrade] = useState(true);
+  const [showResults, setShowResults] = useState(true);
+  const [allowReview, setAllowReview] = useState(true);
+
   const [questions, setQuestions] = useState<QuestionForm[]>([]);
-  const [fieldErrors, setFieldErrors] = useState<any>({});
 
+  // Metadata arrays
+  const [termsList, setTermsList] = useState<any[]>([]);
+  const [topicsList, setTopicsList] = useState<any[]>([]);
+  const [quizLevels, setQuizLevels] = useState<any[]>([]);
+  const [diffLevels, setDiffLevels] = useState<any[]>([]);
+  
+  // Field states
+  const [termId, setTermId] = useState("");
+  const [quizLevelId, setQuizLevelId] = useState("");
+  const [diffLevelId, setDiffLevelId] = useState("");
+  const [order, setOrder] = useState("1");
   useEffect(() => {
-    const fetchAssets = async () => {
-      const token = getToken();
-      try {
-        const [lessonsRes, quizRes] = await Promise.all([
-          fetch("/api/quizzes/lessons/", {
-            headers: { Authorization: `Token ${token}` },
-          }),
-          fetch(`/api/quizzes/${quizId}/`, {
-            headers: { Authorization: `Token ${token}` },
-          }),
-        ]);
+    fetchMetadata();
+  }, []);
 
-        if (!lessonsRes.ok || !quizRes.ok) {
-          throw new Error("Unable to retrieve quiz edit metadata.");
+  const fetchMetadata = async () => {
+    const token = getToken();
+    if (!token) return;
+    try {
+      const [termRes, qlRes, dlRes, quizRes] = await Promise.all([
+        fetch("/api/quizzes/terms/", { headers: { Authorization: `Token ${token}` } }),
+        fetch("/api/quizzes/quiz-levels/", { headers: { Authorization: `Token ${token}` } }),
+        fetch("/api/quizzes/difficulty-levels/", { headers: { Authorization: `Token ${token}` } }),
+        fetch(`/api/quizzes/${quizId}/`, { headers: { Authorization: `Token ${token}` } }),
+      ]);
+      if (termRes.ok) setTermsList(await termRes.json());
+      if (qlRes.ok) setQuizLevels(await qlRes.json());
+      if (dlRes.ok) setDiffLevels(await dlRes.json());
+      if (quizRes.ok) {
+        const quizData = await quizRes.json();
+        setTitle(quizData.title || "");
+        setDescription(quizData.description || "");
+        setLessonId(quizData.lesson ? quizData.lesson.toString() : "");
+        setTopicId(quizData.topic ? quizData.topic.toString() : "");
+        setSkillId(quizData.skill ? quizData.skill.toString() : "");
+        
+        let loadedTermId = "";
+        if (quizData.lesson) {
+          try {
+            const lRes = await fetch(`/api/quizzes/lessons/${quizData.lesson}/`, { headers: { Authorization: `Token ${token}` } });
+            if (lRes.ok) {
+              const lData = await lRes.json();
+              loadedTermId = lData.term ? lData.term.toString() : "";
+            }
+          } catch (e) {}
         }
-
-        const lessonsData = await lessonsRes.json() as any[];
-        const quizData = await quizRes.json() as any;
-
-        setLessons(lessonsData);
-        setTitle(quizData.title);
-        setDescription(quizData.description);
-        setLessonId(quizData.lesson.toString());
-        setLearningLevel(quizData.learning_level);
+        setTermId(loadedTermId);
+        setQuizLevelId(quizData.quiz_level ? quizData.quiz_level.toString() : "");
+        setDiffLevelId(quizData.difficulty ? quizData.difficulty.toString() : "");
+        setOrder(quizData.order ? quizData.order.toString() : "1");
+        setPassMark(quizData.pass_mark ? quizData.pass_mark.toString() : "50");
+        setEstimatedTime(quizData.estimated_time_minutes ? quizData.estimated_time_minutes.toString() : "10");
+        setAttemptLimit(quizData.max_attempts ? quizData.max_attempts.toString() : "3");
+        setAssignTo(quizData.assigned_class ? quizData.assigned_class.toString() : "");
         
         // Map questions
         const mappedQuestions = quizData.questions.map((q: any) => {
+          let qType = q.question_type;
+          if (qType === "NUMERIC") qType = "Short Answer";
           return {
             id: q.id,
             question_text: q.question_text,
-            question_type: q.question_type,
-            difficulty_level: q.difficulty_level,
+            question_type: qType,
+            difficulty_level: q.difficulty_level || "Medium",
             answers: q.answers || [],
             correct_value: q.correct_value || "",
-            hints: q.hints || []
+            points: q.points || 1
           };
         });
         setQuestions(mappedQuestions);
-      } catch (err: any) {
-        setError(err.message || "Failed to load quiz details.");
-      } finally {
-        setLoading(false);
       }
-    };
-
-    fetchAssets();
-  }, [quizId]);
-
-  const handleAddQuestion = () => {
-    setQuestions(prev => [
-      ...prev,
-      {
-        question_text: "",
-        question_type: "MCQ",
-        difficulty_level: "Medium",
-        answers: [
-          { answer_text: "", is_correct: false },
-          { answer_text: "", is_correct: false },
-        ],
-        correct_value: "",
-        hints: [],
-      }
-    ]);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const handleRemoveQuestion = (qIdx: number) => {
-    setQuestions(prev => prev.filter((_, idx) => idx !== qIdx));
-  };
-
-  const handleQuestionChange = (qIdx: number, field: keyof QuestionForm, val: any) => {
-    setQuestions(prev => prev.map((q, idx) => {
-      if (idx !== qIdx) return q;
-      return { ...q, [field]: val };
-    }));
-  };
-
-  const handleMCQOptionChange = (qIdx: number, optIdx: number, field: keyof AnswerOption, val: any) => {
-    setQuestions(prev => prev.map((q, idx) => {
-      if (idx !== qIdx) return q;
-      const updatedAnswers = q.answers.map((ans, aIdx) => {
-        if (aIdx !== optIdx) {
-          if (field === "is_correct" && val === true) {
-            return { ...ans, is_correct: false };
-          }
-          return ans;
-        }
-        return { ...ans, [field]: val };
-      });
-      return { ...q, answers: updatedAnswers };
-    }));
-  };
-
-  const handleAddMCQOption = (qIdx: number) => {
-    setQuestions(prev => prev.map((q, idx) => {
-      if (idx !== qIdx) return q;
-      return {
-        ...q,
-        answers: [...q.answers, { answer_text: "", is_correct: false }]
-      };
-    }));
-  };
-
-  const handleRemoveMCQOption = (qIdx: number, optIdx: number) => {
-    setQuestions(prev => prev.map((q, idx) => {
-      if (idx !== qIdx) return q;
-      return {
-        ...q,
-        answers: q.answers.filter((_, aIdx) => aIdx !== optIdx)
-      };
-    }));
-  };
-
-  const handleAddHint = (qIdx: number) => {
-    setQuestions(prev => prev.map((q, idx) => {
-      if (idx !== qIdx) return q;
-      const nextSeq = q.hints.length + 1;
-      return {
-        ...q,
-        hints: [...q.hints, { hint_text: "", sequence_no: nextSeq }]
-      };
-    }));
-  };
-
-  const handleHintChange = (qIdx: number, hintIdx: number, val: string) => {
-    setQuestions(prev => prev.map((q, idx) => {
-      if (idx !== qIdx) return q;
-      const updatedHints = q.hints.map((hint, hIdx) => {
-        if (hIdx !== hintIdx) return hint;
-        return { ...hint, hint_text: val };
-      });
-      return { ...q, hints: updatedHints };
-    }));
-  };
-
-  const handleRemoveHint = (qIdx: number, hintIdx: number) => {
-    setQuestions(prev => prev.map((q, idx) => {
-      if (idx !== qIdx) return q;
-      const updatedHints = q.hints
-        .filter((_, hIdx) => hIdx !== hintIdx)
-        .map((hint, newIdx) => ({ ...hint, sequence_no: newIdx + 1 }));
-      return { ...q, hints: updatedHints };
-    }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-
-    if (!title.trim() || !lessonId || !assignTo) {
-      setError("Quiz title, lesson, and assigned class are required.");
+  useEffect(() => {
+    if (!termId) {
+      setLessons([]);
       return;
     }
+    const fetchFilteredLessons = async () => {
+      const token = getToken();
+      setLessonsLoading(true);
+      try {
+        const res = await fetch(`/api/quizzes/lessons/?term=${termId}`, { headers: { Authorization: `Token ${token}` } });
+        if (res.ok) setLessons(await res.json());
+      } catch (err) { console.error(err); } finally {
+        setLessonsLoading(false);
+      }
+    };
+    fetchFilteredLessons();
+  }, [termId]);
 
-    // Validate questions
-    for (let i = 0; i < questions.length; i++) {
-      const q = questions[i];
-      if (!q.question_text.trim()) {
-        setError(`Question ${i + 1} text is empty.`);
-        return;
-      }
-      if (q.question_type === "MCQ") {
-        if (q.answers.length < 2) {
-          setError(`Question ${i + 1} requires at least 2 choices.`);
-          return;
-        }
-        if (q.answers.some(opt => !opt.answer_text.trim())) {
-          setError(`Options inside Question ${i + 1} cannot be blank.`);
-          return;
-        }
-        if (!q.answers.some(opt => opt.is_correct)) {
-          setError(`Please select a correct option for Question ${i + 1}.`);
-          return;
-        }
-      } else {
-        if (!q.correct_value.trim()) {
-          setError(`Please write the correct numeric answer for Question ${i + 1}.`);
-          return;
-        }
-      }
+  
+
+  
+
+
+  useEffect(() => {
+    if (!lessonId) {
+      setTopicsList([]);
+      return;
     }
+    const fetchFilteredTopics = async () => {
+      const token = getToken();
+      try {
+        const res = await fetch(`/api/quizzes/topics/?lesson=${lessonId}`, { headers: { Authorization: `Token ${token}` } });
+        if (res.ok) setTopicsList(await res.json());
+      } catch (err) { console.error(err); }
+    };
+    fetchFilteredTopics();
+  }, [lessonId]);
 
-    setSubmitting(true);
+  useEffect(() => {
+    if (!topicId) {
+      setSkillsList([]);
+      return;
+    }
+    const fetchFilteredSkills = async () => {
+      const token = getToken();
+      try {
+        const res = await fetch(`/api/quizzes/skills/?topic=${topicId}`, { headers: { Authorization: `Token ${token}` } });
+        if (res.ok) setSkillsList(await res.json());
+      } catch (err) { console.error(err); }
+    };
+    fetchFilteredSkills();
+  }, [topicId]);
+
+  const handlePublish = async () => {
     const token = getToken();
+    if (!token) return;
+
+    const errors: any = {};
+    if (!title.trim()) errors.title = "Quiz Title is required.";
+    if (!assignTo) errors.assignTo = "Please select a class to assign.";
+    if (!topicId) errors.topicId = "Topic is required.";
+    if (!skillId) errors.skillId = "Skill is required.";
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      return;
+    }
+    setFieldErrors({});
+
+    setLoading(true);
+    setError("");
+
+    // Map UI questions to backend format
+    const formattedQuestions = questions.map((q) => {
+      let qType = "MCQ";
+      if (q.question_type === "Short Answer" || q.question_type === "Fill in the Blank") {
+        qType = "NUMERIC";
+      }
+
+      const answers = qType === "MCQ" ? q.answers : [];
+      const correctValue = qType === "NUMERIC" ? q.correct_value : undefined;
+
+      return {
+        id: q.id,
+        question_text: q.question_text,
+        question_type: qType,
+        difficulty_level: q.difficulty_level,
+        answers: answers,
+        correct_value: correctValue,
+        hints: [],
+      };
+    });
 
     const payload = {
       title,
       description,
-      lesson: parseInt(lessonId, 10),
-      learning_level: learningLevel,
+      lesson: lessonId ? parseInt(lessonId) : null,
+      topic: topicId ? parseInt(topicId) : null,
+      skill: skillId ? parseInt(skillId) : null,
+      quiz_level: quizLevelId ? parseInt(quizLevelId) : null,
+      difficulty: diffLevelId ? parseInt(diffLevelId) : null,
+      order: parseInt(order) || 1,
+      pass_mark: parseInt(passMark) || 50,
+      estimated_time_minutes: parseInt(estimatedTime) || 10,
       max_attempts: parseInt(attemptLimit) || 3,
       assigned_class: assignTo ? parseInt(assignTo) : null,
-      questions: questions.map(q => {
-        const questionPayload: any = {
-          question_text: q.question_text,
-          question_type: q.question_type,
-          difficulty_level: q.difficulty_level,
-          hints: q.hints.map(h => ({ hint_text: h.hint_text, sequence_no: h.sequence_no }))
-        };
-        if (q.id) questionPayload.id = q.id;
-        
-        if (q.question_type === "MCQ") {
-          questionPayload.answers = q.answers.map(a => ({
-            answer_text: a.answer_text,
-            is_correct: a.is_correct
-          }));
-        } else {
-          questionPayload.correct_value = q.correct_value;
-        }
-        return questionPayload;
-      })
+      questions: formattedQuestions,
     };
 
     try {
@@ -269,339 +304,483 @@ const EditQuiz = () => {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Token ${token}`
+          Authorization: `Token ${token}`,
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.detail || "Unable to save quiz changes.");
+        const errData = await res.json();
+        throw new Error(JSON.stringify(errData));
       }
 
-      alert("Quiz updated successfully.");
       navigate(`/teacher/quizzes/${quizId}`);
     } catch (err: any) {
-      setError(err.message || "Failed to update quiz.");
+      setError(err.message || "Failed to create quiz.");
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
   };
 
-  if (loading) {
-    return <div style={{ padding: "2rem", textAlign: "center", color: "#64748b" }}>Loading quiz configs...</div>;
-  }
+  const addQuestion = () => {
+    setQuestions([
+      ...questions,
+      {
+        question_text: "",
+        question_type: "MCQ",
+        difficulty_level: "Medium",
+        answers: [
+          { answer_text: "", is_correct: true },
+          { answer_text: "", is_correct: false }
+        ],
+        correct_value: "",
+        points: 1
+      }
+    ]);
+  };
+
+
 
   return (
-    <div className="teacher-card" style={{ maxWidth: "800px", margin: "0 auto" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "24px", fontFamily: '"Inter", sans-serif' }}>
       {/* Back Button */}
-      <div style={{ marginBottom: "16px" }}>
+      <div>
         <button 
-          onClick={() => navigate("/teacher/quizzes")}
+          onClick={() => navigate(`/teacher/quizzes/${quizId}`)}
           style={{ display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", color: "#64748b", fontSize: "14px", fontWeight: "500", cursor: "pointer", padding: 0 }}
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
           Back to Quizzes
         </button>
       </div>
-
-      <h2 className="teacher-card-title" style={{ fontSize: "20px", marginBottom: "24px" }}>Edit Assessment Quiz</h2>
-
-      {error && <div className="teacher-badge danger" style={{ width: "100%", padding: "12px", marginBottom: "20px" }}>{error}</div>}
-
-      <form onSubmit={handleSubmit}>
-        <div className="teacher-form-group">
-          <label className="teacher-form-label">Quiz Title</label>
-          <input
-            type="text"
-            className="teacher-form-input"
-            value={title}
-            onChange={(e) => { setError(""); setTitle(e.target.value); }}
-            required
-          />
-        </div>
-
-        <div className="teacher-form-group">
-          <label className="teacher-form-label">Description / Instructions</label>
-          <textarea
-            className="teacher-form-input"
-            style={{ minHeight: "80px", fontFamily: "inherit" }}
-            value={description}
-            onChange={(e) => { setError(""); setDescription(e.target.value); }}
-          />
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
-          <div className="teacher-form-group">
-            <label className="teacher-form-label">Related Lesson</label>
-            <select
-              className="teacher-dropdown-filter"
-              style={{ width: "100%" }}
-              value={lessonId}
-              onChange={(e) => setLessonId(e.target.value)}
-            >
-              {lessons.map(l => (
-                <option key={l.id} value={l.id.toString()}>{l.title} ({l.term})</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="teacher-form-group">
-            <label className="teacher-form-label">Learning Level</label>
-            <select
-              className="teacher-dropdown-filter"
-              style={{ width: "100%" }}
-              value={learningLevel}
-              onChange={(e) => setLearningLevel(e.target.value)}
-            >
-              <option value="Beginner">Beginner</option>
-              <option value="Intermediate">Intermediate</option>
-              <option value="Advanced">Advanced</option>
-            </select>
-          </div>
-          <div className="teacher-form-group">
-            <label className="teacher-form-label">Order</label>
-            <input
-              type="number"
-              className="teacher-form-input"
-              value={order}
-              onChange={(e) => setOrder(e.target.value)}
-              min="1"
-            />
-          </div>
-
-        </div>
-
-        <hr style={{ border: "none", borderTop: "1px solid var(--teacher-border)", margin: "32px 0" }} />
-
-        <h3 className="teacher-card-title" style={{ fontSize: "16px", marginBottom: "16px" }}>Assignment & Availability</h3>
-
-        <div className="teacher-form-group">
-          <label className="teacher-form-label">Assign to <span style={{ color: "red" }}>*</span></label>
-          {teacherClassrooms.length > 0 ? (
-            <select className="teacher-dropdown-filter" style={{ width: "100%" }} value={assignTo} onChange={(e: any) => { setAssignTo(e.target.value); setFieldErrors({...fieldErrors, assignTo: null}); }}>
-              <option value="">Select class</option>
-              {teacherClassrooms.map((cls: any) => (
-                <option key={cls.id || cls} value={cls.id || cls}>{cls.name || cls}</option>
-              ))}
-            </select>
-          ) : (
-            <input 
-              className="teacher-form-input"
-              value={assignTo} 
-              onChange={(e: any) => { setAssignTo(e.target.value); setFieldErrors({...fieldErrors, assignTo: null}); }} 
-              placeholder="Enter class name (or configure in Profile)" 
-            />
-          )}
-          {fieldErrors.assignTo && <span style={{ color: "#ef4444", fontSize: "11px", marginTop: "4px", display: "block" }}>{fieldErrors.assignTo}</span>}
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
-          <div className="teacher-form-group">
-            <label className="teacher-form-label">Start Date</label>
-            <input type="date" className="teacher-form-input" value={startDate} onChange={(e: any) => setStartDate(e.target.value)} />
-          </div>
-          <div className="teacher-form-group">
-            <label className="teacher-form-label">Due Date</label>
-            <input type="date" className="teacher-form-input" value={dueDate} onChange={(e: any) => setDueDate(e.target.value)} />
-          </div>
-        </div>
+      {error && <div style={{ color: "red" }}>{error}</div>}
+      
+      {/* Top Row Grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "24px" }}>
         
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
-          <div className="teacher-form-group">
-            <label className="teacher-form-label">Release Time</label>
-            <input type="time" className="teacher-form-input" value={releaseTime} onChange={(e: any) => setReleaseTime(e.target.value)} />
+        {/* 1. Quiz Details */}
+        <Card>
+          <CardTitle 
+            title="1. Quiz Details" 
+            icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" color="#3b82f6"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>} 
+          />
+          <div>
+            <Label>Quiz Title <span style={{ color: "red" }}>*</span></Label>
+            <Input value={title} onChange={(e: any) => { setTitle(e.target.value); setFieldErrors({...fieldErrors, title: null}); }} />
+            {fieldErrors.title && <span style={{ color: "#ef4444", fontSize: "11px", marginTop: "4px", display: "block" }}>{fieldErrors.title}</span>}
           </div>
-          <div className="teacher-form-group">
-            <label className="teacher-form-label">Attempt Limit</label>
-            <input type="number" className="teacher-form-input" value={attemptLimit} onChange={(e: any) => setAttemptLimit(e.target.value)} />
+          <div>
+            <Label>Short Description</Label>
+            <textarea 
+              value={description} onChange={(e) => setDescription(e.target.value)}
+              style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "13px", outline: "none", color: "#1e293b", minHeight: "60px", resize: "none" }}
+            />
+            <div style={{ textAlign: "right", fontSize: "11px", color: "#94a3b8", marginTop: "4px" }}>{description.length} / 150</div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+            <div>
+              <Label>Academic Term</Label>
+              <Select value={termId} onChange={(e: any) => { setTermId(e.target.value); setLessonId(""); setTopicId(""); setSkillId(""); }}>
+                <option value="">Select Term</option>
+                {termsList.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </Select>
+            </div>
+            <div>
+              <Label>Lesson</Label>
+              <Select value={lessonId} onChange={(e: any) => { setLessonId(e.target.value); setTopicId(""); setSkillId(""); setFieldErrors({...fieldErrors, lessonId: null}); }} disabled={!termId}>
+                <option value="">{lessonsLoading ? "Loading..." : "Select Lesson"}</option>
+                {lessons.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
+              </Select>
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+            <div>
+              <Label>Topic <span style={{ color: "red" }}>*</span></Label>
+              <Select value={topicId} onChange={(e: any) => { setTopicId(e.target.value); setSkillId(""); setFieldErrors({...fieldErrors, topicId: null}); }} disabled={!lessonId}>
+                <option value="">Select Topic</option>
+                {topicsList.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </Select>
+              {fieldErrors.topicId && <span style={{ color: "#ef4444", fontSize: "11px", marginTop: "4px", display: "block" }}>{fieldErrors.topicId}</span>}
+            </div>
+            <div>
+              <Label>Skill <span style={{ color: "red" }}>*</span></Label>
+              <Select value={skillId} onChange={(e: any) => { setSkillId(e.target.value); setFieldErrors({...fieldErrors, skillId: null}); }} disabled={!topicId}>
+                <option value="">Select Skill</option>
+                {skillsList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </Select>
+              {fieldErrors.skillId && <span style={{ color: "#ef4444", fontSize: "11px", marginTop: "4px", display: "block" }}>{fieldErrors.skillId}</span>}
+            </div>
+          </div>
+
+          
+          <div>
+            <Label>Estimated Time</Label>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div style={{ position: "relative", width: "100px" }}>
+                <div style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8", display: "flex" }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                </div>
+                <input type="number" value={estimatedTime} onChange={(e: any) => setEstimatedTime(e.target.value)} style={{ width: "100%", padding: "8px 12px 8px 30px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "13px", outline: "none" }} />
+              </div>
+              <span style={{ fontSize: "13px", color: "#64748b" }}>min</span>
+            </div>
+          </div>
+        </Card>
+
+        {/* 2. Difficulty & Progression */}
+        <Card>
+          <CardTitle 
+            title="2. Difficulty & Progression" 
+            icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" color="#8b5cf6"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>} 
+          />
+          <div>
+            <Label>Level</Label>
+            <Select value={quizLevelId} onChange={(e: any) => setQuizLevelId(e.target.value)}>
+                <option value="">Select Level</option>
+                {quizLevels.map(ql => <option key={ql.id} value={ql.id}>{ql.name}</option>)}
+            </Select>
+          </div>
+          <div>
+            <Label>Difficulty</Label>
+            <Select value={diffLevelId} onChange={(e: any) => setDiffLevelId(e.target.value)}>
+                <option value="">Select Difficulty</option>
+                {diffLevels.map(dl => <option key={dl.id} value={dl.id}>{dl.name}</option>)}
+            </Select>
+          </div>
+          <div>
+            <Label>Order</Label>
+            <input type="number" value={order} onChange={(e: any) => setOrder(e.target.value)} style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "13px", outline: "none" }} min="1" />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "8px" }}>
+            <Toggle checked={enableHints} onChange={setEnableHints} label="Enable hints during quiz" />
+            <Toggle checked={shuffleAnswers} onChange={setShuffleAnswers} label="Shuffle answers" />
+          </div>
+
+          <div style={{ marginTop: "auto" }}>
+            <Label>Pass Mark (%)</Label>
+            <div style={{ position: "relative" }}>
+              <div style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8", display: "flex" }}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              </div>
+              <input type="number" value={passMark} onChange={(e: any) => setPassMark(e.target.value)} style={{ width: "100%", padding: "8px 30px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "13px", outline: "none" }} />
+              <div style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8", fontSize: "13px" }}>%</div>
+            </div>
+          </div>
+        </Card>
+
+        {/* 3. Assignment & Availability */}
+        <Card>
+          <CardTitle 
+            title="3. Assignment & Availability" 
+            icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" color="#6366f1"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>} 
+          />
+          <div>
+            <Label>Assign to <span style={{ color: "red" }}>*</span></Label>
+            {teacherClassrooms.length > 0 ? (
+              <Select value={assignTo} onChange={(e: any) => { setAssignTo(e.target.value); setFieldErrors({...fieldErrors, assignTo: null}); }}>
+                <option value="">Select class</option>
+                {teacherClassrooms.map((cls: any) => (
+                  <option key={cls.id || cls} value={cls.id || cls}>{cls.name || cls}</option>
+                ))}
+              </Select>
+            ) : (
+              <Input 
+                value={assignTo} 
+                onChange={(e: any) => { setAssignTo(e.target.value); setFieldErrors({...fieldErrors, assignTo: null}); }} 
+                placeholder="Enter class name (or configure in Profile)" 
+              />
+            )}
+            {fieldErrors.assignTo && <span style={{ color: "#ef4444", fontSize: "11px", marginTop: "4px", display: "block" }}>{fieldErrors.assignTo}</span>}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+            <div>
+              <Label>Start Date</Label>
+              <div style={{ position: "relative" }}>
+                <div style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8", display: "flex" }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                </div>
+                <input type="date" value={startDate} onChange={(e: any) => setStartDate(e.target.value)} style={{ width: "100%", padding: "8px 12px 8px 30px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "13px", outline: "none", color: "#1e293b" }} />
+              </div>
+            </div>
+            <div>
+              <Label>Due Date</Label>
+              <div style={{ position: "relative" }}>
+                <div style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8", display: "flex" }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                </div>
+                <input type="date" value={dueDate} onChange={(e: any) => setDueDate(e.target.value)} style={{ width: "100%", padding: "8px 12px 8px 30px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "13px", outline: "none", color: "#1e293b" }} />
+              </div>
+            </div>
+          </div>
+          
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "8px 0" }}>
+            <span style={{ fontSize: "13px", fontWeight: "600", color: "#1e293b" }}>Schedule Quiz</span>
+            <div onClick={() => setScheduleQuiz(!scheduleQuiz)} style={{ width: "36px", height: "20px", borderRadius: "10px", backgroundColor: scheduleQuiz ? "#22c55e" : "#cbd5e1", position: "relative", cursor: "pointer", transition: "all 0.2s" }}>
+              <div style={{ width: "16px", height: "16px", borderRadius: "50%", backgroundColor: "white", position: "absolute", top: "2px", left: scheduleQuiz ? "18px" : "2px", transition: "all 0.2s" }} />
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", opacity: scheduleQuiz ? 1 : 0.5, pointerEvents: scheduleQuiz ? "auto" : "none" }}>
+            <div>
+              <Label>Release Time</Label>
+              <div style={{ position: "relative" }}>
+                <div style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8", display: "flex" }}>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                </div>
+                <input type="time" value={releaseTime} onChange={(e: any) => setReleaseTime(e.target.value)} style={{ width: "100%", padding: "8px 12px 8px 30px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "13px", outline: "none" }} />
+              </div>
+            </div>
+            <div>
+              <Label>Attempt Limit</Label>
+              <div style={{ position: "relative" }}>
+                <input type="number" value={attemptLimit} onChange={(e: any) => setAttemptLimit(e.target.value)} style={{ width: "100%", padding: "8px 50px 8px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "13px", outline: "none" }} />
+                <div style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8", fontSize: "12px" }}>attempts</div>
+              </div>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* 4. Questions Builder */}
+      <Card>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <CardTitle 
+              title="4. Questions Builder" 
+              icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" color="#3b82f6"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>} 
+            />
+            <div style={{ fontSize: "13px", color: "#64748b" }}>Add, edit and organize questions for your quiz.</div>
+          </div>
+          <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+            <span style={{ fontSize: "13px", color: "#3b82f6", fontWeight: "600", backgroundColor: "#eff6ff", padding: "6px 12px", borderRadius: "16px" }}>Total Questions: {questions.length}</span>
+
+            <button style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 16px", borderRadius: "8px", border: "1px solid #e2e8f0", backgroundColor: "#fff", color: "#3b82f6", fontSize: "13px", fontWeight: "600", cursor: "pointer" }}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Import Questions
+            </button>
+            <button onClick={addQuestion} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 16px", borderRadius: "8px", border: "none", backgroundColor: "#2563eb", color: "#fff", fontSize: "13px", fontWeight: "600", cursor: "pointer" }}>
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Question
+            </button>
           </div>
         </div>
 
-        <hr style={{ border: "none", borderTop: "1px solid var(--teacher-border)", margin: "32px 0" }} />
+        {/* Filters */}
+        <div style={{ display: "flex", gap: "8px", borderBottom: "1px solid #f1f5f9", paddingBottom: "16px" }}>
+          {["All Types", ...Array.from(new Set(questions.map(q => q.question_type)))].map(type => (
+            <button key={type} style={{ padding: "6px 12px", borderRadius: "16px", border: "none", backgroundColor: type === "All Types" ? "#eff6ff" : "transparent", color: type === "All Types" ? "#3b82f6" : "#64748b", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}>
+              {type}
+            </button>
+          ))}
+        </div>
 
-        <h3 className="teacher-card-title" style={{ fontSize: "16px", marginBottom: "16px" }}>Questions Builder</h3>
-
-        {questions.map((question, qIdx) => (
-          <div key={qIdx} className="teacher-quiz-question-card">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <span style={{ fontWeight: 700, fontSize: "15px" }}>Question #{qIdx + 1}</span>
-              {questions.length > 1 && (
-                <button
-                  type="button"
-                  style={{ background: "none", border: "none", color: "#ef4444", fontWeight: 600, cursor: "pointer", fontSize: "13px" }}
-                  onClick={() => handleRemoveQuestion(qIdx)}
-                >
-                  Remove Question
-                </button>
-              )}
-            </div>
-
-            <div className="teacher-form-group">
-              <label className="teacher-form-label">Question Text</label>
-              <input
-                type="text"
-                className="teacher-form-input"
-                value={question.question_text}
-                onChange={(e) => handleQuestionChange(qIdx, "question_text", e.target.value)}
-                required
-              />
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
-              <div className="teacher-form-group">
-                <label className="teacher-form-label">Question Type</label>
-                <select
-                  className="teacher-dropdown-filter"
-                  style={{ width: "100%" }}
-                  value={question.question_type}
-                  onChange={(e) => handleQuestionChange(qIdx, "question_type", e.target.value)}
-                >
-                  <option value="MCQ">Multiple Choice (MCQ)</option>
-                  <option value="NUMERIC">Numeric Answer</option>
-                </select>
-              </div>
-
-              <div className="teacher-form-group">
-                <label className="teacher-form-label">Difficulty Level</label>
-                <select
-                  className="teacher-dropdown-filter"
-                  style={{ width: "100%" }}
-                  value={question.difficulty_level}
-                  onChange={(e) => handleQuestionChange(qIdx, "difficulty_level", e.target.value)}
-                >
-                  <option value="Easy">Easy</option>
-                  <option value="Medium">Medium</option>
-                  <option value="Hard">Hard</option>
-                </select>
-              </div>
-            </div>
-
-            {/* MCQ Options */}
-            {question.question_type === "MCQ" ? (
-              <div style={{ marginTop: "16px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                  <label className="teacher-form-label">Answer Options</label>
-                  <button
-                    type="button"
-                    style={{ background: "none", border: "none", color: "#2563eb", fontWeight: 600, cursor: "pointer", fontSize: "12px" }}
-                    onClick={() => handleAddMCQOption(qIdx)}
-                  >
-                    + Add Option
-                  </button>
+        {/* Questions List */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+          {questions.map((q, idx) => (
+            <div key={idx} style={{ display: "flex", gap: "16px", padding: "16px", border: "1px solid #e2e8f0", borderRadius: "8px" }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>
+                <div style={{ width: "32px", height: "32px", borderRadius: "50%", border: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px", fontWeight: "600", color: "#1e293b" }}>
+                  {idx + 1}
                 </div>
-
-                <div className="teacher-quiz-answers-grid">
-                  {question.answers.map((opt, optIdx) => (
-                    <div key={optIdx} className="teacher-quiz-answer-input-row">
-                      <input
-                        type="radio"
-                        name={`correct-option-${qIdx}`}
-                        checked={opt.is_correct}
-                        onChange={(e) => handleMCQOptionChange(qIdx, optIdx, "is_correct", e.target.checked)}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                  <select
+                    value={q.question_type}
+                    onChange={(e: any) => {
+                      const newQ = [...questions];
+                      newQ[idx].question_type = e.target.value;
+                      if (e.target.value === "True / False") {
+                        newQ[idx].answers = [{ answer_text: "True", is_correct: true }, { answer_text: "False", is_correct: false }];
+                      }
+                      setQuestions(newQ);
+                    }}
+                    style={{ backgroundColor: q.question_type === "MCQ" ? "#f3e8ff" : q.question_type === "True / False" ? "#e0f2fe" : "#fef3c7", color: q.question_type === "MCQ" ? "#9333ea" : q.question_type === "True / False" ? "#0284c7" : "#d97706", padding: "4px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: "600", border: "none", outline: "none", cursor: "pointer" }}
+                  >
+                    <option value="MCQ">Multiple Choice</option>
+                    <option value="True / False">True / False</option>
+                    <option value="Short Answer">Short Answer</option>
+                    <option value="Fill in the Blank">Fill in the Blank</option>
+                    <option value="Matching">Matching</option>
+                  </select>
+                  <span style={{ fontSize: "12px", color: "#64748b" }}>{q.points} points</span>
+                </div>
+                
+                {q.question_type === "MCQ" || q.question_type === "True / False" ? (
+                  <div style={{ display: "flex" }}>
+                    <div style={{ flex: 1 }}>
+                      <input 
+                        value={q.question_text}
+                        onChange={(e) => {
+                          const newQ = [...questions];
+                          newQ[idx].question_text = e.target.value;
+                          setQuestions(newQ);
+                        }}
+                        placeholder="Question text"
+                        style={{ width: "100%", padding: "8px", border: "none", outline: "none", fontSize: "14px", fontWeight: "500", color: "#1e293b" }}
                       />
-                      <input
-                        type="text"
-                        className="teacher-form-input"
-                        placeholder={`Option ${optIdx + 1}`}
-                        style={{ flex: 1, padding: "8px 12px", fontSize: "13px" }}
-                        value={opt.answer_text}
-                        onChange={(e) => handleMCQOptionChange(qIdx, optIdx, "answer_text", e.target.value)}
-                        required
-                      />
-                      {question.answers.length > 2 && (
-                        <button
-                          type="button"
-                          style={{ border: "none", background: "none", color: "#ef4444", cursor: "pointer", fontSize: "14px" }}
-                          onClick={() => handleRemoveMCQOption(qIdx, optIdx)}
+                    </div>
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "8px" }}>
+                      {q.answers.map((a, aIdx) => (
+                        <div key={aIdx} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <div 
+                            onClick={() => {
+                              const newQ = [...questions];
+                              newQ[idx].answers.forEach((ans, i) => {
+                                ans.is_correct = i === aIdx;
+                              });
+                              setQuestions(newQ);
+                            }}
+                            style={{ width: "16px", height: "16px", borderRadius: "50%", border: a.is_correct ? "5px solid #22c55e" : "1px solid #cbd5e1", cursor: "pointer", flexShrink: 0 }} 
+                          />
+                          <input 
+                            value={a.answer_text}
+                            onChange={(e) => {
+                              const newQ = [...questions];
+                              newQ[idx].answers[aIdx].answer_text = e.target.value;
+                              setQuestions(newQ);
+                            }}
+                            placeholder="Answer"
+                            style={{ border: "1px solid #e2e8f0", padding: "6px 12px", borderRadius: "6px", outline: "none", fontSize: "13px", color: "#475569", width: "100%" }}
+                          />
+                          <button
+                            onClick={() => {
+                              const newQ = [...questions];
+                              newQ[idx].answers.splice(aIdx, 1);
+                              setQuestions(newQ);
+                            }}
+                            style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: "4px" }}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                          </button>
+                        </div>
+                      ))}
+                      {q.question_type === "MCQ" && (
+                        <button 
+                          onClick={() => {
+                            const newQ = [...questions];
+                            newQ[idx].answers.push({ answer_text: "", is_correct: newQ[idx].answers.length === 0 });
+                            setQuestions(newQ);
+                          }}
+                          style={{ alignSelf: "flex-start", background: "none", border: "none", color: "#3b82f6", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", padding: "4px 0" }}
                         >
-                          ✕
+                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                          Add Option
                         </button>
                       )}
                     </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              // Numeric Option
-              <div className="teacher-form-group" style={{ marginTop: "16px" }}>
-                <label className="teacher-form-label">Correct Value (Integer/Decimal)</label>
-                <input
-                  type="text"
-                  className="teacher-form-input"
-                  value={question.correct_value}
-                  onChange={(e) => handleQuestionChange(qIdx, "correct_value", e.target.value)}
-                  required
-                />
-              </div>
-            )}
-
-            {/* Hints Section */}
-            <div style={{ marginTop: "20px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                <label className="teacher-form-label" style={{ fontSize: "12px", color: "#475569" }}>Hints (Optional)</label>
-                <button
-                  type="button"
-                  style={{ background: "none", border: "none", color: "#0891b2", fontWeight: 600, cursor: "pointer", fontSize: "12px" }}
-                  onClick={() => handleAddHint(qIdx)}
-                >
-                  + Add Hint
-                </button>
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                {question.hints.map((hint, hintIdx) => (
-                  <div key={hintIdx} style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    <span style={{ fontSize: "12px", color: "#94a3b8", fontWeight: 600 }}>Hint #{hint.sequence_no}:</span>
-                    <input
-                      type="text"
-                      className="teacher-form-input"
-                      style={{ flex: 1, padding: "6px 12px", fontSize: "13px" }}
-                      value={hint.hint_text}
-                      onChange={(e) => handleHintChange(qIdx, hintIdx, e.target.value)}
-                      required
-                    />
-                    <button
-                      type="button"
-                      style={{ border: "none", background: "none", color: "#ef4444", cursor: "pointer" }}
-                      onClick={() => handleRemoveHint(qIdx, hintIdx)}
-                    >
-                      ✕
-                    </button>
                   </div>
-                ))}
+                ) : (
+                  <div style={{ display: "flex" }}>
+                     <div style={{ flex: 1 }}>
+                      <input 
+                        value={q.question_text}
+                        onChange={(e) => {
+                          const newQ = [...questions];
+                          newQ[idx].question_text = e.target.value;
+                          setQuestions(newQ);
+                        }}
+                        placeholder="Question text"
+                        style={{ width: "100%", padding: "8px", border: "none", outline: "none", fontSize: "14px", fontWeight: "500", color: "#1e293b" }}
+                      />
+                    </div>
+                    <div style={{ flex: 1, display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{ fontSize: "13px", color: "#64748b" }}>Expected answer:</span>
+                      <input 
+                        value={q.correct_value}
+                        onChange={(e) => {
+                          const newQ = [...questions];
+                          newQ[idx].correct_value = e.target.value;
+                          setQuestions(newQ);
+                        }}
+                        style={{ padding: "6px 12px", border: "1px solid #e2e8f0", borderRadius: "6px", fontSize: "13px", outline: "none", flex: 1 }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button style={{ padding: "6px", borderRadius: "6px", border: "1px solid #e2e8f0", background: "none", cursor: "pointer", color: "#64748b" }}><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button>
+                <button style={{ padding: "6px", borderRadius: "6px", border: "1px solid #e2e8f0", background: "none", cursor: "pointer", color: "#64748b" }}><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+                <button onClick={() => {
+                  const newQ = [...questions];
+                  newQ.splice(idx, 1);
+                  setQuestions(newQ);
+                }} style={{ padding: "6px", borderRadius: "6px", border: "1px solid #fecaca", background: "none", cursor: "pointer", color: "#ef4444" }}><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
               </div>
             </div>
-          </div>
-        ))}
-
-        <button
-          type="button"
-          className="teacher-btn-secondary"
-          style={{ width: "100%", padding: "12px", marginTop: "8px" }}
-          onClick={handleAddQuestion}
-        >
-          + Add Question
-        </button>
-
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "32px" }}>
-          <button
-            type="button"
-            className="teacher-btn-secondary"
-            onClick={() => navigate(`/teacher/quizzes/${quizId}`)}
-            disabled={submitting}
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="teacher-btn-primary"
-            disabled={submitting}
-          >
-            {submitting ? "Saving..." : "Save Changes"}
-          </button>
+          ))}
+          {questions.length === 0 && (
+            <div style={{ textAlign: "center", padding: "40px", color: "#94a3b8", fontSize: "14px" }}>
+              No questions added yet. Click "Add Question" to begin.
+            </div>
+          )}
         </div>
-      </form>
+      </Card>
+
+      {/* Bottom Row */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
+        
+        {/* 5. Scoring & Settings */}
+        <Card>
+          <CardTitle 
+            title="5. Scoring & Settings" 
+            icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" color="#3b82f6"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>} 
+          />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+            <Toggle checked={randomizeOrder} onChange={setRandomizeOrder} label="Randomize question order" />
+            <Toggle checked={showResults} onChange={setShowResults} label="Show results immediately" />
+            <Toggle checked={autoGrade} onChange={setAutoGrade} label="Auto-grade objective questions" />
+            <Toggle checked={allowReview} onChange={setAllowReview} label="Allow review after submission" />
+          </div>
+        </Card>
+
+        {/* Quiz Summary */}
+        <Card>
+          <CardTitle 
+            title="Quiz Summary" 
+            icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" color="#3b82f6"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>} 
+          />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 0", height: "100%" }}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: "20px", fontWeight: "700", color: "#1e293b" }}>{questions.length}</div>
+              <div style={{ fontSize: "12px", color: "#64748b" }}>Questions</div>
+            </div>
+            <div style={{ width: "1px", height: "40px", backgroundColor: "#e2e8f0" }} />
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: "20px", fontWeight: "700", color: "#1e293b" }}>{questions.reduce((sum, q) => sum + q.points, 0)}</div>
+              <div style={{ fontSize: "12px", color: "#64748b" }}>Total Points</div>
+            </div>
+            <div style={{ width: "1px", height: "40px", backgroundColor: "#e2e8f0" }} />
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: "20px", fontWeight: "700", color: "#1e293b" }}>{estimatedTime} min</div>
+              <div style={{ fontSize: "12px", color: "#64748b" }}>Estimated Time</div>
+            </div>
+            <div style={{ width: "1px", height: "40px", backgroundColor: "#e2e8f0" }} />
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: "20px", fontWeight: "700", color: "#22c55e" }}>{passMark}%</div>
+              <div style={{ fontSize: "12px", color: "#64748b" }}>Pass Mark</div>
+            </div>
+          </div>
+        </Card>
+
+      </div>
+
+      {/* Action Buttons */}
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "12px" }}>
+        <button style={{ padding: "10px 24px", borderRadius: "8px", border: "1px solid #3b82f6", backgroundColor: "#fff", color: "#3b82f6", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
+          Save Draft
+        </button>
+        <button style={{ padding: "10px 24px", borderRadius: "8px", border: "none", backgroundColor: "#eff6ff", color: "#3b82f6", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
+          Preview Quiz
+        </button>
+        <button onClick={handlePublish} disabled={loading} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 24px", borderRadius: "8px", border: "none", backgroundColor: "#2563eb", color: "#fff", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          {loading ? "Updating..." : "Update Quiz"}
+        </button>
+      </div>
+
     </div>
   );
 };

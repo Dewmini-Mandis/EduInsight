@@ -10,7 +10,6 @@ import PageHeader from "../components/PageHeader";
 import TeacherDashboard from "../dashboards/teacher/TeacherDashboard";
 import ClassAnalytics from "../dashboards/teacher/ClassAnalytics";
 import RiskAlerts from "../dashboards/teacher/RiskAlerts";
-import Recommendations from "../dashboards/teacher/Recommendations";
 import QuizList from "../dashboards/teacher/QuizList";
 import CreateQuiz from "../dashboards/teacher/CreateQuiz";
 import QuizDetails from "../dashboards/teacher/QuizDetails";
@@ -22,8 +21,12 @@ import StudentList from "../dashboards/teacher/StudentList";
 import CreateStudent from "../dashboards/teacher/CreateStudent";
 import StudentDetails from "../dashboards/teacher/StudentDetails";
 import StudentProgress from "../dashboards/teacher/StudentProgress";
-import CreateMaterial from "../dashboards/teacher/CreateMaterial";
+import MaterialList from "../dashboards/teacher/MaterialList";
+import CreateVideoMaterial from "../dashboards/teacher/CreateVideoMaterial";
+import CreateNoteMaterial from "../dashboards/teacher/CreateNoteMaterial";
+import PreviewMaterial from "../dashboards/teacher/PreviewMaterial";
 import LessonBuilder from "../dashboards/teacher/LessonBuilder";
+import TopicSkillManager from "../dashboards/teacher/TopicSkillManager";
 import UserProfilePage from "../pages/UserProfile";
 const TeacherLayout = () => {
   const [collapsed, setCollapsed] = useState(false);
@@ -35,7 +38,7 @@ const TeacherLayout = () => {
     if (path.includes("/dashboard")) return "Dashboard";
     if (path.includes("/analytics")) return "Class Analytics";
     if (path.includes("/risk-alerts")) return "Risk Alerts";
-    if (path.includes("/recommendations")) return "Recommendations";
+    if (path.includes("/materials")) return "Materials";
     if (path.includes("/quizzes/create")) return "Create Quiz";
     if (path.includes("/quizzes/") && path.includes("/edit")) return "Edit Quiz";
     if (path.includes("/quizzes/") && path.includes("/results")) return "Quiz Results";
@@ -43,6 +46,7 @@ const TeacherLayout = () => {
     if (path.includes("/quizzes")) return "Quizzes";
     if (path.includes("/materials/create")) return "Create Material";
     if (path.includes("/lessons/create")) return "Create Lesson";
+    if (path.includes("/lessons/") && path.includes("/topics")) return "Manage Topics & Skills";
     if (path.includes("/lessons")) return "Lessons";
     if (path.includes("/students/create")) return "Add Students";
     if (path.includes("/students/") && path.includes("/progress")) return "Student Progress";
@@ -57,11 +61,10 @@ const TeacherLayout = () => {
     if (path.includes("/dashboard")) return "Overview of your classes and student performance.";
     if (path.includes("/analytics")) return "Monitor class performance, mastery, and engagement to inform instruction.";
     if (path.includes("/risk-alerts")) return "Identify students who need intervention and monitor risk trends.";
-    if (path.includes("/recommendations")) return "AI-powered suggestions to improve class outcomes and support student success.";
+    if (path.includes("/materials/create") || path.includes("/materials")) return "Upload learning materials for your students.";
     if (path.includes("/quizzes/create")) return "Build structured assessments and assign them to the right learners.";
-    if (path.includes("/materials/create")) return "Upload learning materials for your students.";
     if (path.includes("/quizzes")) return "Manage and review all your quizzes.";
-    if (path.includes("/lessons")) return "Manage your lesson plans.";
+    if (path.includes("/lessons")) return "Manage your lesson plans, topics, and skills.";
     if (path.includes("/students/create")) return "Register new students individually or import them in bulk to your classes.";
     if (path.includes("/students")) return "Manage your students.";
     return "";
@@ -86,7 +89,13 @@ const TeacherLayout = () => {
             <Route path="dashboard" element={<TeacherDashboard />} />
             <Route path="analytics" element={<ClassAnalytics />} />
             <Route path="risk-alerts" element={<RiskAlerts />} />
-            <Route path="recommendations" element={<Recommendations />} />
+            
+            <Route path="materials" element={<MaterialList />} />
+            <Route path="materials/video/create" element={<CreateVideoMaterial />} />
+            <Route path="materials/note/create" element={<CreateNoteMaterial />} />
+            <Route path="materials/video/:materialId/edit" element={<CreateVideoMaterial />} />
+            <Route path="materials/note/:materialId/edit" element={<CreateNoteMaterial />} />
+            <Route path="materials/:materialId/preview" element={<PreviewMaterial />} />
             
             <Route path="quizzes" element={<QuizList />} />
             <Route path="quizzes/create" element={<CreateQuiz />} />
@@ -96,9 +105,8 @@ const TeacherLayout = () => {
             
             <Route path="lessons" element={<LessonList />} />
             <Route path="lessons/create" element={<CreateLesson />} />
+            <Route path="lessons/:lessonId/topics" element={<TopicSkillManager />} />
             <Route path="lessons/:lessonId/builder" element={<LessonBuilder />} />
-            
-            <Route path="materials/create" element={<CreateMaterial />} />
             
             <Route path="students" element={<StudentList />} />
             <Route path="students/create" element={<CreateStudent />} />

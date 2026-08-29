@@ -49,6 +49,13 @@ class Student(models.Model):
 		blank=True,
 		related_name="students",
 	)
+	registered_by = models.ForeignKey(
+		"accounts.User",
+		on_delete=models.SET_NULL,
+		null=True,
+		blank=True,
+		related_name="registered_students",
+	)
 
 	class Meta:
 		db_table = "students"

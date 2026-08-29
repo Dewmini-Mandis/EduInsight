@@ -162,3 +162,5 @@ Thumbs.db
 *.pkl
 *.pickle
 
+# Data files
+*.csv

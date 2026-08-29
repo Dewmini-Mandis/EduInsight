@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import EngagementQuestion, Quiz, Question, Answer, CorrectAnswer, Hint, Lesson, AcademicTerm, Topic, Skill, QuizLevel, DifficultyLevel, LearningMaterial
+from .models import EngagementQuestion, Quiz, Question, Answer, CorrectAnswer, Hint, Lesson, AcademicTerm, Topic, Skill, QuizLevel, DifficultyLevel, LearningMaterial, VideoQuestion, MaterialAttachment
 
 class AcademicTermSerializer(serializers.ModelSerializer):
     class Meta:
@@ -32,6 +32,16 @@ class EngagementQuestionSerializer(serializers.ModelSerializer):
         model = EngagementQuestion
         fields = "__all__"
 
+class VideoQuestionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VideoQuestion
+        fields = "__all__"
+
+class MaterialAttachmentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MaterialAttachment
+        fields = "__all__"
+
 class LearningMaterialSerializer(serializers.ModelSerializer):
     created_by_name = serializers.CharField(source="created_by.get_full_name", read_only=True)
     lesson_title = serializers.CharField(source="lesson.title", read_only=True)
@@ -40,6 +50,8 @@ class LearningMaterialSerializer(serializers.ModelSerializer):
     difficulty_name = serializers.CharField(source="difficulty.name", read_only=True, allow_null=True)
 
     engagement_questions = EngagementQuestionSerializer(many=True, read_only=True)
+    video_questions = VideoQuestionSerializer(many=True, read_only=True)
+    attachments = MaterialAttachmentSerializer(many=True, read_only=True)
 
     class Meta:
         model = LearningMaterial
@@ -48,6 +60,7 @@ class LearningMaterialSerializer(serializers.ModelSerializer):
 
 class LessonSerializer(serializers.ModelSerializer):
     created_by_name = serializers.CharField(source="created_by.get_full_name", read_only=True)
+    term_name = serializers.CharField(source="term.name", read_only=True)
 
     class Meta:
         model = Lesson
@@ -56,6 +69,7 @@ class LessonSerializer(serializers.ModelSerializer):
             "title",
             "description",
             "term",
+            "term_name",
             "created_by",
             "created_by_name",
             "created_at",

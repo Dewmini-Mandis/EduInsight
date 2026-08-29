@@ -4,7 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.db import models
 
 from apps.accounts.models import Role
-from .models import EngagementQuestion, Quiz, Lesson, AcademicTerm, Topic, Skill, QuizLevel, DifficultyLevel, LearningMaterial
+from .models import EngagementQuestion, Quiz, Lesson, AcademicTerm, Topic, Skill, QuizLevel, DifficultyLevel, LearningMaterial, VideoQuestion, MaterialAttachment
 from .serializers import (
     QuizSerializer, 
     LessonSerializer, 
@@ -14,7 +14,9 @@ from .serializers import (
     QuizLevelSerializer, 
     DifficultyLevelSerializer,
     LearningMaterialSerializer,
-    EngagementQuestionSerializer
+    EngagementQuestionSerializer,
+    VideoQuestionSerializer,
+    MaterialAttachmentSerializer
 )
 
 class LearningMaterialViewSet(viewsets.ModelViewSet):
@@ -39,7 +41,62 @@ class LearningMaterialViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if not user.is_role(Role.ROLE_SYSTEM_ADMIN, Role.ROLE_TEACHER):
             raise PermissionDenied("You do not have permission to create learning materials.")
-        serializer.save(created_by=user)
+            
+        if self.request.data.get("material_type") == "TEXT":
+            attachments = self.request.FILES.getlist("attachments")
+            if not attachments:
+                raise PermissionDenied("At least one attachment is required for Note materials.")
+                
+        material = serializer.save(created_by=user)
+        
+        if self.request.data.get("material_type") == "TEXT":
+            for f in self.request.FILES.getlist("attachments"):
+                att_type = "PDF" if f.name.endswith(".pdf") or getattr(f, "content_type", "") == "application/pdf" else "IMAGE"
+                MaterialAttachment.objects.create(material=material, file=f, attachment_type=att_type)
+
+    def perform_update(self, serializer):
+        user = self.request.user
+        if not user.is_role(Role.ROLE_SYSTEM_ADMIN, Role.ROLE_TEACHER):
+            raise PermissionDenied("You do not have permission to edit learning materials.")
+            
+        material = serializer.instance
+        material_type = self.request.data.get("material_type", material.material_type)
+        if material_type == "TEXT":
+            attachments = self.request.FILES.getlist("attachments")
+            existing_count = material.attachments.count()
+            if existing_count == 0 and not attachments:
+                raise PermissionDenied("At least one attachment is required for Note materials.")
+                
+        serializer.save()
+        
+        if material_type == "TEXT":
+            for f in self.request.FILES.getlist("attachments"):
+                att_type = "PDF" if f.name.endswith(".pdf") or getattr(f, "content_type", "") == "application/pdf" else "IMAGE"
+                MaterialAttachment.objects.create(material=material, file=f, attachment_type=att_type)
+
+class VideoQuestionViewSet(viewsets.ModelViewSet):
+    queryset = VideoQuestion.objects.all()
+    serializer_class = VideoQuestionSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        qs = super().get_queryset()
+        material_id = self.request.query_params.get("material")
+        if material_id:
+            qs = qs.filter(material_id=material_id)
+        return qs
+
+class MaterialAttachmentViewSet(viewsets.ModelViewSet):
+    queryset = MaterialAttachment.objects.all()
+    serializer_class = MaterialAttachmentSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        qs = super().get_queryset()
+        material_id = self.request.query_params.get("material")
+        if material_id:
+            qs = qs.filter(material_id=material_id)
+        return qs
 
 
 
@@ -92,6 +149,14 @@ class LessonViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         term = self.request.query_params.get("term")
         queryset = Lesson.objects.all().order_by("created_at")
+
+        user = self.request.user
+        if user.is_role(Role.ROLE_STUDENT):
+            q_filter = models.Q(created_by__role__role_name=Role.ROLE_SYSTEM_ADMIN)
+            if hasattr(user, 'student_profile') and user.student_profile.registered_by_id:
+                q_filter |= models.Q(created_by_id=user.student_profile.registered_by_id)
+            queryset = queryset.filter(q_filter)
+
         if term:
             queryset = queryset.filter(term=term)
         return queryset
@@ -139,10 +204,10 @@ class QuizViewSet(viewsets.ModelViewSet):
             return queryset.filter(models.Q(school__isnull=True) | models.Q(created_by=user))
 
         if user.is_role(Role.ROLE_STUDENT):
-            school_id = user.school_id
-            if school_id:
-                return queryset.filter(models.Q(school_id=school_id) | models.Q(school__isnull=True))
-            return queryset.filter(school__isnull=True)
+            q_filter = models.Q(created_by__role__role_name=Role.ROLE_SYSTEM_ADMIN)
+            if hasattr(user, 'student_profile') and user.student_profile.registered_by_id:
+                q_filter |= models.Q(created_by_id=user.student_profile.registered_by_id)
+            return queryset.filter(q_filter)
 
         return Quiz.objects.none()
 

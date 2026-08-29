@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { getToken } from "../../auth/authUtils";
 import "../../styles/teacher.css";
@@ -6,7 +6,8 @@ import "../../styles/teacher.css";
 const CreateLesson = () => {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [term, setTerm] = useState("1st Term");
+  const [term, setTerm] = useState("");
+  const [terms, setTerms] = useState<any[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
@@ -14,11 +15,32 @@ const CreateLesson = () => {
   const queryParams = new URLSearchParams(location.search);
   const quizId = queryParams.get("quizId");
 
+  useEffect(() => {
+    const fetchTerms = async () => {
+      try {
+        const token = getToken();
+        const res = await fetch("/api/quizzes/terms/", {
+          headers: { Authorization: `Token ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setTerms(data);
+          if (data.length > 0) {
+            setTerm(data[0].id.toString());
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching terms", err);
+      }
+    };
+    fetchTerms();
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
-    if (!title.trim() || !description.trim()) {
+    if (!title.trim() || !description.trim() || !term) {
       setError("Please fill in all fields.");
       return;
     }
@@ -29,7 +51,7 @@ const CreateLesson = () => {
     const payload: any = {
       title,
       description,
-      term
+      term: parseInt(term)
     };
     if (quizId) {
       payload.quiz = quizId;
@@ -91,15 +113,16 @@ const CreateLesson = () => {
             style={{ width: "100%" }}
             value={term}
             onChange={(e) => setTerm(e.target.value)}
+            required
           >
-            <option value="1st Term">1st Term</option>
-            <option value="2nd Term">2nd Term</option>
-            <option value="3rd Term">3rd Term</option>
+            {terms.map(t => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
           </select>
         </div>
 
         <div className="teacher-form-group">
-          <label className="teacher-form-label">Topic Description</label>
+          <label className="teacher-form-label">Lesson Description</label>
           <textarea
             className="teacher-form-input"
             style={{ minHeight: "120px", fontFamily: "inherit" }}
@@ -124,7 +147,7 @@ const CreateLesson = () => {
             className="teacher-btn-primary"
             disabled={submitting}
           >
-            {submitting ? "Saving..." : "Save Topic"}
+            {submitting ? "Saving..." : "Save Lesson"}
           </button>
         </div>
       </form>

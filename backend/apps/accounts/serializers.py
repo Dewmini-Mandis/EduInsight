@@ -120,6 +120,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
 				index_no=index_no,
 				grade=grade,
 				class_name=class_name,
+				registered_by=self.context.get("request").user if self.context.get("request") else None
 			)
 			if class_room_id:
 				from apps.classes.models import SchoolClass

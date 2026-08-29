@@ -193,7 +193,7 @@ const StudentDashboard = () => {
   const [lessonProgress, setLessonProgress] = useState<any[]>([]);
   const [lessons, setLessons] = useState<any[]>([]);
   const [materials, setMaterials] = useState<any[]>([]);
-  const [selectedTerm, setSelectedTerm] = useState<string>("1st Term");
+  const [selectedTerm, setSelectedTerm] = useState<string>("Term 1");
   const [selectedLessonId, setSelectedLessonId] = useState<string>("");
   const [selectedQuiz, setSelectedQuiz] = useState<any | null>(null);
   const [selectedAttempt, setSelectedAttempt] = useState<any | null>(null);
@@ -230,15 +230,15 @@ const StudentDashboard = () => {
       });
       if (!quizRes.ok) throw new Error("Unable to fetch quizzes");
       const quizData = await quizRes.json();
-      setQuizzes(quizData);
+      setQuizzes(Array.isArray(quizData) ? quizData : quizData.results || []);
 
       // Fetch attempts history
-      const attemptRes = await fetch("/api/attempts/", {
+      const attemptRes = await fetch("/api/attempts/attempts/", {
         headers: { Authorization: `Token ${token}` },
       });
       if (!attemptRes.ok) throw new Error("Unable to fetch attempts");
       const attemptData = await attemptRes.json();
-      setAttempts(attemptData);
+      setAttempts(Array.isArray(attemptData) ? attemptData : attemptData.results || []);
 
       // Fetch lessons
       const lessonsRes = await fetch("/api/quizzes/lessons/", {
@@ -246,19 +246,21 @@ const StudentDashboard = () => {
       });
       if (!lessonsRes.ok) throw new Error("Unable to fetch lessons");
       const lessonsData = await lessonsRes.json();
-      setLessons(lessonsData);
+      const lessonsArray = Array.isArray(lessonsData) ? lessonsData : lessonsData.results || [];
+      setLessons(lessonsArray);
 
       // Fetch materials for recommendations
       const materialsRes = await fetch("/api/quizzes/materials/", {
         headers: { Authorization: `Token ${token}` },
       });
       if (materialsRes.ok) {
-        setMaterials(await materialsRes.json());
+        const materialsData = await materialsRes.json();
+        setMaterials(Array.isArray(materialsData) ? materialsData : materialsData.results || []);
       }
       
-      if (lessonsData.length > 0) {
+      if (lessonsArray.length > 0) {
         // Find default lesson for current term or first available
-        const defaultL = lessonsData.find((l: any) => l.term === "1st Term") || lessonsData[0];
+        const defaultL = lessonsArray.find((l: any) => l.term_name === "Term 1") || lessonsArray[0];
         setSelectedLessonId(defaultL.id.toString());
       }
     } catch (err: any) {
@@ -320,19 +322,17 @@ const StudentDashboard = () => {
 
   // Derived state for the selected lesson learning path:
   const learningPathData = useMemo(() => {
-    const termLessons = lessons.filter(l => l.term === selectedTerm);
+    const termLessons = lessons.filter(l => l.term_name === selectedTerm);
     const activeLesson = lessons.find(l => l.id.toString() === selectedLessonId);
     
     // Quizzes assigned to the active lesson
-    const lessonQuizzes = quizzes.filter(q => q.lesson === Number(selectedLessonId));
-    
-    const beginnerQuizzes = lessonQuizzes.filter(q => q.learning_level === "Beginner");
-    const intermediateQuizzes = lessonQuizzes.filter(q => q.learning_level === "Intermediate");
-    const advancedQuizzes = lessonQuizzes.filter(q => q.learning_level === "Advanced");
+    const lessonQuizzes = quizzes.filter(q => q.lesson === Number(selectedLessonId))
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
 
     // Completion helpers
     const isQuizCompleted = (quizId: number) => {
-      return attempts.some(att => att.quiz === quizId && att.score >= 75);
+      const quiz = quizzes.find(q => q.id === quizId);
+      return attempts.some(att => att.quiz === quizId && att.score >= (quiz?.pass_mark || 75));
     };
 
     const getBestScore = (quizId: number) => {
@@ -349,21 +349,6 @@ const StudentDashboard = () => {
       if (completedCount === lQuizzes.length) return "Completed";
       return "In Progress";
     };
-
-    // Unlocking state
-    const beginnerCompleted = beginnerQuizzes.length > 0 && beginnerQuizzes.every(q => isQuizCompleted(q.id));
-    const intermediateUnlocked = beginnerCompleted;
-    const intermediateCompleted = intermediateUnlocked && intermediateQuizzes.length > 0 && intermediateQuizzes.every(q => isQuizCompleted(q.id));
-    const advancedUnlocked = intermediateCompleted;
-    const advancedCompleted = advancedUnlocked && advancedQuizzes.length > 0 && advancedQuizzes.every(q => isQuizCompleted(q.id));
-
-    // Current student level
-    let currentLevel = "Beginner Level";
-    if (intermediateUnlocked && !intermediateCompleted) {
-      currentLevel = "Intermediate Level";
-    } else if (advancedUnlocked) {
-      currentLevel = "Advanced Level";
-    }
 
     // Numbers
     const totalQuizzes = lessonQuizzes.length;
@@ -385,15 +370,7 @@ const StudentDashboard = () => {
     return {
       termLessons,
       activeLesson,
-      beginnerQuizzes,
-      intermediateQuizzes,
-      advancedQuizzes,
-      beginnerCompleted,
-      intermediateUnlocked,
-      intermediateCompleted,
-      advancedUnlocked,
-      advancedCompleted,
-      currentLevel,
+      lessonQuizzes,
       totalQuizzes,
       completedQuizzes,
       remainingQuizzes,
@@ -508,7 +485,7 @@ const StudentDashboard = () => {
         }),
       };
 
-      const res = await fetch("/api/attempts/", {
+      const res = await fetch("/api/attempts/attempts/", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -531,7 +508,7 @@ const StudentDashboard = () => {
 
       setQuizAction("result");
       
-      const attemptRes = await fetch("/api/attempts/", {
+      const attemptRes = await fetch("/api/attempts/attempts/", {
         headers: { Authorization: `Token ${token}` },
       });
       if (attemptRes.ok) {
@@ -547,12 +524,12 @@ const StudentDashboard = () => {
 
   const handleViewAnswers = (quiz: any) => {
     const quizAttempts = attempts.filter((a) => a.quiz === quiz.id);
-    const bestAttempt = quizAttempts.reduce((prev, current) => (prev.score > current.score) ? prev : current, quizAttempts[0]);
-    if (bestAttempt) {
-      setSelectedAttempt(bestAttempt);
+    const lastAttempt = quizAttempts[0];
+    if (lastAttempt) {
+      setSelectedAttempt(lastAttempt);
       setSelectedQuiz(quiz);
       setQuizAction("result");
-      setActiveSection("quizzes");
+      // Keep them in their current active section
     }
   };
 
@@ -738,9 +715,9 @@ const StudentDashboard = () => {
                     
                     <div style={{ display: "flex", gap: "24px", justifyContent: "center", flexWrap: "wrap" }}>
                       {[
-                        { title: "1st Term", subtitle: "Start Learning" },
-                        { title: "2nd Term", subtitle: "Continue Your Journey" },
-                        { title: "3rd Term", subtitle: "Advanced Learning" }
+                        { title: "Term 1", subtitle: "Start Learning" },
+                        { title: "Term 2", subtitle: "Continue Your Journey" },
+                        { title: "Term 3", subtitle: "Advanced Learning" }
                       ].map((t) => {
                         const isActive = selectedTerm === t.title;
                         return (
@@ -948,7 +925,7 @@ const StudentDashboard = () => {
 
                   <div style={{ background: "white", padding: "24px 32px", borderRadius: "16px", border: "1px solid #e2e8f0", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                      <span style={{ fontSize: "16px", fontWeight: "700", color: "var(--navy-900)" }}>Overall Progress</span>
+                      <span style={{ fontSize: "16px", fontWeight: "700", color: "var(--navy-900)" }}>Lesson Progress</span>
                       <span style={{ fontSize: "24px", fontWeight: "800", color: "var(--navy-900)" }}>
                         {learningPathData.overallProgress}%
                       </span>
@@ -962,149 +939,49 @@ const StudentDashboard = () => {
                     </div>
                   </div>
 
-                  <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                  <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: "16px", padding: "24px", boxShadow: "0 2px 4px rgba(0,0,0,0.02)" }}>
+                    <h3 style={{ margin: "0 0 24px", fontSize: "20px", fontWeight: "700", color: "var(--navy-900)" }}>Quizzes</h3>
                     
-                    {/* Beginner Level */}
-                    <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: "16px", padding: "24px", boxShadow: "0 2px 4px rgba(0,0,0,0.02)" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px" }}>
-                        <div style={{ display: "flex", gap: "16px" }}>
-                          <div style={{ background: "#eff6ff", padding: "16px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            <Map size={24} color="#3b82f6" />
-                          </div>
-                          <div>
-                            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "4px" }}>
-                              <h3 style={{ margin: 0, fontSize: "20px", fontWeight: "700", color: "var(--navy-900)" }}>Beginner Level</h3>
-                              {learningPathData.beginnerCompleted ? (
-                                <span style={{ fontSize: "11px", color: "#16a34a", backgroundColor: "#dcfce7", padding: "4px 10px", borderRadius: "20px", fontWeight: "600" }}>Completed</span>
-                              ) : (
-                                <span style={{ fontSize: "11px", color: "#3b82f6", backgroundColor: "#e0e7ff", padding: "4px 10px", borderRadius: "20px", fontWeight: "600" }}>In Progress</span>
-                              )}
-                            </div>
-                            <p style={{ margin: 0, color: "#64748b", fontSize: "14px" }}>Learn the basics and simple operations.</p>
-                          </div>
-                        </div>
-                        <div style={{ textAlign: "right" }}>
-                          <div style={{ fontSize: "18px", fontWeight: "700", color: "#3b82f6", marginBottom: "4px" }}>{learningPathData.beginnerQuizzes.filter(q => learningPathData.isQuizCompleted(q.id)).length} / {learningPathData.beginnerQuizzes.length}</div>
-                          <div style={{ fontSize: "12px", color: "#64748b" }}>Quizzes Completed</div>
-                        </div>
+                    {learningPathData.lessonQuizzes.length === 0 ? (
+                      <div style={{ padding: "40px", textAlign: "center", color: "#94a3b8", fontSize: "14px", fontStyle: "italic" }}>
+                        No quizzes available for this lesson yet.
                       </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
-                        {learningPathData.beginnerQuizzes.map((quiz, index, arr) => {
+                    ) : (
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "16px" }}>
+                        {learningPathData.lessonQuizzes.map((quiz, index) => {
                           const isCompleted = learningPathData.isQuizCompleted(quiz.id);
-                          const isUnlocked = index === 0 || learningPathData.isQuizCompleted(arr[index - 1].id);
+                          const isLocked = index > 0 && !learningPathData.isQuizCompleted(learningPathData.lessonQuizzes[index - 1].id);
                           return (
-                            <div key={quiz.id} onClick={() => isUnlocked ? handleStartAttempt(quiz) : null} style={{ padding: "16px", border: `1px solid ${isCompleted ? "#dcfce7" : "#e2e8f0"}`, borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: isUnlocked ? "pointer" : "not-allowed", opacity: isUnlocked ? 1 : 0.6, background: "white", transition: "all 0.2s" }} onMouseEnter={isUnlocked ? (e) => e.currentTarget.style.borderColor = "#3b82f6" : undefined} onMouseLeave={isUnlocked ? (e) => e.currentTarget.style.borderColor = isCompleted ? "#dcfce7" : "#e2e8f0" : undefined}>
+                            <div 
+                              key={quiz.id} 
+                              onClick={() => {
+                                if (!isLocked) {
+                                  handleStartAttempt(quiz);
+                                }
+                              }} 
+                              style={{ padding: "16px", border: `1px solid ${isCompleted ? "#dcfce7" : isLocked ? "#f1f5f9" : "#e2e8f0"}`, borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: isLocked ? "not-allowed" : "pointer", background: isLocked ? "#f8fafc" : "white", transition: "all 0.2s", opacity: isLocked ? 0.6 : 1 }} 
+                              onMouseEnter={(e) => { if (!isLocked) e.currentTarget.style.borderColor = "#3b82f6"; }} 
+                              onMouseLeave={(e) => { if (!isLocked) e.currentTarget.style.borderColor = isCompleted ? "#dcfce7" : "#e2e8f0"; }}
+                            >
                               <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-                                <div style={{ background: isCompleted ? "#3b82f6" : "#f1f5f9", borderRadius: "50%", width: "40px", height: "40px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                  {isCompleted ? <Check size={20} color="white" /> : <Calendar size={20} color="#3b82f6" />}
+                                <div style={{ background: isCompleted ? "#3b82f6" : isLocked ? "#cbd5e1" : "#f1f5f9", borderRadius: "50%", width: "40px", height: "40px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                  {isCompleted ? <Check size={20} color="white" /> : isLocked ? <Lock size={20} color="white" /> : <Map size={20} color="#3b82f6" />}
                                 </div>
                                 <div>
-                                  <div style={{ fontSize: "14px", fontWeight: "700", color: "var(--navy-900)", marginBottom: "4px" }}>{quiz.title}</div>
-                                  <div style={{ fontSize: "12px", color: isCompleted ? "#16a34a" : "#3b82f6", fontWeight: "500" }}>Quiz {quiz.order || index + 1} &bull; {isCompleted ? "Completed" : "In Progress"}</div>
+                                  <div style={{ fontSize: "14px", fontWeight: "700", color: isLocked ? "#94a3b8" : "var(--navy-900)", marginBottom: "4px" }}>{quiz.title}</div>
+                                  <div style={{ fontSize: "12px", color: isCompleted ? "#16a34a" : isLocked ? "#94a3b8" : "#64748b", fontWeight: "500" }}>
+                                    Quiz {quiz.order || index + 1} &bull; {isCompleted ? "Completed" : isLocked ? "Locked" : "In Progress"}
+                                  </div>
                                 </div>
                               </div>
-                              <div style={{ width: "24px", height: "24px", borderRadius: "50%", border: `1px solid ${isCompleted ? "#16a34a" : "#e2e8f0"}`, display: "flex", alignItems: "center", justifyContent: "center", background: isCompleted ? "#dcfce7" : "transparent" }}>
-                                {isCompleted ? <Check size={14} color="#16a34a" /> : <ChevronRight size={14} color="#94a3b8" />}
+                              <div style={{ width: "24px", height: "24px", borderRadius: "50%", border: `1px solid ${isCompleted ? "#16a34a" : isLocked ? "transparent" : "#e2e8f0"}`, display: "flex", alignItems: "center", justifyContent: "center", background: isCompleted ? "#dcfce7" : "transparent" }}>
+                                {isCompleted ? <Check size={14} color="#16a34a" /> : isLocked ? <Lock size={14} color="#94a3b8" /> : <ChevronRight size={14} color="#3b82f6" />}
                               </div>
                             </div>
                           );
                         })}
                       </div>
-                    </div>
-
-                    {/* Intermediate Level */}
-                    <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: "16px", padding: "24px", boxShadow: "0 2px 4px rgba(0,0,0,0.02)", opacity: learningPathData.intermediateUnlocked ? 1 : 0.6 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: learningPathData.intermediateUnlocked ? "24px" : "0" }}>
-                        <div style={{ display: "flex", gap: "16px" }}>
-                          <div style={{ background: learningPathData.intermediateUnlocked ? "#f5f3ff" : "#f1f5f9", padding: "16px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            {learningPathData.intermediateUnlocked ? <Map size={24} color="#8b5cf6" /> : <Lock size={24} color="#94a3b8" />}
-                          </div>
-                          <div>
-                            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "4px" }}>
-                              <h3 style={{ margin: 0, fontSize: "20px", fontWeight: "700", color: "var(--navy-900)" }}>Intermediate Level</h3>
-                              {!learningPathData.intermediateUnlocked && (
-                                <span style={{ fontSize: "11px", color: "#64748b", backgroundColor: "#f1f5f9", padding: "4px 10px", borderRadius: "20px", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}><Lock size={10} /> Locked</span>
-                              )}
-                            </div>
-                            <p style={{ margin: 0, color: "#64748b", fontSize: "14px" }}>Unlock after completing all Beginner Level quizzes.</p>
-                          </div>
-                        </div>
-                        <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "#f8fafc", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <ChevronDown size={18} color="#94a3b8" />
-                        </div>
-                      </div>
-                      {learningPathData.intermediateUnlocked && (
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
-                          {learningPathData.intermediateQuizzes.map((quiz, index, arr) => {
-                            const isCompleted = learningPathData.isQuizCompleted(quiz.id);
-                            const isUnlocked = index === 0 || learningPathData.isQuizCompleted(arr[index - 1].id);
-                            return (
-                              <div key={quiz.id} onClick={() => isUnlocked ? handleStartAttempt(quiz) : null} style={{ padding: "16px", border: `1px solid ${isCompleted ? "#dcfce7" : "#e2e8f0"}`, borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: isUnlocked ? "pointer" : "not-allowed", opacity: isUnlocked ? 1 : 0.6, background: "white", transition: "all 0.2s" }}>
-                                <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-                                  <div style={{ background: isCompleted ? "#8b5cf6" : "#f1f5f9", borderRadius: "50%", width: "40px", height: "40px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                    {isCompleted ? <Check size={20} color="white" /> : <Calendar size={20} color="#8b5cf6" />}
-                                  </div>
-                                  <div>
-                                    <div style={{ fontSize: "14px", fontWeight: "700", color: "var(--navy-900)", marginBottom: "4px" }}>{quiz.title}</div>
-                                    <div style={{ fontSize: "12px", color: isCompleted ? "#16a34a" : "#8b5cf6", fontWeight: "500" }}>Quiz {quiz.order || index + 1} &bull; {isCompleted ? "Completed" : "In Progress"}</div>
-                                  </div>
-                                </div>
-                                <div style={{ width: "24px", height: "24px", borderRadius: "50%", border: `1px solid ${isCompleted ? "#16a34a" : "#e2e8f0"}`, display: "flex", alignItems: "center", justifyContent: "center", background: isCompleted ? "#dcfce7" : "transparent" }}>
-                                  {isCompleted ? <Check size={14} color="#16a34a" /> : <ChevronRight size={14} color="#94a3b8" />}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Advanced Level */}
-                    <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: "16px", padding: "24px", boxShadow: "0 2px 4px rgba(0,0,0,0.02)", opacity: learningPathData.advancedUnlocked ? 1 : 0.6 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: learningPathData.advancedUnlocked ? "24px" : "0" }}>
-                        <div style={{ display: "flex", gap: "16px" }}>
-                          <div style={{ background: learningPathData.advancedUnlocked ? "#fff7ed" : "#f1f5f9", padding: "16px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                            {learningPathData.advancedUnlocked ? <Map size={24} color="#f97316" /> : <Lock size={24} color="#94a3b8" />}
-                          </div>
-                          <div>
-                            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "4px" }}>
-                              <h3 style={{ margin: 0, fontSize: "20px", fontWeight: "700", color: "var(--navy-900)" }}>Advanced Level</h3>
-                              {!learningPathData.advancedUnlocked && (
-                                <span style={{ fontSize: "11px", color: "#64748b", backgroundColor: "#f1f5f9", padding: "4px 10px", borderRadius: "20px", fontWeight: "600", display: "flex", alignItems: "center", gap: "4px" }}><Lock size={10} /> Locked</span>
-                              )}
-                            </div>
-                            <p style={{ margin: 0, color: "#64748b", fontSize: "14px" }}>Unlock after completing all Intermediate Level quizzes.</p>
-                          </div>
-                        </div>
-                        <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "#f8fafc", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <ChevronDown size={18} color="#94a3b8" />
-                        </div>
-                      </div>
-                      {learningPathData.advancedUnlocked && (
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
-                          {learningPathData.advancedQuizzes.map((quiz, index, arr) => {
-                            const isCompleted = learningPathData.isQuizCompleted(quiz.id);
-                            const isUnlocked = index === 0 || learningPathData.isQuizCompleted(arr[index - 1].id);
-                            return (
-                              <div key={quiz.id} onClick={() => isUnlocked ? handleStartAttempt(quiz) : null} style={{ padding: "16px", border: `1px solid ${isCompleted ? "#dcfce7" : "#e2e8f0"}`, borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: isUnlocked ? "pointer" : "not-allowed", opacity: isUnlocked ? 1 : 0.6, background: "white", transition: "all 0.2s" }}>
-                                <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-                                  <div style={{ background: isCompleted ? "#f97316" : "#f1f5f9", borderRadius: "50%", width: "40px", height: "40px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                    {isCompleted ? <Check size={20} color="white" /> : <Calendar size={20} color="#f97316" />}
-                                  </div>
-                                  <div>
-                                    <div style={{ fontSize: "14px", fontWeight: "700", color: "var(--navy-900)", marginBottom: "4px" }}>{quiz.title}</div>
-                                    <div style={{ fontSize: "12px", color: isCompleted ? "#16a34a" : "#f97316", fontWeight: "500" }}>Quiz {quiz.order || index + 1} &bull; {isCompleted ? "Completed" : "In Progress"}</div>
-                                  </div>
-                                </div>
-                                <div style={{ width: "24px", height: "24px", borderRadius: "50%", border: `1px solid ${isCompleted ? "#16a34a" : "#e2e8f0"}`, display: "flex", alignItems: "center", justifyContent: "center", background: isCompleted ? "#dcfce7" : "transparent" }}>
-                                  {isCompleted ? <Check size={14} color="#16a34a" /> : <ChevronRight size={14} color="#94a3b8" />}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -1586,6 +1463,9 @@ const StudentDashboard = () => {
                     <div style={{ fontSize: "1.1rem", fontWeight: "600", color: "#1e40af", marginBottom: "0.5rem" }}>
                       Quiz Attempt Score
                     </div>
+                    <div style={{ padding: "4px 12px", background: "#3b82f6", color: "white", borderRadius: "12px", fontSize: "14px", fontWeight: "700", display: "inline-block", marginBottom: "0.5rem" }}>
+                      Current Level: {Math.floor(quizzes.filter(q => attempts.some(a => a.quiz === q.id && a.score >= (q.pass_mark || 75))).length / 2) + 1}
+                    </div>
                     <div
                       style={{
                         fontSize: "3.5rem",
@@ -1602,129 +1482,186 @@ const StudentDashboard = () => {
                     </div>
                   </div>
 
-                  <div style={{ fontSize: "1.1rem", fontWeight: "700", marginBottom: "1rem" }}>
-                    Answer Breakdown
-                  </div>
+                  {(() => {
+                    const currentAttemptsCount = attempts.filter((att) => att.quiz === selectedQuiz?.id).length;
+                    const currentMaxAttempts = selectedQuiz?.max_attempts || 3;
+                    const currentIsLimitReached = currentAttemptsCount >= currentMaxAttempts;
 
-                  <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                    {selectedQuiz?.questions?.map((q: any, idx: number) => {
-                      const userAns = selectedAttempt.answers?.find((a: any) => a.question === q.id);
+                    if (!currentIsLimitReached) {
                       return (
-                        <div
-                          key={q.id}
-                          style={{
-                            background: "white",
-                            border: "1px solid var(--admin-border)",
-                            borderRadius: "10px",
-                            padding: "14px",
-                          }}
-                        >
-                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-                            <span style={{ fontWeight: "700", fontSize: "12px", color: "#64748b" }}>
-                              Question #{idx + 1}
-                            </span>
-                            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                              {userAns?.hint_count > 0 && (
-                                <span className="status-pill status-active" style={{ fontSize: "11px", backgroundColor: "#fef3c7", color: "#d97706" }}>
-                                  {userAns.hint_count} Hints Used (-{userAns.hint_count * 25}%)
-                                </span>
-                              )}
-                              <span
-                                className={`status-pill ${userAns?.is_correct ? "status-active" : "status-suspended"}`}
-                                style={{ fontSize: "11px", padding: "2px 8px" }}
-                              >
-                                {userAns?.is_correct ? "Correct" : "Incorrect"}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div style={{ fontSize: "14px", fontWeight: "600", marginBottom: "10px" }}>
-                            {q.question_text}
-                          </div>
-
-                          {q.question_type === "MCQ" ? (
-                            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                              {q.answers?.map((ans: any) => {
-                                const isUserChoice = userAns?.selected_answer === ans.id;
-                                return (
-                                  <div
-                                    key={ans.id}
-                                    style={{
-                                      display: "flex",
-                                      alignItems: "center",
-                                      gap: "8px",
-                                      padding: "6px 10px",
-                                      borderRadius: "6px",
-                                      border: "1px solid",
-                                      borderColor: ans.is_correct
-                                        ? "#bbf7d0"
-                                        : "transparent",
-                                      background: ans.is_correct
-                                        ? "#f0fdf4"
-                                        : "transparent",
-                                    }}
-                                  >
-                                    <span
-                                      style={{
-                                        fontWeight: "bold",
-                                        color: ans.is_correct ? "#16a34a" : "#cbd5e1",
-                                      }}
-                                    >
-                                      {ans.is_correct ? "✓" : "○"}
-                                    </span>
-                                    <span style={{ fontSize: "13px", color: ans.is_correct ? "#14532d" : "inherit" }}>
-                                      {ans.answer_text}
-                                    </span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <div style={{ display: "flex", flexDirection: "column", gap: "6px", fontSize: "13px" }}>
-                              <div>
-                                <span style={{ color: "#64748b" }}>Correct Value:</span>{" "}
-                                <strong style={{ color: "#16a34a" }}>
-                                  {q.correct_value}
-                                </strong>
-                              </div>
-                            </div>
-                          )}
+                        <div style={{ padding: "20px", background: "#fef3c7", color: "#b45309", borderRadius: "12px", border: "1px solid #fde68a", textAlign: "center", marginBottom: "2rem" }}>
+                          <span style={{ fontWeight: "700", display: "block", marginBottom: "8px" }}>Answers Hidden</span>
+                          You have {currentMaxAttempts - currentAttemptsCount} attempt(s) remaining. The correct answers will be revealed once you have exhausted all your attempts.
                         </div>
                       );
-                    })}
-                  </div>
+                    }
+
+                    return (
+                      <>
+                        <div style={{ fontSize: "1.1rem", fontWeight: "700", marginBottom: "1rem" }}>
+                          Answer Breakdown
+                        </div>
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                          {selectedQuiz?.questions?.map((q: any, idx: number) => {
+                            const userAns = selectedAttempt.answers?.find((a: any) => a.question === q.id);
+                            return (
+                              <div
+                                key={q.id}
+                                style={{
+                                  background: "white",
+                                  border: "1px solid var(--admin-border)",
+                                  borderRadius: "10px",
+                                  padding: "14px",
+                                }}
+                              >
+                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                                  <span style={{ fontWeight: "700", fontSize: "12px", color: "#64748b" }}>
+                                    Question #{idx + 1}
+                                  </span>
+                                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                                    {userAns?.hint_count > 0 && (
+                                      <span className="status-pill status-active" style={{ fontSize: "11px", backgroundColor: "#fef3c7", color: "#d97706" }}>
+                                        {userAns.hint_count} Hints Used (-{userAns.hint_count * 25}%)
+                                      </span>
+                                    )}
+                                    <span
+                                      className={`status-pill ${userAns?.is_correct ? "status-active" : "status-suspended"}`}
+                                      style={{ fontSize: "11px", padding: "2px 8px" }}
+                                    >
+                                      {userAns?.is_correct ? "Correct" : "Incorrect"}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div style={{ fontSize: "14px", fontWeight: "600", marginBottom: "10px" }}>
+                                  {q.question_text}
+                                </div>
+
+                                {q.question_type === "MCQ" ? (
+                                  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                    {q.answers?.map((ans: any) => {
+                                      const isUserChoice = userAns?.selected_answer === ans.id;
+                                      return (
+                                        <div
+                                          key={ans.id}
+                                          style={{
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "8px",
+                                            padding: "6px 10px",
+                                            borderRadius: "6px",
+                                            border: "1px solid",
+                                            borderColor: ans.is_correct
+                                              ? "#bbf7d0"
+                                              : isUserChoice
+                                              ? "#fca5a5"
+                                              : "transparent",
+                                            background: ans.is_correct
+                                              ? "#f0fdf4"
+                                              : isUserChoice
+                                              ? "#fef2f2"
+                                              : "transparent",
+                                          }}
+                                        >
+                                          <span
+                                            style={{
+                                              fontWeight: "bold",
+                                              color: ans.is_correct ? "#16a34a" : isUserChoice ? "#dc2626" : "#cbd5e1",
+                                            }}
+                                          >
+                                            {ans.is_correct ? "✓" : isUserChoice ? "✗" : "○"}
+                                          </span>
+                                          <span style={{ fontSize: "13px", color: ans.is_correct ? "#14532d" : "inherit" }}>
+                                            {ans.answer_text}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                ) : (
+                                  <div style={{ display: "flex", flexDirection: "column", gap: "6px", fontSize: "13px" }}>
+                                    <div>
+                                      <span style={{ color: "#64748b" }}>Your Answer:</span>{" "}
+                                      <strong style={{ color: userAns?.is_correct ? "#16a34a" : "#dc2626" }}>
+                                        {userAns?.typed_answer || "(None)"}
+                                      </strong>
+                                    </div>
+                                    {!userAns?.is_correct && (
+                                      <div>
+                                        <span style={{ color: "#64748b" }}>Correct Value:</span>{" "}
+                                        <strong style={{ color: "#16a34a" }}>
+                                          {q.correct_value}
+                                        </strong>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
+                    );
+                  })()}
 
                   <div style={{ marginTop: "2rem" }}>
-                    {selectedAttempt.score >= 75 ? (
-                      <button
-                        className="admin-primary-btn"
-                        onClick={() => {
-                          setQuizAction("list");
-                          setActiveSection("learning-path");
-                          setSelectedQuiz(null);
-                          setSelectedAttempt(null);
-                          setError("");
-                          setSuccessMessage("");
-                        }}
-                      >
-                        Proceed to Next Quiz
-                      </button>
-                    ) : (
-                      <button
-                        className="admin-primary-btn"
-                        style={{ backgroundColor: "#f59e0b", borderColor: "#f59e0b" }}
-                        onClick={() => {
-                          setQuizAction("list");
-                          setActiveSection("learning-path");
-                          setSelectedQuiz(null);
-                          setSelectedAttempt(null);
-                          setError("");
-                          setSuccessMessage("");
-                        }}
-                      >
-                        Return to Lessons (Study Required)
-                      </button>
-                    )}
+                    {(() => {
+                      const currentAttemptsCount = attempts.filter((att) => att.quiz === selectedQuiz?.id).length;
+                      const currentMaxAttempts = selectedQuiz?.max_attempts || 3;
+                      const currentIsLimitReached = currentAttemptsCount >= currentMaxAttempts;
+                      
+                      if (currentIsLimitReached) {
+                        return (
+                          <button
+                            className="admin-primary-btn"
+                            style={{ backgroundColor: "#8b5cf6", borderColor: "#8b5cf6" }}
+                            onClick={() => {
+                              setQuizAction("list");
+                              setActiveSection("learning-path");
+                              setLearningPathStep("lesson");
+                              setSelectedLessonId(selectedQuiz?.lesson?.toString() || selectedLessonId);
+                              setSelectedQuiz(null);
+                              setSelectedAttempt(null);
+                            }}
+                          >
+                            Study Lesson Materials
+                          </button>
+                        );
+                      }
+
+                      return selectedAttempt.score >= (selectedQuiz?.pass_mark || 75) ? (
+                        <button
+                          className="admin-primary-btn"
+                          onClick={() => {
+                            setQuizAction("list");
+                            setActiveSection("learning-path");
+                            setLearningPathStep("lesson");
+                            setSelectedQuiz(null);
+                            setSelectedAttempt(null);
+                            setError("");
+                            setSuccessMessage("");
+                          }}
+                        >
+                          Proceed to Study Lessons
+                        </button>
+                      ) : (
+                        <button
+                          className="admin-primary-btn"
+                          style={{ backgroundColor: "#f59e0b", borderColor: "#f59e0b" }}
+                          onClick={() => {
+                            setQuizAction("list");
+                            setActiveSection("learning-path");
+                            setSelectedQuiz(null);
+                            setSelectedAttempt(null);
+                            setError("");
+                            setSuccessMessage("");
+                          }}
+                        >
+                          Return to Quizzes (Try Again)
+                        </button>
+                      );
+                    })()}
                   </div>
                 </div>
               )}

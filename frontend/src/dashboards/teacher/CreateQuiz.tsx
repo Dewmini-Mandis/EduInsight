@@ -74,6 +74,7 @@ const Toggle = ({ checked, onChange, label }: any) => (
 
 const CreateQuiz = () => {
   const [lessons, setLessons] = useState<any[]>([]);
+  const [skillsList, setSkillsList] = useState<any[]>([]);
   const [lessonsLoading, setLessonsLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -88,7 +89,8 @@ const CreateQuiz = () => {
   const [description, setDescription] = useState("");
   const [academicTerm, setAcademicTerm] = useState("");
   const [lessonId, setLessonId] = useState("");
-  const [topic, setTopic] = useState("");
+  const [skillId, setSkillId] = useState("");
+  const [topicId, setTopicId] = useState("");
   const [estimatedTime, setEstimatedTime] = useState("");
   
   const [level, setLevel] = useState("Beginner");
@@ -113,6 +115,7 @@ const CreateQuiz = () => {
 
   // Metadata arrays
   const [termsList, setTermsList] = useState<any[]>([]);
+  const [topicsList, setTopicsList] = useState<any[]>([]);
   const [quizLevels, setQuizLevels] = useState<any[]>([]);
   const [diffLevels, setDiffLevels] = useState<any[]>([]);
   
@@ -165,6 +168,39 @@ const CreateQuiz = () => {
 
   
 
+
+  useEffect(() => {
+    if (!lessonId) {
+      setTopicsList([]);
+      setTopicId("");
+      return;
+    }
+    const fetchFilteredTopics = async () => {
+      const token = getToken();
+      try {
+        const res = await fetch(`/api/quizzes/topics/?lesson=${lessonId}`, { headers: { Authorization: `Token ${token}` } });
+        if (res.ok) setTopicsList(await res.json());
+      } catch (err) { console.error(err); }
+    };
+    fetchFilteredTopics();
+  }, [lessonId]);
+
+  useEffect(() => {
+    if (!topicId) {
+      setSkillsList([]);
+      setSkillId("");
+      return;
+    }
+    const fetchFilteredSkills = async () => {
+      const token = getToken();
+      try {
+        const res = await fetch(`/api/quizzes/skills/?topic=${topicId}`, { headers: { Authorization: `Token ${token}` } });
+        if (res.ok) setSkillsList(await res.json());
+      } catch (err) { console.error(err); }
+    };
+    fetchFilteredSkills();
+  }, [topicId]);
+
   const handlePublish = async () => {
     const token = getToken();
     if (!token) return;
@@ -172,6 +208,8 @@ const CreateQuiz = () => {
     const errors: any = {};
     if (!title.trim()) errors.title = "Quiz Title is required.";
     if (!assignTo) errors.assignTo = "Please select a class to assign.";
+    if (!topicId) errors.topicId = "Topic is required.";
+    if (!skillId) errors.skillId = "Skill is required.";
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       return;
@@ -205,6 +243,8 @@ const CreateQuiz = () => {
       title,
       description,
       lesson: lessonId ? parseInt(lessonId) : null,
+      topic: topicId ? parseInt(topicId) : null,
+      skill: skillId ? parseInt(skillId) : null,
       quiz_level: quizLevelId ? parseInt(quizLevelId) : null,
       difficulty: diffLevelId ? parseInt(diffLevelId) : null,
       order: parseInt(order) || 1,
@@ -303,12 +343,31 @@ const CreateQuiz = () => {
             </div>
             <div>
               <Label>Lesson</Label>
-              <Select value={lessonId} onChange={(e: any) => setLessonId(e.target.value)} disabled={!termId}>
+              <Select value={lessonId} onChange={(e: any) => { setLessonId(e.target.value); setFieldErrors({...fieldErrors, lessonId: null}); }} disabled={!termId}>
                 <option value="">{lessonsLoading ? "Loading..." : "Select Lesson"}</option>
                 {lessons.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
               </Select>
             </div>
           </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px" }}>
+            <div>
+              <Label>Topic <span style={{ color: "red" }}>*</span></Label>
+              <Select value={topicId} onChange={(e: any) => { setTopicId(e.target.value); setFieldErrors({...fieldErrors, topicId: null}); }} disabled={!lessonId}>
+                <option value="">Select Topic</option>
+                {topicsList.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </Select>
+              {fieldErrors.topicId && <span style={{ color: "#ef4444", fontSize: "11px", marginTop: "4px", display: "block" }}>{fieldErrors.topicId}</span>}
+            </div>
+            <div>
+              <Label>Skill <span style={{ color: "red" }}>*</span></Label>
+              <Select value={skillId} onChange={(e: any) => { setSkillId(e.target.value); setFieldErrors({...fieldErrors, skillId: null}); }} disabled={!topicId}>
+                <option value="">Select Skill</option>
+                {skillsList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </Select>
+              {fieldErrors.skillId && <span style={{ color: "#ef4444", fontSize: "11px", marginTop: "4px", display: "block" }}>{fieldErrors.skillId}</span>}
+            </div>
+          </div>
+
           
           <div>
             <Label>Estimated Time</Label>

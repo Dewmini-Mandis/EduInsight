@@ -99,7 +99,10 @@ const CreateMaterial = () => {
 
     const errors: any = {};
     if (!title.trim()) errors.title = "Title is required.";
+    if (!termId) errors.termId = "Academic Term is required.";
     if (!lessonId) errors.lessonId = "Lesson is required.";
+    if (!topicId) errors.topicId = "Topic is required.";
+    if (!skillId) errors.skillId = "Skill is required.";
     
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
@@ -185,11 +188,12 @@ const CreateMaterial = () => {
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
           <div>
-            <Label>Academic Term</Label>
-            <Select value={termId} onChange={(e: any) => setTermId(e.target.value)}>
+            <Label>Academic Term <span style={{ color: "red" }}>*</span></Label>
+            <Select value={termId} onChange={(e: any) => { setTermId(e.target.value); setFieldErrors({...fieldErrors, termId: null}); }}>
               <option value="">Select Term</option>
               {termsList.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </Select>
+            {fieldErrors.termId && <span style={{ color: "red", fontSize: "12px" }}>{fieldErrors.termId}</span>}
           </div>
           <div>
             <Label>Lesson <span style={{ color: "red" }}>*</span></Label>
@@ -203,18 +207,20 @@ const CreateMaterial = () => {
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
           <div>
-            <Label>Topic (Optional)</Label>
-            <Select value={topicId} onChange={(e: any) => setTopicId(e.target.value)} disabled={!lessonId}>
+            <Label>Topic <span style={{ color: "red" }}>*</span></Label>
+            <Select value={topicId} onChange={(e: any) => { setTopicId(e.target.value); setFieldErrors({...fieldErrors, topicId: null}); }} disabled={!lessonId}>
               <option value="">Select Topic</option>
               {topicsList.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </Select>
+            {fieldErrors.topicId && <span style={{ color: "red", fontSize: "12px" }}>{fieldErrors.topicId}</span>}
           </div>
           <div>
-            <Label>Skill (Optional)</Label>
-            <Select value={skillId} onChange={(e: any) => setSkillId(e.target.value)} disabled={!topicId}>
+            <Label>Skill <span style={{ color: "red" }}>*</span></Label>
+            <Select value={skillId} onChange={(e: any) => { setSkillId(e.target.value); setFieldErrors({...fieldErrors, skillId: null}); }} disabled={!topicId}>
               <option value="">Select Skill</option>
               {skillsList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </Select>
+            {fieldErrors.skillId && <span style={{ color: "red", fontSize: "12px" }}>{fieldErrors.skillId}</span>}
           </div>
         </div>
         

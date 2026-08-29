@@ -84,6 +84,7 @@ class LearningMaterial(models.Model):
 	title = models.CharField(max_length=255)
 	material_type = models.CharField(max_length=20, choices=MATERIAL_TYPES)
 	content = models.TextField(blank=True, help_text="Text content or URL")
+	file = models.FileField(upload_to="materials/videos/", null=True, blank=True)
 	
 	lesson = models.ForeignKey(Lesson, on_delete=models.SET_NULL, null=True, blank=True, related_name="materials")
 	topic = models.ForeignKey(Topic, on_delete=models.SET_NULL, null=True, blank=True, related_name="materials")
@@ -101,6 +102,35 @@ class LearningMaterial(models.Model):
 	is_required = models.BooleanField(default=True)
 	def __str__(self) -> str:
 		return self.title
+
+
+class MaterialAttachment(models.Model):
+	material = models.ForeignKey(LearningMaterial, on_delete=models.CASCADE, related_name="attachments")
+	file = models.FileField(upload_to="materials/attachments/")
+	attachment_type = models.CharField(max_length=20, choices=[("PDF", "PDF"), ("IMAGE", "Image")])
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	def __str__(self):
+		return f"{self.attachment_type} for {self.material.title}"
+
+
+class VideoQuestion(models.Model):
+	TYPE_MCQ = "MCQ"
+	TYPE_TF = "True / False"
+
+	QUESTION_TYPES = [
+		(TYPE_MCQ, "Multiple Choice"),
+		(TYPE_TF, "True / False")
+	]
+
+	material = models.ForeignKey(LearningMaterial, on_delete=models.CASCADE, related_name="video_questions")
+	timestamp = models.FloatField(help_text="Timestamp in seconds")
+	question_type = models.CharField(max_length=20, choices=QUESTION_TYPES)
+	question_text = models.TextField()
+	options = models.JSONField(default=list, help_text="List of options with text and is_correct flags")
+
+	def __str__(self):
+		return f"Question at {self.timestamp}s for {self.material.title}"
 
 
 class Quiz(models.Model):

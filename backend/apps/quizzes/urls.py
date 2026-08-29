@@ -9,11 +9,15 @@ from .views import (
     QuizLevelViewSet, 
     DifficultyLevelViewSet,
     LearningMaterialViewSet,
-    EngagementQuestionViewSet
+    EngagementQuestionViewSet,
+    VideoQuestionViewSet,
+    MaterialAttachmentViewSet
 )
 
 router = DefaultRouter()
 router.register(r"engagement-questions", EngagementQuestionViewSet, basename="engagement-question")
+router.register(r"video-questions", VideoQuestionViewSet, basename="video-question")
+router.register(r"material-attachments", MaterialAttachmentViewSet, basename="material-attachment")
 router.register(r"materials", LearningMaterialViewSet, basename="material")
 router.register(r"terms", AcademicTermViewSet, basename="term")
 router.register(r"lessons", LessonViewSet, basename="lesson")
