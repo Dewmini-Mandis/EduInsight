@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getToken, getUser } from "../../auth/authUtils";
+import { FileText, ArrowLeft } from "lucide-react";
 
 type AnswerOption = {
   answer_text: string;
@@ -72,6 +73,18 @@ const Toggle = ({ checked, onChange, label }: any) => (
   </div>
 );
 
+const useMediaQuery = (query: string) => {
+  const [matches, setMatches] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    if (media.matches !== matches) setMatches(media.matches);
+    const listener = () => setMatches(media.matches);
+    media.addEventListener("change", listener);
+    return () => media.removeEventListener("change", listener);
+  }, [matches, query]);
+  return matches;
+};
+
 const CreateQuiz = () => {
   const [lessons, setLessons] = useState<any[]>([]);
   const [skillsList, setSkillsList] = useState<any[]>([]);
@@ -79,6 +92,8 @@ const CreateQuiz = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const isMobile = useMediaQuery("(max-width: 768px)");
+  const [hoverBack, setHoverBack] = useState(false);
   const user = getUser() as any;
   const teacherClassrooms = user?.teacher_profile?.classrooms || [];
 
@@ -299,15 +314,77 @@ const CreateQuiz = () => {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "24px", fontFamily: '"Inter", sans-serif' }}>
-      {/* Back Button */}
-      <div>
-        <button 
-          onClick={() => navigate("/teacher/quizzes")}
-          style={{ display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", color: "#64748b", fontSize: "14px", fontWeight: "500", cursor: "pointer", padding: 0 }}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-          Back to Quizzes
-        </button>
+      
+      {/* Breadcrumb & New Header Card */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+        {/* Breadcrumb */}
+        <div style={{ fontSize: "13px", color: "#6F86A5" }}>
+          Dashboard &gt; Quizzes &gt; <span style={{ fontWeight: "600", color: "#0B1F3A" }}>Create Quiz</span>
+        </div>
+
+        {/* Header Card */}
+        <div style={{
+          backgroundColor: "#FFFFFF",
+          border: "1px solid #E4ECF6",
+          borderRadius: "16px",
+          boxShadow: "0 6px 20px rgba(18, 63, 110, 0.05)",
+          padding: "18px 20px",
+          display: "flex",
+          flexDirection: isMobile ? "column" : "row",
+          alignItems: isMobile ? "flex-start" : "center",
+          justifyContent: "space-between",
+          gap: isMobile ? "20px" : "16px"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+            <div style={{
+              width: "52px",
+              height: "52px",
+              borderRadius: "12px",
+              backgroundColor: "#F1EDFF",
+              color: "#6C4BFF",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0
+            }}>
+              <FileText size={24} />
+            </div>
+            <div>
+              <h2 style={{ margin: 0, fontSize: isMobile ? "24px" : "30px", fontWeight: "700", color: "#0B1F3A", lineHeight: 1.2 }}>
+                Create Quiz
+              </h2>
+              <p style={{ margin: "4px 0 0 0", fontSize: "15px", color: "#5D78A3", fontWeight: "400" }}>
+                Build structured assessments and assign them to the right learners.
+              </p>
+            </div>
+          </div>
+
+          <button 
+            onClick={() => navigate("/teacher/quizzes")}
+            onMouseEnter={() => setHoverBack(true)}
+            onMouseLeave={() => setHoverBack(false)}
+            style={{ 
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "center",
+              gap: "8px", 
+              height: "42px", 
+              padding: "0 18px", 
+              borderRadius: "9px", 
+              border: `1px solid ${hoverBack ? "#C8D8EB" : "#DCE6F3"}`, 
+              backgroundColor: hoverBack ? "#EEF4FB" : "#F7FAFE", 
+              color: "#3D5E8A", 
+              fontSize: "14px", 
+              fontWeight: "600", 
+              cursor: "pointer",
+              transition: "all 150ms ease",
+              width: isMobile ? "100%" : "auto"
+            }}
+          >
+            <ArrowLeft size={16} strokeWidth={2.5} />
+            Back to Quizzes
+          </button>
+        </div>
       </div>
       {error && <div style={{ color: "red" }}>{error}</div>}
       

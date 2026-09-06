@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import "../styles/teacher.css";
 
 // Shared Components
@@ -20,6 +20,7 @@ import CreateLesson from "../dashboards/teacher/CreateLesson";
 import StudentList from "../dashboards/teacher/StudentList";
 import CreateStudent from "../dashboards/teacher/CreateStudent";
 import StudentDetails from "../dashboards/teacher/StudentDetails";
+import EditStudentProfile from "../dashboards/teacher/EditStudentProfile";
 import StudentProgress from "../dashboards/teacher/StudentProgress";
 import MaterialList from "../dashboards/teacher/MaterialList";
 import CreateVideoMaterial from "../dashboards/teacher/CreateVideoMaterial";
@@ -32,6 +33,7 @@ const TeacherLayout = () => {
   const [collapsed, setCollapsed] = useState(false);
   
   const location = useLocation();
+  const navigate = useNavigate();
 
   const getPageTitle = () => {
     const path = location.pathname;
@@ -76,15 +78,23 @@ const TeacherLayout = () => {
       <TeacherSidebar collapsed={collapsed} setCollapsed={setCollapsed} />
 
       {/* Main Panel */}
-      <main className="teacher-main-content" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: "100vh", marginLeft: collapsed ? "80px" : "260px", transition: "margin-left 0.3s ease" }}>
-        {/* Header Component */}
-        <PageHeader 
-          title={getPageTitle()} 
-          subtitle={getPageSubtitle()}
-        />
+      <main className="teacher-main-content" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: "100vh", marginLeft: collapsed ? "80px" : "260px", transition: "margin-left 0.3s ease", backgroundColor: "#F5F8FC" }}>
+
+        {/* Page Title Section Component */}
+        {!(location.pathname.includes("/lessons/") && location.pathname.includes("/topics")) && 
+         location.pathname !== "/teacher/lessons" && 
+         !location.pathname.startsWith("/teacher/materials") && 
+         location.pathname !== "/teacher/quizzes" && 
+         !location.pathname.startsWith("/teacher/students") &&
+         location.pathname !== "/teacher/quizzes/create" && (
+          <PageHeader 
+            title={getPageTitle()} 
+            subtitle={getPageSubtitle()}
+          />
+        )}
 
         {/* Nested routing outlet */}
-        <div style={{ padding: "24px 32px", overflowY: "auto", flex: 1 }}>
+        <div style={{ padding: "0 32px 24px 32px", overflowY: "auto", flex: 1 }}>
           <Routes>
             <Route path="dashboard" element={<TeacherDashboard />} />
             <Route path="analytics" element={<ClassAnalytics />} />
@@ -111,6 +121,7 @@ const TeacherLayout = () => {
             <Route path="students" element={<StudentList />} />
             <Route path="students/create" element={<CreateStudent />} />
             <Route path="students/:studentId" element={<StudentDetails />} />
+            <Route path="students/:studentId/edit" element={<EditStudentProfile />} />
             <Route path="students/:studentId/progress" element={<StudentProgress />} />
             <Route path="profile" element={<UserProfilePage />} />
             <Route path="*" element={<Navigate to="dashboard" replace />} />

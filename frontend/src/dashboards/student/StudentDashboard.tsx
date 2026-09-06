@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Map, BookOpen, Target, Trophy, Clock, CheckCircle, ChevronRight, Lock, Calendar, ChevronDown, Check } from "lucide-react";
 
 import { getToken, getUser } from "../../auth/authUtils";
+import StudentSidebar from "../../components/StudentSidebar";
 import "../../styles/admin.css";
 import "../../styles/teacher.css";
 
@@ -543,99 +544,19 @@ const StudentDashboard = () => {
 
   return (
     <div className={`teacher-app-container ${collapsed ? "teacher-sidebar-collapsed" : ""}`}>
-      <aside className={`teacher-sidebar ${collapsed ? "collapsed" : ""}`}>
-        <div>
-          <div className="teacher-sidebar-brand" style={{ justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <div className="teacher-brand-icon">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M12 3L1 9L5 11.18V17.18L12 21L19 17.18V11.18L21 10.09V17H23V9L12 3ZM20.28 9L12 13.55L3.72 9L12 4.45L20.28 9ZM17 15.99L12 18.74L7 15.99V12.27L12 15L17 12.27V15.99Z" fill="currentColor"/>
-                </svg>
-              </div>
-              <div className="teacher-brand-text">
-                <span className="teacher-brand-name">EduInsight</span>
-                <span className="teacher-brand-module">STUDENT</span>
-              </div>
-            </div>
-            <button
-              onClick={() => setCollapsed(!collapsed)}
-              style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", display: "flex", padding: "4px" }}
-              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                {collapsed ? (
-                  <polyline points="13 17 18 12 13 7" />
-                ) : (
-                  <polyline points="11 17 6 12 11 7" />
-                )}
-                <line x1="18" y1="12" x2="6" y2="12" />
-              </svg>
-            </button>
-          </div>
-          <nav className="teacher-sidebar-nav">
-            <button
-              className={`teacher-nav-link ${activeSection === "learning-path" ? "active" : ""}`}
-              type="button"
-              onClick={() => {
-                setActiveSection("learning-path");
-                setQuizAction("list");
-                setLearningPathStep("term");
-                setSelectedAttempt(null);
-                setSelectedQuiz(null);
-              }}
-            >
-              <Map size={18} strokeWidth={2.5} />
-              <span className="teacher-nav-text">Learning Path</span>
-            </button>
-            <button
-              className={`teacher-nav-link ${activeSection === "progress" ? "active" : ""}`}
-              type="button"
-              onClick={() => {
-                setActiveSection("progress");
-                setQuizAction("list");
-                setSelectedAttempt(null);
-                setSelectedQuiz(null);
-              }}
-            >
-              <Trophy size={18} strokeWidth={2.5} />
-              <span className="teacher-nav-text">My Progress</span>
-            </button>
-            <button
-              className={`teacher-nav-link ${activeSection === "recommendations" ? "active" : ""}`}
-              type="button"
-              onClick={() => {
-                setActiveSection("recommendations");
-                setQuizAction("list");
-                setSelectedAttempt(null);
-                setSelectedQuiz(null);
-              }}
-            >
-              <Target size={18} strokeWidth={2.5} />
-              <span className="teacher-nav-text">Recommendations</span>
-            </button>
-          </nav>
-        </div>
-        <div className="teacher-sidebar-footer">
-          <div className="teacher-user-info-card">
-            <div className="teacher-user-avatar">{initials}</div>
-            <div className="teacher-user-details">
-              <span className="teacher-user-name">{displayName}</span>
-              <span className="teacher-user-email" style={{fontSize: "12px", color: "var(--text-muted)"}}>
-                {currentUser?.email || "student@school.edu.lk"}
-              </span>
-            </div>
-            <svg style={{marginLeft: "auto", color: "var(--text-muted)"}} xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-          </div>
-          <button
-            className="teacher-signout-btn"
-            type="button"
-            onClick={() => navigate("/logout")}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1-2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-            <span>Sign Out</span>
-          </button>
-        </div>
-      </aside>
+      <StudentSidebar
+        collapsed={collapsed}
+        setCollapsed={setCollapsed}
+        activeSection={activeSection}
+        setActiveSection={setActiveSection}
+        setQuizAction={setQuizAction}
+        setLearningPathStep={setLearningPathStep}
+        setSelectedAttempt={setSelectedAttempt}
+        setSelectedQuiz={setSelectedQuiz}
+        initials={initials}
+        displayName={displayName}
+        currentUser={currentUser}
+      />
 
       <main className="teacher-main-content" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: "100vh", marginLeft: collapsed ? "80px" : "260px", transition: "margin-left 0.3s ease", padding: "32px", backgroundColor: "var(--background)", boxSizing: "border-box", overflowY: "auto" }}>
         <header className="admin-header" style={{ marginBottom: "1.5rem" }}>

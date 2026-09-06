@@ -1114,9 +1114,11 @@ const TeacherQuizManager = () => {
       <aside className="admin-sidebar">
         <div>
           <div className="admin-brand">
-            <div>
-              <div className="admin-brand-title">EduInsight</div>
-              <div className="admin-brand-sub">NATIONAL ADMIN</div>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <img src="/eduinsight-logo.png" alt="EduInsight" style={{ height: "24px" }} />
+              <div>
+                <div className="admin-brand-sub">NATIONAL ADMIN</div>
+              </div>
             </div>
           </div>
           <nav className="admin-nav">

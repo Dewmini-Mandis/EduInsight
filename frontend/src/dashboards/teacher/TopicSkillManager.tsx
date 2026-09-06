@@ -2,6 +2,9 @@ import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getToken } from "../../auth/authUtils";
 
+import LessonTopicHeader from "./topics/LessonTopicHeader";
+import TopicCard from "./topics/TopicCard";
+
 type Topic = {
   id: number;
   name: string;
@@ -171,71 +174,71 @@ const TopicSkillManager = () => {
     }
   };
 
-  if (loading) return <div style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted)" }}>Loading topics and skills...</div>;
+  if (loading) return <div style={{ padding: "2rem", textAlign: "center", color: "#5D78A3" }}>Loading topics and skills...</div>;
 
   return (
-    <div style={{ maxWidth: "800px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "24px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: "20px", color: "var(--navy-950)" }}>Manage Topics & Skills</h2>
-          <p style={{ margin: "4px 0 0 0", fontSize: "14px", color: "var(--text-secondary)" }}>Lesson: <strong>{lesson?.title}</strong></p>
-        </div>
-        <button onClick={() => navigate("/teacher/lessons")} className="teacher-btn-secondary">
-          Back to Lessons
-        </button>
-      </div>
-
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <button 
-          onClick={() => setIsAddingTopic(true)} 
-          className="teacher-btn-primary"
-          style={{ display: "flex", alignItems: "center", gap: "8px" }}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Add New Topic
-        </button>
-      </div>
+    <div style={{ maxWidth: "1280px", margin: "0 auto", display: "flex", flexDirection: "column" }}>
+      
+      <LessonTopicHeader 
+        lessonTitle={lesson?.title} 
+        onAddTopic={() => setIsAddingTopic(true)} 
+      />
 
       {isAddingTopic && (
-        <div style={{ backgroundColor: "#f8fafc", padding: "20px", borderRadius: "12px", border: "1px solid var(--teacher-border)" }}>
-          <h3 style={{ margin: "0 0 16px 0", fontSize: "16px", color: "var(--navy-950)" }}>Add New Topic</h3>
-          <p style={{ margin: "0 0 16px 0", fontSize: "13px", color: "var(--text-secondary)" }}>A topic must be associated with at least one skill. Please provide an initial skill name.</p>
+        <div style={{ 
+          backgroundColor: "#FFFFFF", 
+          padding: "24px", 
+          borderRadius: "16px", 
+          border: "1px solid #E4ECF6",
+          boxShadow: "0 6px 20px rgba(18, 63, 110, 0.05)",
+          marginBottom: "24px"
+        }}>
+          <h3 style={{ margin: "0 0 4px 0", fontSize: "18px", color: "#0B1F3A" }}>Add New Topic</h3>
+          <p style={{ margin: "0 0 20px 0", fontSize: "14px", color: "#5D78A3" }}>A topic must be associated with at least one skill. Please provide an initial skill name.</p>
           <form onSubmit={handleAddTopic} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-            <div className="teacher-form-group" style={{ margin: 0 }}>
-              <label className="teacher-form-label">Topic Name</label>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label style={{ fontSize: "13px", fontWeight: "600", color: "#3D5E8A" }}>Topic Name</label>
               <input 
                 type="text" 
-                className="teacher-form-input" 
+                style={{ 
+                  height: "44px", padding: "0 14px", border: "1px solid #DCE6F3", borderRadius: "9px", fontSize: "14px", outline: "none"
+                }}
                 placeholder="e.g., Adding Fractions" 
                 value={newTopicName} 
                 onChange={e => setNewTopicName(e.target.value)} 
                 required 
               />
             </div>
-            <div className="teacher-form-group" style={{ margin: 0 }}>
-              <label className="teacher-form-label">First Skill Name</label>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label style={{ fontSize: "13px", fontWeight: "600", color: "#3D5E8A" }}>First Skill Name</label>
               <input 
                 type="text" 
-                className="teacher-form-input" 
+                style={{ 
+                  height: "44px", padding: "0 14px", border: "1px solid #DCE6F3", borderRadius: "9px", fontSize: "14px", outline: "none"
+                }}
                 placeholder="e.g., Basic Addition with Common Denominators" 
                 value={initialSkillName} 
                 onChange={e => setInitialSkillName(e.target.value)} 
                 required 
               />
             </div>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "8px" }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "8px" }}>
               <button 
                 type="button" 
                 onClick={() => { setIsAddingTopic(false); setNewTopicName(""); setInitialSkillName(""); }} 
-                className="teacher-btn-secondary"
                 disabled={topicSubmitting}
+                style={{ 
+                  height: "42px", padding: "0 20px", backgroundColor: "#F6F9FD", border: "1px solid #DCE6F3", borderRadius: "9px", color: "#3D5E8A", fontSize: "14px", fontWeight: "600", cursor: "pointer"
+                }}
               >
                 Cancel
               </button>
               <button 
                 type="submit" 
-                className="teacher-btn-primary"
                 disabled={topicSubmitting}
+                style={{ 
+                  height: "42px", padding: "0 20px", background: "linear-gradient(135deg, #126BFF 0%, #169BFF 100%)", border: "none", borderRadius: "9px", color: "white", fontSize: "14px", fontWeight: "600", cursor: "pointer", boxShadow: "0 5px 14px rgba(18, 107, 255, 0.20)", opacity: topicSubmitting ? 0.7 : 1
+                }}
               >
                 {topicSubmitting ? "Saving..." : "Save Topic & Skill"}
               </button>
@@ -245,73 +248,36 @@ const TopicSkillManager = () => {
       )}
 
       {topics.length === 0 && !isAddingTopic ? (
-        <div style={{ textAlign: "center", padding: "40px 20px", backgroundColor: "#ffffff", borderRadius: "12px", border: "1px dashed #cbd5e1" }}>
-          <h3 style={{ color: "var(--navy-950)", marginBottom: "8px" }}>No topics found</h3>
-          <p style={{ color: "var(--text-secondary)", fontSize: "14px" }}>Create your first topic to start assigning skills.</p>
+        <div style={{ textAlign: "center", padding: "40px 20px", backgroundColor: "#FFFFFF", borderRadius: "16px", border: "1px dashed #DCE6F3" }}>
+          <h3 style={{ color: "#0B1F3A", margin: "0 0 8px 0" }}>No topics found</h3>
+          <p style={{ color: "#5D78A3", fontSize: "14px", margin: 0 }}>Create your first topic to start assigning skills.</p>
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          {topics.map(topic => {
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {topics.map((topic, index) => {
             const topicSkills = skills.filter(s => s.topic === topic.id);
             return (
-              <div key={topic.id} style={{ backgroundColor: "#ffffff", padding: "20px", borderRadius: "12px", border: "1px solid var(--teacher-border)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                  <h3 style={{ margin: 0, fontSize: "16px", color: "var(--navy-950)", display: "flex", alignItems: "center", gap: "8px" }}>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--blue-600)" }}><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10M6 10h10"/></svg>
-                    {topic.name}
-                  </h3>
-                  <button 
-                    onClick={() => handleDeleteTopic(topic.id)} 
-                    style={{ background: "none", border: "none", color: "var(--danger)", fontSize: "12px", fontWeight: "600", cursor: "pointer", padding: "4px 8px", borderRadius: "4px" }}
-                  >
-                    Delete Topic
-                  </button>
-                </div>
-                
-                <div style={{ marginLeft: "26px", borderLeft: "2px solid #e2e8f0", paddingLeft: "16px" }}>
-                  <h4 style={{ margin: "0 0 12px 0", fontSize: "13px", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Associated Skills</h4>
-                  
-                  <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "8px" }}>
-                    {topicSkills.map(skill => (
-                      <li key={skill.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#f8fafc", padding: "10px 14px", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
-                        <span style={{ fontSize: "14px", color: "var(--navy-950)", fontWeight: "500" }}>{skill.name}</span>
-                        <button 
-                          onClick={() => handleDeleteSkill(skill.id, topic.id)}
-                          style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", padding: "4px" }}
-                          title="Delete Skill"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-
-                  {addingSkillToTopic === topic.id ? (
-                    <form onSubmit={(e) => handleAddSkill(e, topic.id)} style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "12px" }}>
-                      <input 
-                        type="text" 
-                        className="teacher-form-input" 
-                        style={{ padding: "8px 12px", fontSize: "13px", margin: 0, flex: 1 }}
-                        placeholder="Enter new skill name" 
-                        value={newSkillName} 
-                        onChange={e => setNewSkillName(e.target.value)} 
-                        autoFocus
-                        required 
-                      />
-                      <button type="submit" disabled={skillSubmitting} className="teacher-btn-primary" style={{ padding: "8px 16px", fontSize: "13px" }}>Save</button>
-                      <button type="button" disabled={skillSubmitting} onClick={() => { setAddingSkillToTopic(null); setNewSkillName(""); }} className="teacher-btn-secondary" style={{ padding: "8px 16px", fontSize: "13px" }}>Cancel</button>
-                    </form>
-                  ) : (
-                    <button 
-                      onClick={() => { setAddingSkillToTopic(topic.id); setNewSkillName(""); }}
-                      style={{ marginTop: "12px", background: "none", border: "none", color: "var(--blue-600)", fontSize: "13px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", padding: "4px 0" }}
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                      Add Skill
-                    </button>
-                  )}
-                </div>
-              </div>
+              <TopicCard 
+                key={topic.id}
+                topic={topic}
+                index={index}
+                skills={topicSkills}
+                onDeleteTopic={handleDeleteTopic}
+                onRemoveSkill={handleDeleteSkill}
+                isAdding={addingSkillToTopic === topic.id}
+                onStartAdding={() => {
+                  setAddingSkillToTopic(topic.id);
+                  setNewSkillName("");
+                }}
+                onCancelAdding={() => {
+                  setAddingSkillToTopic(null);
+                  setNewSkillName("");
+                }}
+                onSubmitSkill={handleAddSkill}
+                newSkillName={newSkillName}
+                setNewSkillName={setNewSkillName}
+                skillSubmitting={skillSubmitting}
+              />
             );
           })}
         </div>

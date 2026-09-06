@@ -1,15 +1,35 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { getToken } from "../../auth/authUtils";
+import { UploadCloud, Trash2, Calendar, BookOpen, Layers, Target, Save, FileText, Video } from "lucide-react";
 
-const Card = ({ children, style }: any) => (
-  <div style={{ backgroundColor: "#ffffff", borderRadius: "12px", border: "1px solid #f0f0f0", padding: "20px", display: "flex", flexDirection: "column", gap: "16px", ...style }}>
+import LearningNoteHeader from "../../components/materials/LearningNoteHeader";
+import FileUploader from "../../components/materials/FileUploader";
+
+const MainCard = ({ children, style }: any) => (
+  <div style={{ backgroundColor: "#FFFFFF", borderRadius: "16px", border: "1px solid #E4ECF6", boxShadow: "0 6px 20px rgba(18, 63, 110, 0.05)", padding: "22px", display: "flex", flexDirection: "column", gap: "20px", ...style }}>
     {children}
   </div>
 );
-const Label = ({ children }: any) => <div style={{ fontSize: "12px", fontWeight: "600", color: "#64748b", marginBottom: "6px" }}>{children}</div>;
-const Input = ({ ...props }: any) => <input style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "13px", outline: "none", color: "#1e293b" }} {...props} />;
-const Select = ({ children, ...props }: any) => <select style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "13px", outline: "none", color: "#1e293b", backgroundColor: "#fff" }} {...props}>{children}</select>;
+
+const Label = ({ children }: any) => <div style={{ fontSize: "13px", fontWeight: "600", color: "#234A7A", marginBottom: "7px" }}>{children}</div>;
+
+const InputWrapper = ({ icon: Icon, children }: any) => (
+  <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+    <div style={{ position: "absolute", left: "14px", color: "#126BFF", pointerEvents: "none", display: "flex" }}>
+      <Icon size={18} strokeWidth={2} />
+    </div>
+    {children}
+  </div>
+);
+
+const Input = ({ ...props }: any) => (
+  <input style={{ width: "100%", height: "46px", padding: "0 14px 0 42px", borderRadius: "9px", border: "1px solid #DCE6F3", fontSize: "14px", outline: "none", color: "#0B1F3A", transition: "all 0.2s" }} onFocus={(e:any) => {e.target.style.borderColor="#126BFF"; e.target.style.boxShadow="0 0 0 3px rgba(18,107,255,0.10)"}} onBlur={(e:any) => {e.target.style.borderColor="#DCE6F3"; e.target.style.boxShadow="none"}} {...props} />
+);
+
+const Select = ({ children, ...props }: any) => (
+  <select style={{ width: "100%", height: "46px", padding: "0 14px 0 42px", borderRadius: "9px", border: "1px solid #DCE6F3", fontSize: "14px", outline: "none", color: "#0B1F3A", backgroundColor: "#fff", appearance: "none", transition: "all 0.2s" }} onFocus={(e:any) => {e.target.style.borderColor="#126BFF"; e.target.style.boxShadow="0 0 0 3px rgba(18,107,255,0.10)"}} onBlur={(e:any) => {e.target.style.borderColor="#DCE6F3"; e.target.style.boxShadow="none"}} {...props}>{children}</select>
+);
 
 type VideoQuestion = {
   id?: number;
@@ -205,143 +225,179 @@ const CreateVideoMaterial = () => {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "900px", margin: "0 auto", paddingBottom: "100px" }}>
-      <button onClick={() => navigate("/teacher/materials")} style={{ display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", color: "#64748b", fontSize: "14px", fontWeight: "500", cursor: "pointer", padding: 0 }}>
-        Back
-      </button>
+    <div style={{ display: "flex", flexDirection: "column", maxWidth: "1240px", margin: "0 auto", padding: "24px 32px 32px 32px" }}>
+      
+      <LearningNoteHeader 
+        onBack={() => navigate("/teacher/materials")} 
+        title={materialId ? "Edit Interactive Video" : "Upload Interactive Video"}
+        subtitle="Add a video and configure timeline questions."
+        helperText="Add a video, select the relevant term and lesson, and build an interactive timeline."
+        icon={Video}
+      />
 
-      <h2>{materialId ? "Edit Interactive Video" : "Upload Interactive Video"}</h2>
-      {error && <div style={{ color: "red" }}>{error}</div>}
+      {error && <div style={{ color: "#FF4054", padding: "12px", backgroundColor: "#FDEDED", borderRadius: "8px", fontSize: "14px", fontWeight: "500", border: "1px solid #FADCDC", marginBottom: "16px" }}>{error}</div>}
 
-      <Card>
+      <MainCard>
         <div>
-          <Label>Title *</Label>
-          <Input value={title} onChange={(e: any) => setTitle(e.target.value)} placeholder="E.g., Intro to Fractions" />
+          <Label>Title <span style={{ color: "#126BFF" }}>*</span></Label>
+          <InputWrapper icon={FileText}>
+            <Input value={title} onChange={(e: any) => setTitle(e.target.value)} placeholder="E.g., Intro to Fractions" />
+          </InputWrapper>
         </div>
         
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
           <div>
-            <Label>Term *</Label>
-            <Select value={termId} onChange={(e: any) => setTermId(e.target.value)}>
-              <option value="">Select</option>
-              {termsList.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </Select>
+            <Label>Term <span style={{ color: "#126BFF" }}>*</span></Label>
+            <InputWrapper icon={Calendar}>
+              <Select value={termId} onChange={(e: any) => setTermId(e.target.value)}>
+                <option value="">Select Term</option>
+                {termsList.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </Select>
+            </InputWrapper>
           </div>
           <div>
-            <Label>Lesson *</Label>
-            <Select value={lessonId} onChange={(e: any) => setLessonId(e.target.value)} disabled={!termId}>
-              <option value="">Select</option>
-              {lessonsList.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
-            </Select>
+            <Label>Lesson <span style={{ color: "#126BFF" }}>*</span></Label>
+            <InputWrapper icon={BookOpen}>
+              <Select value={lessonId} onChange={(e: any) => setLessonId(e.target.value)} disabled={!termId}>
+                <option value="">Select Lesson</option>
+                {lessonsList.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
+              </Select>
+            </InputWrapper>
           </div>
           <div>
             <Label>Topic</Label>
-            <Select value={topicId} onChange={(e: any) => setTopicId(e.target.value)} disabled={!lessonId}>
-              <option value="">Select</option>
-              {topicsList.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </Select>
+            <InputWrapper icon={Layers}>
+              <Select value={topicId} onChange={(e: any) => setTopicId(e.target.value)} disabled={!lessonId}>
+                <option value="">Select Topic</option>
+                {topicsList.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </Select>
+            </InputWrapper>
           </div>
           <div>
             <Label>Skill</Label>
-            <Select value={skillId} onChange={(e: any) => setSkillId(e.target.value)} disabled={!topicId}>
-              <option value="">Select</option>
-              {skillsList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </Select>
+            <InputWrapper icon={Target}>
+              <Select value={skillId} onChange={(e: any) => setSkillId(e.target.value)} disabled={!topicId}>
+                <option value="">Select Skill</option>
+                {skillsList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </Select>
+            </InputWrapper>
           </div>
         </div>
 
         <div>
-          <Label>Video File {materialId ? "(Leave empty to keep existing)" : "*"}</Label>
-          <input type="file" accept="video/mp4,video/webm" onChange={handleFileChange} />
+          <Label>Video File {materialId ? "(Leave empty to keep existing)" : <span style={{ color: "#126BFF" }}>*</span>}</Label>
+          <FileUploader
+            accept="video/mp4,video/webm"
+            multiple={false}
+            helpText="Supported formats: MP4, WebM (Max 50MB)"
+            existingAttachments={videoUrl && !videoFile ? [{ id: 'video', file: videoUrl }] : []}
+            newAttachments={videoFile ? [videoFile] : []}
+            onAddFiles={(files) => {
+              if (files.length > 0) {
+                setVideoFile(files[0]);
+                setVideoUrl(URL.createObjectURL(files[0]));
+              }
+            }}
+            onRemoveExisting={() => setVideoUrl("")}
+            onRemoveNew={() => { setVideoFile(null); setVideoUrl(""); }}
+          />
         </div>
-      </Card>
 
       {videoUrl && (
-        <Card style={{ position: "relative" }}>
-          <h3 style={{ margin: "0 0 16px 0" }}>Interactive Timeline</h3>
-          <video ref={videoRef} src={videoUrl} controls style={{ width: "100%", borderRadius: "8px", backgroundColor: "#000" }} />
+        <div style={{ marginTop: "24px" }}>
+          <h3 style={{ margin: "0 0 16px 0", color: "#0B1F3A" }}>Interactive Timeline</h3>
+          <video ref={videoRef} src={videoUrl} controls style={{ width: "100%", borderRadius: "12px", backgroundColor: "#000", border: "1px solid #E4ECF6" }} />
           
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "16px" }}>
-             <button onClick={handleAddQuestionClick} style={{ padding: "8px 16px", backgroundColor: "#2563eb", color: "white", borderRadius: "6px", border: "none", cursor: "pointer", fontWeight: "600" }}>
+             <button onClick={handleAddQuestionClick} style={{ padding: "10px 20px", backgroundColor: "#EEF4FB", color: "#126BFF", border: "1px solid #C8D8EB", borderRadius: "8px", cursor: "pointer", fontWeight: "600" }}>
                + Add Question at Current Time
              </button>
           </div>
 
           {questions.length > 0 && (
              <div style={{ marginTop: "24px" }}>
-               <h4>Questions</h4>
+               <h4 style={{ color: "#0B1F3A", marginBottom: "12px" }}>Questions</h4>
                {questions.map((q, idx) => (
-                 <div key={idx} style={{ display: "flex", justifyContent: "space-between", padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "8px" }}>
-                   <div>
-                      <strong>{Math.floor(q.timestamp)}s</strong> - {q.question_text} ({q.question_type})
+                 <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", backgroundColor: "#F7FAFE", border: "1px solid #E4ECF6", borderRadius: "12px", marginBottom: "8px" }}>
+                   <div style={{ fontSize: "14px", color: "#3D5E8A" }}>
+                      <strong style={{ color: "#0B1F3A", marginRight: "8px" }}>{Math.floor(q.timestamp)}s</strong>
+                      {q.question_text} <span style={{ fontSize: "12px", color: "#5D78A3", backgroundColor: "#EAF3FF", padding: "2px 6px", borderRadius: "4px", marginLeft: "8px" }}>{q.question_type}</span>
                    </div>
-                   <button onClick={() => handleRemoveQuestion(idx)} style={{ color: "red", border: "none", background: "none", cursor: "pointer" }}>Remove</button>
+                   <button onClick={() => handleRemoveQuestion(idx)} style={{ color: "#FF4054", border: "none", background: "none", cursor: "pointer", padding: "4px", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "6px" }} title="Remove Question"><Trash2 size={16}/></button>
                  </div>
                ))}
              </div>
           )}
 
           {showQuestionBuilder && (
-            <div style={{ marginTop: "24px", padding: "20px", border: "1px solid #cbd5e1", borderRadius: "8px", backgroundColor: "#f8fafc" }}>
-              <h4>Add Question at {Math.floor(newQuestionTime)}s</h4>
+            <div style={{ marginTop: "24px", padding: "24px", border: "1px solid #DCE6F3", borderRadius: "12px", backgroundColor: "#F7FAFE" }}>
+              <h4 style={{ color: "#0B1F3A", margin: "0 0 16px 0" }}>Add Question at {Math.floor(newQuestionTime)}s</h4>
               
               <div style={{ marginBottom: "16px" }}>
                 <Label>Question Type</Label>
-                <Select value={newQuestionType} onChange={(e: any) => {
-                  setNewQuestionType(e.target.value);
-                  if (e.target.value === "True / False") {
-                    setNewQuestionOptions([{text: "True", is_correct: true}, {text: "False", is_correct: false}]);
-                  }
-                }}>
-                  <option value="MCQ">Multiple Choice</option>
-                  <option value="True / False">True / False</option>
-                </Select>
+                <div style={{ position: "relative" }}>
+                  <select value={newQuestionType} onChange={(e: any) => {
+                    setNewQuestionType(e.target.value);
+                    if (e.target.value === "True / False") {
+                      setNewQuestionOptions([{text: "True", is_correct: true}, {text: "False", is_correct: false}]);
+                    }
+                  }} style={{ width: "100%", height: "46px", padding: "0 14px", borderRadius: "9px", border: "1px solid #DCE6F3", fontSize: "14px", outline: "none", color: "#0B1F3A", backgroundColor: "#fff" }}>
+                    <option value="MCQ">Multiple Choice</option>
+                    <option value="True / False">True / False</option>
+                  </select>
+                </div>
               </div>
 
               <div style={{ marginBottom: "16px" }}>
                 <Label>Question Text</Label>
-                <textarea value={newQuestionText} onChange={e => setNewQuestionText(e.target.value)} style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid #ccc", outline: "none", minHeight: "80px" }} />
+                <textarea value={newQuestionText} onChange={e => setNewQuestionText(e.target.value)} style={{ width: "100%", padding: "14px", borderRadius: "9px", border: "1px solid #DCE6F3", outline: "none", color: "#0B1F3A", minHeight: "80px", fontFamily: "inherit", fontSize: "14px", resize: "vertical", transition: "border-color 0.2s" }} onFocus={(e:any) => e.target.style.borderColor="#126BFF"} onBlur={(e:any) => e.target.style.borderColor="#DCE6F3"} />
               </div>
 
               <Label>Options</Label>
               {newQuestionOptions.map((opt, idx) => (
-                <div key={idx} style={{ display: "flex", gap: "8px", marginBottom: "8px", alignItems: "center" }}>
+                <div key={idx} style={{ display: "flex", gap: "12px", marginBottom: "12px", alignItems: "center" }}>
                   <input type="radio" checked={opt.is_correct} onChange={() => {
                     const opts = [...newQuestionOptions];
                     opts.forEach(o => o.is_correct = false);
                     opts[idx].is_correct = true;
                     setNewQuestionOptions(opts);
-                  }} />
-                  <Input value={opt.text} onChange={(e: any) => {
+                  }} style={{ width: "18px", height: "18px", accentColor: "#126BFF" }} />
+                  <input value={opt.text} onChange={(e: any) => {
                     const opts = [...newQuestionOptions];
                     opts[idx].text = e.target.value;
                     setNewQuestionOptions(opts);
-                  }} disabled={newQuestionType === "True / False"} />
+                  }} disabled={newQuestionType === "True / False"} style={{ flex: 1, height: "42px", padding: "0 14px", borderRadius: "8px", border: "1px solid #DCE6F3", fontSize: "14px", outline: "none", color: "#0B1F3A" }} />
                   {newQuestionType === "MCQ" && (
                     <button onClick={() => {
                       const opts = [...newQuestionOptions];
                       opts.splice(idx, 1);
                       setNewQuestionOptions(opts);
-                    }} style={{ color: "red", background: "none", border: "none", cursor: "pointer" }}>X</button>
+                    }} style={{ color: "#FF4054", background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center" }}><Trash2 size={16}/></button>
                   )}
                 </div>
               ))}
               {newQuestionType === "MCQ" && (
-                <button onClick={() => setNewQuestionOptions([...newQuestionOptions, {text: "", is_correct: false}])} style={{ fontSize: "12px", padding: "4px 8px", cursor: "pointer" }}>+ Add Option</button>
+                <button onClick={() => setNewQuestionOptions([...newQuestionOptions, {text: "", is_correct: false}])} style={{ fontSize: "13px", padding: "8px 14px", cursor: "pointer", backgroundColor: "#EEF4FB", border: "1px solid #C8D8EB", color: "#3D5E8A", borderRadius: "6px", fontWeight: "600", marginTop: "8px" }}>+ Add Option</button>
               )}
 
               <div style={{ display: "flex", gap: "12px", marginTop: "24px" }}>
-                <button onClick={handleSaveQuestion} style={{ padding: "8px 16px", backgroundColor: "#2563eb", color: "white", borderRadius: "6px", border: "none", cursor: "pointer" }}>Save Question</button>
-                <button onClick={() => setShowQuestionBuilder(false)} style={{ padding: "8px 16px", backgroundColor: "white", color: "#64748b", border: "1px solid #cbd5e1", borderRadius: "6px", cursor: "pointer" }}>Cancel</button>
+                <button onClick={handleSaveQuestion} style={{ padding: "0 20px", height: "42px", backgroundColor: "#126BFF", color: "white", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: "600" }}>Save Question</button>
+                <button onClick={() => setShowQuestionBuilder(false)} style={{ padding: "0 20px", height: "42px", backgroundColor: "white", color: "#5D78A3", border: "1px solid #DCE6F3", borderRadius: "8px", cursor: "pointer", fontWeight: "600" }}>Cancel</button>
               </div>
             </div>
           )}
-        </Card>
+        </div>
       )}
 
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <button onClick={handleSubmit} disabled={loading} style={{ padding: "12px 32px", borderRadius: "8px", border: "none", backgroundColor: "#10b981", color: "#fff", fontSize: "16px", fontWeight: "600", cursor: "pointer" }}>
-          {loading ? "Uploading..." : "Save Material & Video"}
+      </MainCard>
+
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "20px" }}>
+        <button onClick={() => navigate("/teacher/materials")} style={{ height: "42px", padding: "0 18px", borderRadius: "8px", border: "1px solid #DCE6F3", background: "#F7FAFE", color: "#3D5E8A", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
+          Cancel
+        </button>
+        <button onClick={handleSubmit} disabled={loading} style={{ display: "flex", alignItems: "center", gap: "8px", height: "42px", padding: "0 20px", borderRadius: "8px", border: "none", background: "linear-gradient(135deg, #126BFF 0%, #169BFF 100%)", color: "#fff", fontSize: "14px", fontWeight: "600", cursor: "pointer", boxShadow: "0 5px 14px rgba(18, 107, 255, 0.20)", transition: "transform 150ms ease" }} onMouseEnter={(e:any) => e.currentTarget.style.transform="translateY(-1px)"} onMouseLeave={(e:any) => e.currentTarget.style.transform="none"}>
+          <Save size={16} />
+          {loading ? "Uploading..." : "Save Interactive Video"}
         </button>
       </div>
     </div>

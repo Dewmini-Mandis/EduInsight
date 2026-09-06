@@ -2,8 +2,6 @@ import pandas as pd
 
 DATA_PATH = r"C:\Users\dewmi\Downloads\archive\Log_Problem.csv"
 
-OUTPUT_PATH = "ml/data_pipeline/risk_training_data_full.csv"
-
 USE_COLUMNS = [
     "timestamp_TW",
     "uuid",
@@ -16,57 +14,39 @@ USE_COLUMNS = [
     "level"
 ]
 
-CHUNK_SIZE = 500000
+print("Loading data...")
 
-print("Reading full dataset in chunks...")
-
-chunks = []
-
-for i, chunk in enumerate(
-    pd.read_csv(
-        DATA_PATH,
-        usecols=USE_COLUMNS,
-        chunksize=CHUNK_SIZE
-    )
-):
-    print(f"Processing chunk {i + 1}...")
-
-    chunk["timestamp_TW"] = pd.to_datetime(
-        chunk["timestamp_TW"],
-        errors="coerce"
-    )
-
-    chunk["is_correct"] = chunk["is_correct"].astype(int)
-    chunk["is_hint_used"] = chunk["is_hint_used"].astype(int)
-
-    chunk = chunk.dropna(
-        subset=[
-            "timestamp_TW",
-            "uuid",
-            "ucid"
-        ]
-    )
-
-    chunk = chunk[
-        (chunk["total_sec_taken"] >= 0) &
-        (chunk["total_attempt_cnt"] >= 0) &
-        (chunk["used_hint_cnt"] >= 0)
-    ]
-
-    chunks.append(chunk)
-
-print("\nCombining chunks...")
-
-df = pd.concat(
-    chunks,
-    ignore_index=True
+df = pd.read_csv(
+    DATA_PATH,
+    usecols=USE_COLUMNS,
+    nrows=1000000
 )
 
-print("Full cleaned rows:", len(df))
+# --------------------------------------------------
+# Basic preprocessing
+# --------------------------------------------------
 
-# --------------------------------------------------
-# Sort by student + skill + time
-# --------------------------------------------------
+df["timestamp_TW"] = pd.to_datetime(
+    df["timestamp_TW"],
+    errors="coerce"
+)
+
+df["is_correct"] = df["is_correct"].astype(int)
+df["is_hint_used"] = df["is_hint_used"].astype(int)
+
+df = df.dropna(
+    subset=[
+        "timestamp_TW",
+        "uuid",
+        "ucid"
+    ]
+)
+
+df = df[
+    (df["total_sec_taken"] >= 0) &
+    (df["total_attempt_cnt"] >= 0) &
+    (df["used_hint_cnt"] >= 0)
+]
 
 df = df.sort_values(
     by=[
@@ -76,8 +56,11 @@ df = df.sort_values(
     ]
 )
 
+print("Rows after cleaning:", len(df))
+
+
 # --------------------------------------------------
-# Count student-skill interactions
+# Count interactions for each student + skill
 # --------------------------------------------------
 
 group_counts = (
@@ -85,38 +68,50 @@ group_counts = (
       .size()
 )
 
-print("\nStudent-skill pairs:")
-print(len(group_counts))
+print(
+    "\nStudent-skill pairs:",
+    len(group_counts)
+)
 
-print("\nPairs with at least 10 interactions:")
-print((group_counts >= 10).sum())
+print(
+    "Pairs with at least 10 interactions:",
+    (group_counts >= 10).sum()
+)
 
-print("\nPairs with at least 20 interactions:")
-print((group_counts >= 20).sum())
+print(
+    "Pairs with at least 20 interactions:",
+    (group_counts >= 20).sum()
+)
 
-# --------------------------------------------------
-# Keep only valid pairs
-# --------------------------------------------------
-
-valid_pairs = group_counts[
-    group_counts >= 10
-].index
-
-valid_pair_set = set(valid_pairs)
-
-df["pair"] = list(zip(df["uuid"], df["ucid"]))
-
-df = df[
-    df["pair"].isin(valid_pair_set)
-]
-
-df = df.drop(columns=["pair"])
-
-print("\nValid pairs:")
-print(len(valid_pairs))
 
 # --------------------------------------------------
-# Build ML rows
+# Keep pairs with at least 10 interactions
+#
+# Past 5 interactions
+# Future 5 interactions
+# --------------------------------------------------
+
+valid_pairs = (
+    group_counts[
+        group_counts >= 10
+    ]
+    .index
+)
+
+df = (
+    df.set_index(["uuid", "ucid"])
+      .loc[valid_pairs]
+      .reset_index()
+)
+
+print(
+    "\nValid student-skill pairs:",
+    len(valid_pairs)
+)
+
+
+# --------------------------------------------------
+# Build ML dataset
 # --------------------------------------------------
 
 rows = []
@@ -130,21 +125,40 @@ for (student_id, skill_id), group in df.groupby(
     if len(group) < 10:
         continue
 
+    # First 5 = observed behaviour
     past = group.iloc[:5]
+
+    # Next 5 = future performance
     future = group.iloc[5:10]
 
+    # ----------------------------------------------
+    # Accuracy features
+    # ----------------------------------------------
+
+    past_accuracy = (
+        past["is_correct"].mean()
+    )
+
+    # First half vs later half
     early = past.iloc[:2]
     recent = past.iloc[2:5]
 
-    past_accuracy = past["is_correct"].mean()
+    early_accuracy = (
+        early["is_correct"].mean()
+    )
 
-    early_accuracy = early["is_correct"].mean()
-
-    recent_accuracy = recent["is_correct"].mean()
+    recent_accuracy = (
+        recent["is_correct"].mean()
+    )
 
     improvement_rate = (
-        recent_accuracy - early_accuracy
+        recent_accuracy -
+        early_accuracy
     )
+
+    # ----------------------------------------------
+    # Time features
+    # ----------------------------------------------
 
     past_avg_time = (
         past["total_sec_taken"].mean()
@@ -162,6 +176,10 @@ for (student_id, skill_id), group in df.groupby(
         past["total_sec_taken"].min()
     )
 
+    # ----------------------------------------------
+    # Attempt features
+    # ----------------------------------------------
+
     past_avg_attempts = (
         past["total_attempt_cnt"].mean()
     )
@@ -173,6 +191,10 @@ for (student_id, skill_id), group in df.groupby(
     past_max_attempts = (
         past["total_attempt_cnt"].max()
     )
+
+    # ----------------------------------------------
+    # Hint features
+    # ----------------------------------------------
 
     past_avg_hints = (
         past["used_hint_cnt"].mean()
@@ -186,6 +208,10 @@ for (student_id, skill_id), group in df.groupby(
         past["is_hint_used"].mean()
     )
 
+    # ----------------------------------------------
+    # Level features
+    # ----------------------------------------------
+
     past_avg_level = (
         past["level"].mean()
     )
@@ -198,40 +224,75 @@ for (student_id, skill_id), group in df.groupby(
         past["level"].min()
     )
 
+    # ----------------------------------------------
+    # Future target
+    # ----------------------------------------------
+
     future_accuracy = (
         future["is_correct"].mean()
     )
 
     rows.append({
+
         "uuid": student_id,
         "ucid": skill_id,
 
         "past_accuracy": past_accuracy,
+
         "early_accuracy": early_accuracy,
+
         "recent_accuracy": recent_accuracy,
+
         "improvement_rate": improvement_rate,
 
         "past_avg_time": past_avg_time,
+
         "past_median_time": past_median_time,
+
         "past_max_time": past_max_time,
+
         "past_min_time": past_min_time,
 
         "past_avg_attempts": past_avg_attempts,
+
         "past_total_attempts": past_total_attempts,
+
         "past_max_attempts": past_max_attempts,
 
         "past_avg_hints": past_avg_hints,
+
         "past_total_hints": past_total_hints,
+
         "past_hint_rate": past_hint_rate,
 
         "past_avg_level": past_avg_level,
+
         "past_max_level": past_max_level,
+
         "past_min_level": past_min_level,
 
         "future_accuracy": future_accuracy
     })
 
+
 risk_df = pd.DataFrame(rows)
+
+print(
+    "\nCreated student-skill dataset:"
+)
+
+print(
+    risk_df.shape
+)
+
+print(
+    "\nFuture accuracy statistics:"
+)
+
+print(
+    risk_df["future_accuracy"].describe()
+)
+
 
 # --------------------------------------------------
 # Risk labels
@@ -254,22 +315,34 @@ risk_df["risk_level"] = (
     .apply(create_risk_label)
 )
 
-print("\nCreated training dataset:")
-print(risk_df.shape)
-
-print("\nRisk distribution:")
 print(
-    risk_df["risk_level"].value_counts()
+    "\nRisk distribution:"
 )
+
+print(
+    risk_df["risk_level"]
+    .value_counts()
+)
+
 
 # --------------------------------------------------
 # Save
 # --------------------------------------------------
+
+OUTPUT_PATH = (
+    "ml/data_pipeline/"
+    "risk_training_data.csv"
+)
 
 risk_df.to_csv(
     OUTPUT_PATH,
     index=False
 )
 
-print("\nSaved to:")
-print(OUTPUT_PATH)
+print(
+    "\nSaved to:"
+)
+
+print(
+    OUTPUT_PATH
+)

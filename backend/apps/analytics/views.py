@@ -92,3 +92,54 @@ class ProficiencyPredictionViewSet(viewsets.ModelViewSet):
         prediction.flag_reason = request.data.get('reason', '')
         prediction.save()
         return Response({"status": "Flagged successfully"})
+
+from rest_framework.views import APIView
+from apps.quizzes.models import Skill
+from django.shortcuts import get_object_or_404
+from .services.student_feature_builder import build_student_skill_features
+from .services.risk_predictor import predict_student_risk
+
+class StudentSkillRiskPredictionView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, student_id, skill_id):
+        # 1. Validate student and skill exist
+        student = get_object_or_404(Student, id=student_id)
+        skill = get_object_or_404(Skill, id=skill_id)
+        
+        # 2. Build features
+        feature_result = build_student_skill_features(student_id, skill_id)
+        if feature_result["status"] == "insufficient_history":
+            return Response({
+                "status": "insufficient_history",
+                "required_interactions": feature_result["required_interactions"],
+                "available_interactions": feature_result["available_interactions"]
+            }, status=200)
+            
+        features = feature_result["features"]
+        
+        # 3. Predict risk
+        pred_result = predict_student_risk(features)
+        if pred_result["status"] == "error":
+            return Response({"error": pred_result["message"]}, status=500)
+            
+        # 4. Save Prediction History
+        prediction = RiskPrediction.objects.create(
+            student=student,
+            skill=skill,
+            risk_category=pred_result["risk_level"],
+            risk_probability=pred_result["risk_probability"],
+            threshold=pred_result["threshold"],
+            model_version=pred_result["model_version"],
+            contributing_factors=features
+        )
+        
+        return Response({
+            "student_id": student.id,
+            "skill_id": skill.id,
+            "risk_probability": pred_result["risk_probability"],
+            "risk_percentage": pred_result["risk_percentage"],
+            "risk_level": pred_result["risk_level"],
+            "threshold": pred_result["threshold"],
+            "model_version": pred_result["model_version"]
+        })

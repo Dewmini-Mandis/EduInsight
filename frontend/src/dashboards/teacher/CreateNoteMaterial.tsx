@@ -1,15 +1,36 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { getToken } from "../../auth/authUtils";
+import { FileText, Calendar, BookOpen, Layers, Target, Save } from "lucide-react";
 
-const Card = ({ children, style }: any) => (
-  <div style={{ backgroundColor: "#ffffff", borderRadius: "12px", border: "1px solid #f0f0f0", padding: "20px", display: "flex", flexDirection: "column", gap: "16px", ...style }}>
+import LearningNoteHeader from "../../components/materials/LearningNoteHeader";
+import RichTextEditor from "../../components/materials/RichTextEditor";
+import FileUploader from "../../components/materials/FileUploader";
+
+const MainCard = ({ children, style }: any) => (
+  <div style={{ backgroundColor: "#FFFFFF", borderRadius: "16px", border: "1px solid #E4ECF6", boxShadow: "0 6px 20px rgba(18, 63, 110, 0.05)", padding: "22px", display: "flex", flexDirection: "column", gap: "20px", ...style }}>
     {children}
   </div>
 );
-const Label = ({ children }: any) => <div style={{ fontSize: "12px", fontWeight: "600", color: "#64748b", marginBottom: "6px" }}>{children}</div>;
-const Input = ({ ...props }: any) => <input style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "13px", outline: "none", color: "#1e293b" }} {...props} />;
-const Select = ({ children, ...props }: any) => <select style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "13px", outline: "none", color: "#1e293b", backgroundColor: "#fff" }} {...props}>{children}</select>;
+
+const Label = ({ children }: any) => <div style={{ fontSize: "13px", fontWeight: "600", color: "#234A7A", marginBottom: "7px" }}>{children}</div>;
+
+const InputWrapper = ({ icon: Icon, children }: any) => (
+  <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+    <div style={{ position: "absolute", left: "14px", color: "#126BFF", pointerEvents: "none", display: "flex" }}>
+      <Icon size={18} strokeWidth={2} />
+    </div>
+    {children}
+  </div>
+);
+
+const Input = ({ ...props }: any) => (
+  <input style={{ width: "100%", height: "46px", padding: "0 14px 0 42px", borderRadius: "9px", border: "1px solid #DCE6F3", fontSize: "14px", outline: "none", color: "#0B1F3A", transition: "all 0.2s" }} onFocus={(e:any) => {e.target.style.borderColor="#126BFF"; e.target.style.boxShadow="0 0 0 3px rgba(18,107,255,0.10)"}} onBlur={(e:any) => {e.target.style.borderColor="#DCE6F3"; e.target.style.boxShadow="none"}} {...props} />
+);
+
+const Select = ({ children, ...props }: any) => (
+  <select style={{ width: "100%", height: "46px", padding: "0 14px 0 42px", borderRadius: "9px", border: "1px solid #DCE6F3", fontSize: "14px", outline: "none", color: "#0B1F3A", backgroundColor: "#fff", appearance: "none", transition: "all 0.2s" }} onFocus={(e:any) => {e.target.style.borderColor="#126BFF"; e.target.style.boxShadow="0 0 0 3px rgba(18,107,255,0.10)"}} onBlur={(e:any) => {e.target.style.borderColor="#DCE6F3"; e.target.style.boxShadow="none"}} {...props}>{children}</select>
+);
 
 const CreateNoteMaterial = () => {
   const navigate = useNavigate();
@@ -86,8 +107,7 @@ const CreateNoteMaterial = () => {
       .then(r => r.json()).then(setSkillsList);
   }, [topicId]);
 
-  const handleFileChange = (e: any) => {
-    const files = Array.from(e.target.files) as File[];
+  const handleAddFiles = (files: File[]) => {
     setAttachments([...attachments, ...files]);
   };
 
@@ -164,87 +184,89 @@ const CreateNoteMaterial = () => {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "900px", margin: "0 auto", paddingBottom: "100px" }}>
-      <button onClick={() => navigate("/teacher/materials")} style={{ display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", color: "#64748b", fontSize: "14px", fontWeight: "500", cursor: "pointer", padding: 0 }}>
-        Back
-      </button>
+    <div style={{ display: "flex", flexDirection: "column", maxWidth: "1240px", margin: "0 auto", padding: "24px 32px 32px 32px" }}>
+      
+      <LearningNoteHeader 
+        onBack={() => navigate("/teacher/materials")} 
+        title={materialId ? "Edit Learning Note" : "Create Learning Note"}
+        subtitle="Create rich text materials with attachments."
+        helperText="Add a summary, select the relevant term, lesson, topic, and skill, and attach supporting files."
+        icon={FileText}
+      />
 
-      <h2>{materialId ? "Edit Learning Note" : "Create Learning Note"}</h2>
-      {error && <div style={{ color: "red" }}>{error}</div>}
+      {error && <div style={{ color: "#FF4054", padding: "12px", backgroundColor: "#FDEDED", borderRadius: "8px", fontSize: "14px", fontWeight: "500", border: "1px solid #FADCDC", marginBottom: "16px" }}>{error}</div>}
 
-      <Card>
+      <MainCard>
         <div>
-          <Label>Title *</Label>
-          <Input value={title} onChange={(e: any) => setTitle(e.target.value)} placeholder="E.g., Chapter 1 Summary" />
+          <Label>Title <span style={{ color: "#126BFF" }}>*</span></Label>
+          <InputWrapper icon={FileText}>
+            <Input value={title} onChange={(e: any) => setTitle(e.target.value)} placeholder="E.g., Chapter 1 Summary" />
+          </InputWrapper>
         </div>
         
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
           <div>
-            <Label>Term *</Label>
-            <Select value={termId} onChange={(e: any) => setTermId(e.target.value)}>
-              <option value="">Select</option>
-              {termsList.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </Select>
+            <Label>Term <span style={{ color: "#126BFF" }}>*</span></Label>
+            <InputWrapper icon={Calendar}>
+              <Select value={termId} onChange={(e: any) => setTermId(e.target.value)}>
+                <option value="">Select Term</option>
+                {termsList.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </Select>
+            </InputWrapper>
           </div>
           <div>
-            <Label>Lesson *</Label>
-            <Select value={lessonId} onChange={(e: any) => setLessonId(e.target.value)} disabled={!termId}>
-              <option value="">Select</option>
-              {lessonsList.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
-            </Select>
+            <Label>Lesson <span style={{ color: "#126BFF" }}>*</span></Label>
+            <InputWrapper icon={BookOpen}>
+              <Select value={lessonId} onChange={(e: any) => setLessonId(e.target.value)} disabled={!termId}>
+                <option value="">Select Lesson</option>
+                {lessonsList.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
+              </Select>
+            </InputWrapper>
           </div>
           <div>
             <Label>Topic</Label>
-            <Select value={topicId} onChange={(e: any) => setTopicId(e.target.value)} disabled={!lessonId}>
-              <option value="">Select</option>
-              {topicsList.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </Select>
+            <InputWrapper icon={Layers}>
+              <Select value={topicId} onChange={(e: any) => setTopicId(e.target.value)} disabled={!lessonId}>
+                <option value="">Select Topic</option>
+                {topicsList.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </Select>
+            </InputWrapper>
           </div>
           <div>
             <Label>Skill</Label>
-            <Select value={skillId} onChange={(e: any) => setSkillId(e.target.value)} disabled={!topicId}>
-              <option value="">Select</option>
-              {skillsList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </Select>
+            <InputWrapper icon={Target}>
+              <Select value={skillId} onChange={(e: any) => setSkillId(e.target.value)} disabled={!topicId}>
+                <option value="">Select Skill</option>
+                {skillsList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </Select>
+            </InputWrapper>
           </div>
         </div>
 
         <div>
           <Label>Note Content (Optional)</Label>
-          <textarea 
-            value={content} 
-            onChange={(e) => setContent(e.target.value)} 
-            placeholder="Write the summary, notes, or theory here..."
-            style={{ width: "100%", padding: "12px", borderRadius: "8px", border: "1px solid #e2e8f0", fontSize: "14px", outline: "none", minHeight: "250px", fontFamily: "inherit", resize: "vertical" }}
-          />
+          <RichTextEditor value={content} onChange={setContent} />
         </div>
 
         <div>
-          <Label>Attachments (PDF / Images) *</Label>
-          <input type="file" multiple accept="image/*,application/pdf" onChange={handleFileChange} />
-          
-          {(existingAttachments.length > 0 || attachments.length > 0) && (
-            <div style={{ marginTop: "12px", display: "flex", flexDirection: "column", gap: "8px" }}>
-              {existingAttachments.map((att, idx) => (
-                <div key={`exist-${idx}`} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", backgroundColor: "#f8fafc", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
-                  <span style={{ fontSize: "13px", color: "#334155" }}>{att.file.split("/").pop()} (Existing)</span>
-                  <button onClick={() => handleRemoveExistingAttachment(att.id, idx)} style={{ color: "red", border: "none", background: "none", cursor: "pointer", fontSize: "12px" }}>Remove</button>
-                </div>
-              ))}
-              {attachments.map((file, idx) => (
-                <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", backgroundColor: "#f8fafc", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
-                  <span style={{ fontSize: "13px", color: "#334155" }}>{file.name}</span>
-                  <button onClick={() => handleRemoveAttachment(idx)} style={{ color: "red", border: "none", background: "none", cursor: "pointer", fontSize: "12px" }}>Remove</button>
-                </div>
-              ))}
-            </div>
-          )}
+          <Label>Attachments (PDF / Images) <span style={{ color: "#126BFF" }}>*</span></Label>
+          <FileUploader 
+            existingAttachments={existingAttachments}
+            newAttachments={attachments}
+            onAddFiles={handleAddFiles}
+            onRemoveExisting={handleRemoveExistingAttachment}
+            onRemoveNew={handleRemoveAttachment}
+          />
         </div>
-      </Card>
+      </MainCard>
 
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <button onClick={handleSubmit} disabled={loading} style={{ padding: "12px 32px", borderRadius: "8px", border: "none", backgroundColor: "#10b981", color: "#fff", fontSize: "16px", fontWeight: "600", cursor: "pointer" }}>
-          {loading ? "Saving..." : "Save Note Material"}
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "20px" }}>
+        <button onClick={() => navigate("/teacher/materials")} style={{ height: "42px", padding: "0 18px", borderRadius: "8px", border: "1px solid #DCE6F3", background: "#F7FAFE", color: "#3D5E8A", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
+          Cancel
+        </button>
+        <button onClick={handleSubmit} disabled={loading} style={{ display: "flex", alignItems: "center", gap: "8px", height: "42px", padding: "0 20px", borderRadius: "8px", border: "none", background: "linear-gradient(135deg, #126BFF 0%, #169BFF 100%)", color: "#fff", fontSize: "14px", fontWeight: "600", cursor: "pointer", boxShadow: "0 5px 14px rgba(18, 107, 255, 0.20)", transition: "transform 150ms ease" }} onMouseEnter={(e:any) => e.currentTarget.style.transform="translateY(-1px)"} onMouseLeave={(e:any) => e.currentTarget.style.transform="none"}>
+          <Save size={16} />
+          {loading ? "Saving..." : "Save Learning Note"}
         </button>
       </div>
     </div>

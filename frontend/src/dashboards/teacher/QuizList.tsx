@@ -1,11 +1,24 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getToken } from "../../auth/authUtils";
+import { FileText, Plus, UploadCloud } from "lucide-react";
 
 // Reusable Components
 import FilterBar from "../../components/FilterBar";
 import StatusBadge from "../../components/StatusBadge";
 import EmptyState from "../../components/EmptyState";
+
+const useMediaQuery = (query: string) => {
+  const [matches, setMatches] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    if (media.matches !== matches) setMatches(media.matches);
+    const listener = () => setMatches(media.matches);
+    media.addEventListener("change", listener);
+    return () => media.removeEventListener("change", listener);
+  }, [matches, query]);
+  return matches;
+};
 
 type QuizItem = {
   id: number;
@@ -29,7 +42,11 @@ const QuizList = () => {
   const [filterLesson, setFilterLesson] = useState("All Topics");
   const [filterDifficulty, setFilterDifficulty] = useState("All Levels");
   
+  const [hoverUpload, setHoverUpload] = useState(false);
+  const [hoverCreate, setHoverCreate] = useState(false);
+
   const navigate = useNavigate();
+  const isMobile = useMediaQuery("(max-width: 768px)");
 
   useEffect(() => {
     fetchQuizzes();
@@ -78,7 +95,102 @@ const QuizList = () => {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
       
-      {/* Header Actions */}
+      {/* New Header Card */}
+      <div style={{
+        backgroundColor: "#FFFFFF",
+        border: "1px solid #E4ECF6",
+        borderRadius: "16px",
+        boxShadow: "0 6px 20px rgba(18, 63, 110, 0.05)",
+        padding: "18px 20px",
+        display: "flex",
+        flexDirection: isMobile ? "column" : "row",
+        alignItems: isMobile ? "flex-start" : "center",
+        justifyContent: "space-between",
+        gap: isMobile ? "20px" : "16px"
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          <div style={{
+            width: "48px",
+            height: "48px",
+            borderRadius: "12px",
+            backgroundColor: "#F1EDFF",
+            color: "#6C4BFF",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0
+          }}>
+            <FileText size={24} />
+          </div>
+          <div>
+            <h2 style={{ margin: 0, fontSize: isMobile ? "24px" : "30px", fontWeight: "700", color: "#0B1F3A", lineHeight: 1.2 }}>
+              Quizzes
+            </h2>
+            <p style={{ margin: "4px 0 0 0", fontSize: "15px", color: "#5D78A3", fontWeight: "400" }}>
+              Manage and review all your quizzes.
+            </p>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: "12px", width: isMobile ? "100%" : "auto", flexDirection: isMobile ? "column" : "row" }}>
+          <button 
+            onClick={() => navigate("/teacher/materials/create")}
+            onMouseEnter={() => setHoverUpload(true)}
+            onMouseLeave={() => setHoverUpload(false)}
+            style={{ 
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "center",
+              gap: "8px", 
+              height: "42px", 
+              padding: "0 18px", 
+              borderRadius: "9px", 
+              border: "1px solid #126BFF", 
+              backgroundColor: hoverUpload ? "#EEF4FB" : "#FFFFFF", 
+              color: "#126BFF", 
+              fontSize: "14px", 
+              fontWeight: "600", 
+              cursor: "pointer",
+              transition: "all 150ms ease",
+              width: isMobile ? "100%" : "auto"
+            }}
+          >
+            <UploadCloud size={16} strokeWidth={2.5} />
+            Upload Material
+          </button>
+          
+          <button 
+            onClick={() => navigate("/teacher/quizzes/create")}
+            onMouseEnter={() => setHoverCreate(true)}
+            onMouseLeave={() => setHoverCreate(false)}
+            style={{ 
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "center",
+              gap: "8px", 
+              height: "42px", 
+              padding: "0 20px", 
+              borderRadius: "9px", 
+              border: "none", 
+              background: "linear-gradient(135deg, #126BFF 0%, #169BFF 100%)", 
+              color: "white", 
+              fontSize: "14px", 
+              fontWeight: "600", 
+              cursor: "pointer",
+              boxShadow: "0 5px 14px rgba(18, 107, 255, 0.20)",
+              transform: hoverCreate ? "translateY(-1px)" : "none",
+              filter: hoverCreate ? "brightness(0.95)" : "none",
+              transition: "all 150ms ease",
+              width: isMobile ? "100%" : "auto"
+            }}
+          >
+            <Plus size={16} strokeWidth={2.5} />
+            Create Quiz
+          </button>
+        </div>
+      </div>
+
+      {/* Filter Actions */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ flex: 1, maxWidth: "600px" }}>
           <FilterBar 
@@ -109,24 +221,6 @@ const QuizList = () => {
               }
             ]}
           />
-        </div>
-        
-        <div style={{ display: "flex", gap: "12px" }}>
-          <button 
-            onClick={() => navigate("/teacher/materials/create")}
-            style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "8px", border: "1px solid var(--blue-600)", backgroundColor: "transparent", color: "var(--blue-600)", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            Upload Material
-          </button>
-          
-          <button 
-            onClick={() => navigate("/teacher/quizzes/create")}
-            style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "8px", border: "none", backgroundColor: "var(--blue-600)", color: "white", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Create Quiz
-          </button>
         </div>
       </div>
 

@@ -81,10 +81,57 @@
 
 .teacher-sidebar-brand {
   display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 24px 24px 0 24px;
+  margin-bottom: 28px;
+}
+
+.teacher-sidebar.collapsed .teacher-sidebar-brand {
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
-  margin-bottom: 24px;
+  padding: 24px 0 0 0;
+  gap: 16px;
+}
+
+.sidebar-brand-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.sidebar-logo {
+  width: 165px;
+  height: auto;
+  object-fit: contain;
+  transition: width 0.2s ease;
+}
+
+@media (max-width: 1024px) {
+  .sidebar-logo {
+    width: 135px;
+  }
+}
+
+.teacher-sidebar.collapsed .sidebar-logo {
+  width: 40px;
+}
+
+.sidebar-role {
+  margin-top: 2px;
+  margin-left: 46px; /* Aligns under the text part of the logo */
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 1.8px;
+  line-height: 1.2;
+  text-transform: uppercase;
+  color: #27A7FF;
+  transition: opacity 0.2s ease;
+}
+
+.teacher-sidebar.collapsed .sidebar-role {
+  display: none;
 }
 
 .teacher-brand-icon {

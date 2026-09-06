@@ -2,9 +2,20 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getToken } from "../../auth/authUtils";
 
-// Reusable Components
-import ChartCard from "../../components/ChartCard";
-import DataTable, { Column } from "../../components/DataTable";
+import { FileText, Plus, UploadCloud, Search } from "lucide-react";
+import MaterialRow from "./materials/MaterialRow";
+
+const useMediaQuery = (query: string) => {
+  const [matches, setMatches] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    if (media.matches !== matches) setMatches(media.matches);
+    const listener = () => setMatches(media.matches);
+    media.addEventListener("change", listener);
+    return () => media.removeEventListener("change", listener);
+  }, [matches, query]);
+  return matches;
+};
 
 type MaterialItem = {
   id: number;
@@ -17,7 +28,14 @@ type MaterialItem = {
 const MaterialList = () => {
   const [materials, setMaterials] = useState<MaterialItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hoverAddNote, setHoverAddNote] = useState(false);
+  const [hoverUpload, setHoverUpload] = useState(false);
+  
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterType, setFilterType] = useState("All Types");
+
   const navigate = useNavigate();
+  const isMobile = useMediaQuery("(max-width: 768px)");
 
   const fetchData = async () => {
     setLoading(true);
@@ -59,102 +77,223 @@ const MaterialList = () => {
     }
   };
 
-  const getTypeColor = (type: string) => {
-    switch(type) {
-      case "VIDEO": return { bg: "#e0e7ff", text: "#4338ca" };
-      case "PDF": return { bg: "#fee2e2", text: "#b91c1c" };
-      default: return { bg: "#f1f5f9", text: "#475569" };
-    }
-  };
+  const filteredMaterials = materials.filter(m => {
+    const matchSearch = m.title.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchType = filterType === "All Types" ? true : m.material_type === filterType.toUpperCase();
+    return matchSearch && matchType;
+  });
 
-  const columns: Column<MaterialItem>[] = [
-    {
-      key: "title",
-      header: "Material Title",
-      render: (item) => <span style={{ fontWeight: "600", color: "var(--navy-950)" }}>{item.title}</span>
-    },
-    {
-      key: "material_type",
-      header: "Type",
-      render: (item) => {
-        const colors = getTypeColor(item.material_type);
-        return (
-          <span style={{ backgroundColor: colors.bg, color: colors.text, padding: "4px 8px", borderRadius: "4px", fontSize: "11px", fontWeight: "600", textTransform: "uppercase" }}>
-            {item.material_type}
-          </span>
-        );
-      }
-    },
-    {
-      key: "created_at",
-      header: "Created",
-      render: (item) => <span style={{ color: "var(--text-secondary)", fontSize: "13px" }}>{new Date(item.created_at).toLocaleDateString()}</span>
-    },
-    {
-      key: "actions",
-      header: "",
-      render: (item) => (
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
-          <button
-            onClick={() => navigate(`/teacher/materials/${item.id}/preview`)}
-            style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", backgroundColor: "#fff", color: "var(--navy-950)", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}
-          >
-            Preview
-          </button>
-          <button
-            onClick={() => {
-              if (item.material_type === "VIDEO") {
-                navigate(`/teacher/materials/video/${item.id}/edit`);
-              } else {
-                navigate(`/teacher/materials/note/${item.id}/edit`);
-              }
-            }}
-            style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--blue-600)", backgroundColor: "transparent", color: "var(--blue-600)", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}
-          >
-            Edit
-          </button>
-          <button
-            onClick={() => handleDelete(item.id)}
-            style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid rgba(245, 34, 61, 0.2)", backgroundColor: "rgba(245, 34, 61, 0.05)", color: "var(--danger)", fontSize: "12px", fontWeight: "600", cursor: "pointer" }}
-          >
-            Delete
-          </button>
-        </div>
-      )
-    }
-  ];
-
-  if (loading) return <div style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted)" }}>Loading materials...</div>;
+  if (loading) return <div style={{ padding: "2rem", textAlign: "center", color: "#5D78A3" }}>Loading materials...</div>;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+    <div style={{ display: "flex", flexDirection: "column", maxWidth: "1240px", margin: "0 auto", padding: "24px 32px 100px 32px", gap: "24px" }}>
       
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
-        <button 
-          onClick={() => navigate("/teacher/materials/video/create")}
-          style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "8px", border: "none", backgroundColor: "var(--blue-600)", color: "white", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-          Upload Video
-        </button>
-        <button 
-          onClick={() => navigate("/teacher/materials/note/create")}
-          style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "8px", border: "1px solid var(--blue-600)", backgroundColor: "white", color: "var(--blue-600)", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-          Create Note
-        </button>
+      {/* Inline Header matching LessonList / TopicSkillManager */}
+      <div style={{
+        backgroundColor: "#FFFFFF",
+        border: "1px solid #E4ECF6",
+        borderRadius: "16px",
+        boxShadow: "0 6px 20px rgba(18, 63, 110, 0.05)",
+        padding: "18px 20px",
+        display: "flex",
+        flexDirection: isMobile ? "column" : "row",
+        justifyContent: "space-between",
+        alignItems: isMobile ? "flex-start" : "center",
+        gap: isMobile ? "20px" : "0"
+      }}>
+        {/* Left side */}
+        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          <div style={{
+            width: "48px",
+            height: "48px",
+            borderRadius: "12px",
+            backgroundColor: "#EAF3FF",
+            color: "#126BFF",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0
+          }}>
+            <FileText size={24} />
+          </div>
+          <div>
+            <h2 style={{ margin: 0, fontSize: "28px", fontWeight: "700", color: "#0B1F3A" }}>
+              Materials
+            </h2>
+            <p style={{ margin: "4px 0 0 0", fontSize: "15px", color: "#5D78A3" }}>
+              Manage and assign learning materials.
+            </p>
+          </div>
+        </div>
+
+        {/* Right side - Actions */}
+        <div style={{ 
+          display: "flex", 
+          gap: "12px",
+          width: isMobile ? "100%" : "auto",
+          flexDirection: isMobile ? "column" : "row"
+        }}>
+          <button 
+            onClick={() => navigate("/teacher/materials/note/create")}
+            onMouseEnter={() => setHoverAddNote(true)}
+            onMouseLeave={() => setHoverAddNote(false)}
+            style={{ 
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "center",
+              gap: "8px", 
+              height: "42px",
+              padding: "0 20px", 
+              borderRadius: "9px", 
+              border: `1px solid ${hoverAddNote ? "#C8D8EB" : "#DCE6F3"}`, 
+              backgroundColor: hoverAddNote ? "#EEF4FB" : "#F6F9FD", 
+              color: "#3D5E8A", 
+              fontSize: "14px", 
+              fontWeight: "600", 
+              cursor: "pointer",
+              transition: "all 150ms ease",
+              width: isMobile ? "100%" : "auto"
+            }}
+          >
+            <Plus size={16} strokeWidth={2.5} />
+            Create Note
+          </button>
+
+          <button 
+            onClick={() => navigate("/teacher/materials/video/create")}
+            onMouseEnter={() => setHoverUpload(true)}
+            onMouseLeave={() => setHoverUpload(false)}
+            style={{ 
+              display: "flex", 
+              alignItems: "center", 
+              justifyContent: "center",
+              gap: "8px", 
+              height: "42px",
+              padding: "0 20px", 
+              borderRadius: "9px", 
+              border: "none", 
+              background: "linear-gradient(135deg, #126BFF 0%, #169BFF 100%)", 
+              color: "white", 
+              fontSize: "14px", 
+              fontWeight: "600", 
+              cursor: "pointer",
+              boxShadow: "0 5px 14px rgba(18, 107, 255, 0.20)",
+              transform: hoverUpload ? "translateY(-1px)" : "none",
+              filter: hoverUpload ? "brightness(0.95)" : "none",
+              transition: "all 150ms ease",
+              width: isMobile ? "100%" : "auto"
+            }}
+          >
+            <UploadCloud size={16} strokeWidth={2.5} />
+            Upload Video
+          </button>
+        </div>
       </div>
 
-      <ChartCard title="Learning Materials" subtitle="Manage and assign materials">
-        <div style={{ margin: "0 -20px" }}>
-          {materials.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "40px", color: "var(--text-muted)" }}>No materials uploaded yet.</div>
-          ) : (
-            <DataTable columns={columns} data={materials} keyExtractor={(m) => m.id} />
-          )}
+      {/* Materials List Container */}
+      <div style={{
+        backgroundColor: "#FFFFFF",
+        border: "1px solid #E4ECF6",
+        borderRadius: "16px",
+        boxShadow: "0 6px 20px rgba(18, 63, 110, 0.05)",
+        padding: "18px"
+      }}>
+        <div style={{
+          display: "flex",
+          flexDirection: isMobile ? "column" : "row",
+          justifyContent: "space-between",
+          alignItems: isMobile ? "flex-start" : "center",
+          marginBottom: "16px",
+          gap: isMobile ? "16px" : "0"
+        }}>
+          <div style={{
+            fontSize: "12px",
+            fontWeight: "700",
+            letterSpacing: "0.5px",
+            color: "#3D5E8A",
+            textTransform: "uppercase"
+          }}>
+            UPLOADED MATERIALS
+          </div>
+
+          <div style={{ display: "flex", gap: "12px", width: isMobile ? "100%" : "auto" }}>
+            {/* Search Input */}
+            <div style={{ position: "relative", width: isMobile ? "100%" : "300px" }}>
+              <div style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", color: "#5D78A3", display: "flex" }}>
+                <Search size={18} />
+              </div>
+              <input 
+                type="text" 
+                placeholder="Search materials..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{
+                  width: "100%",
+                  height: "42px",
+                  padding: "0 14px 0 42px",
+                  borderRadius: "9px",
+                  border: "1px solid #DCE6F3",
+                  fontSize: "14px",
+                  outline: "none",
+                  color: "#0B1F3A",
+                  transition: "all 0.2s"
+                }}
+                onFocus={(e:any) => {e.target.style.borderColor="#126BFF"; e.target.style.boxShadow="0 0 0 3px rgba(18,107,255,0.10)"}}
+                onBlur={(e:any) => {e.target.style.borderColor="#DCE6F3"; e.target.style.boxShadow="none"}}
+              />
+            </div>
+
+            {/* Type Filter */}
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              style={{
+                height: "42px",
+                width: isMobile ? "100%" : "160px",
+                padding: "0 14px",
+                borderRadius: "9px",
+                border: "1px solid #DCE6F3",
+                fontSize: "14px",
+                outline: "none",
+                color: "#0B1F3A",
+                backgroundColor: "#fff",
+                transition: "all 0.2s",
+                cursor: "pointer"
+              }}
+              onFocus={(e:any) => {e.target.style.borderColor="#126BFF"; e.target.style.boxShadow="0 0 0 3px rgba(18,107,255,0.10)"}}
+              onBlur={(e:any) => {e.target.style.borderColor="#DCE6F3"; e.target.style.boxShadow="none"}}
+            >
+              <option value="All Types">All Types</option>
+              <option value="Text">Text</option>
+              <option value="Video">Video</option>
+            </select>
+          </div>
         </div>
-      </ChartCard>
+
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {filteredMaterials.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "40px", color: "#5D78A3" }}>
+              No materials found.
+            </div>
+          ) : (
+            filteredMaterials.map((material) => (
+                <MaterialRow
+                  key={material.id}
+                  material={material}
+                  onPreview={() => navigate(`/teacher/materials/${material.id}/preview`)}
+                  onEdit={() => {
+                    if (material.material_type === "VIDEO") {
+                      navigate(`/teacher/materials/video/${material.id}/edit`);
+                    } else {
+                      navigate(`/teacher/materials/note/${material.id}/edit`);
+                    }
+                  }}
+                  onDelete={() => handleDelete(material.id)}
+                />
+              ))
+            )}
+        </div>
+      </div>
     </div>
   );
 };

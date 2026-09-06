@@ -74,26 +74,7 @@ db_config = dj_database_url.parse(
 	ssl_require=True,
 )
 
-# Force IPv4 resolve to bypass IPv6 handshake/routing issues on some local networks
-try:
-	host = db_config.get("HOST")
-	if host and not host.startswith("/") and not host.replace(".", "").isdigit():
-		ipv4_addresses = [
-			info[4][0]
-			for info in socket.getaddrinfo(host, 5432, socket.AF_INET)
-		]
-		if ipv4_addresses:
-			db_config["HOST"] = ipv4_addresses[0]
-			db_config["OPTIONS"] = db_config.get("OPTIONS") or {}
-			# Omit channel_binding as it's not supported by Neon and causes connection failures
-			db_config["OPTIONS"].pop("channel_binding", None)
-			# Add endpoint ID to options for Neon routing when connecting via IP address directly
-			endpoint_id = host.split(".")[0]
-			if endpoint_id.endswith("-pooler"):
-				endpoint_id = endpoint_id[:-7]
-			db_config["OPTIONS"]["options"] = f"endpoint={endpoint_id}"
-except Exception:
-	pass
+# Removed IPv4 resolution hack as it breaks Neon DB SNI handshake
 
 USE_SQLITE = os.getenv("USE_SQLITE", "True").lower() in ("true", "1", "t")
 
