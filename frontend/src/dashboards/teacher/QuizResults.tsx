@@ -45,10 +45,11 @@ const QuizResults = () => {
         }
 
         const quizData = await quizRes.json() as QuizDetails;
-        const attemptsData = await attemptsRes.json() as any[];
+        const attemptsData = await attemptsRes.json();
+        const attemptsList: any[] = Array.isArray(attemptsData) ? attemptsData : (attemptsData.results || []);
 
         // Filter attempts for this quiz
-        const filteredAttempts = attemptsData
+        const filteredAttempts = attemptsList
           .filter(att => att.quiz === parseInt(quizId || "0", 10))
           .map(att => ({
             id: att.id,

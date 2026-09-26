@@ -112,11 +112,11 @@ class QuizAPITests(APITestCase):
     def test_queryset_filtering_by_role(self):
         """
         Verify role-based filtering:
-        - System Admin sees everything.
-        - Teacher only sees their school's quizzes, national quizzes (school is null), or quizzes they created.
-        - Students only see their school's quizzes or national quizzes (school is null).
+        - System Admin sees all quizzes (national + all school quizzes)
+        - Teacher sees national quizzes + quizzes belonging to their own school
+        - Student sees national quizzes + quizzes belonging to their own school
         """
-        # Create a national quiz
+        # Create a national quiz (school=None)
         quiz_nat = Quiz.objects.create(title="National Quiz", created_by=self.sys_admin, school=None)
         
         # Create a school A quiz
@@ -125,18 +125,23 @@ class QuizAPITests(APITestCase):
         # Create a school B quiz
         quiz_b = Quiz.objects.create(title="School B Quiz", created_by=self.teacher_b, school=self.school_b)
 
+        # Helper to extract items list whether response is paginated or not
+        def get_items(res):
+            return res.data["results"] if isinstance(res.data, dict) and "results" in res.data else res.data
+
         # 1. System Admin sees all 3 quizzes
         self.client.force_authenticate(user=self.sys_admin)
         res = self.client.get(self.list_url)
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(res.data), 3)
+        self.assertEqual(len(get_items(res)), 3)
 
         # 2. Teacher A sees National Quiz and School A Quiz (2 quizzes)
         self.client.force_authenticate(user=self.teacher_a)
         res = self.client.get(self.list_url)
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(res.data), 2)
-        quiz_titles = [q["title"] for q in res.data]
+        items = get_items(res)
+        self.assertEqual(len(items), 2)
+        quiz_titles = [q["title"] for q in items]
         self.assertIn("National Quiz", quiz_titles)
         self.assertIn("School A Quiz", quiz_titles)
         self.assertNotIn("School B Quiz", quiz_titles)
@@ -145,7 +150,7 @@ class QuizAPITests(APITestCase):
         self.client.force_authenticate(user=self.student_a)
         res = self.client.get(self.list_url)
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(res.data), 2)
+        self.assertEqual(len(get_items(res)), 2)
 
     def test_delete_cascade_cleanup(self):
         """
@@ -163,14 +168,38 @@ class QuizAPITests(APITestCase):
         self.assertEqual(Answer.objects.count(), 1)
         self.assertEqual(CorrectAnswer.objects.count(), 1)
 
+        url = f"{self.list_url}{quiz.id}/"
         self.client.force_authenticate(user=self.sys_admin)
-        res = self.client.delete(f"{self.list_url}{quiz.id}/")
+        res = self.client.delete(url)
         self.assertEqual(res.status_code, status.HTTP_204_NO_CONTENT)
 
         self.assertEqual(Quiz.objects.count(), 0)
         self.assertEqual(Question.objects.count(), 0)
         self.assertEqual(Answer.objects.count(), 0)
         self.assertEqual(CorrectAnswer.objects.count(), 0)
+
+    def test_performance_queries_count(self):
+        """
+        Verify that listing quizzes executes a controlled, optimal number of queries (no N+1).
+        """
+        term = AcademicTerm.objects.create(name="Term 1", order=1)
+        lesson = Lesson.objects.create(title="Algebra", term=term, created_by=self.sys_admin)
+        
+        # Create 5 quizzes with questions and answers
+        for i in range(5):
+            q = Quiz.objects.create(title=f"Quiz {i}", created_by=self.sys_admin, lesson=lesson)
+            q1 = Question.objects.create(quiz=q, question_text=f"Q1_{i}", question_type="MCQ")
+            Answer.objects.create(question=q1, answer_text="Ans A", is_correct=True)
+            Answer.objects.create(question=q1, answer_text="Ans B", is_correct=False)
+
+        self.client.force_authenticate(user=self.sys_admin)
+        
+        # Expect fixed number of SQL queries regardless of 5 items
+        with self.assertNumQueries(6):
+            res = self.client.get(self.list_url)
+            self.assertEqual(res.status_code, status.HTTP_200_OK)
+            items = res.data["results"] if isinstance(res.data, dict) and "results" in res.data else res.data
+            self.assertEqual(len(items), 5)
 
     def test_student_cannot_create_quiz(self):
         """
@@ -240,24 +269,28 @@ class QuizAPITests(APITestCase):
 
         self.client.force_authenticate(user=self.student_a)
         
+        def get_items(res):
+            return res.data["results"] if isinstance(res.data, dict) and "results" in res.data else res.data
+
         # Retrieve all
         res = self.client.get(self.list_url)
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         # Should see quiz_1 and quiz_2
-        quiz_ids = [q["id"] for q in res.data]
+        quiz_ids = [q["id"] for q in get_items(res)]
         self.assertIn(quiz_1.id, quiz_ids)
         self.assertIn(quiz_2.id, quiz_ids)
 
         # Filter by lesson_1
         res = self.client.get(f"{self.list_url}?lesson={lesson_1.id}")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        filtered_ids = [q["id"] for q in res.data]
+        filtered_ids = [q["id"] for q in get_items(res)]
         self.assertIn(quiz_1.id, filtered_ids)
         self.assertNotIn(quiz_2.id, filtered_ids)
 
         # Filter by lesson_2
         res = self.client.get(f"{self.list_url}?lesson={lesson_2.id}")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        filtered_ids = [q["id"] for q in res.data]
+        filtered_ids = [q["id"] for q in get_items(res)]
         self.assertIn(quiz_2.id, filtered_ids)
         self.assertNotIn(quiz_1.id, filtered_ids)
+

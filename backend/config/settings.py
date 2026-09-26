@@ -65,18 +65,21 @@ import dj_database_url
 
 db_url = os.getenv(
 	"DATABASE_URL",
-	"postgresql://neondb_owner:npg_NTFYE8qIifC0@ep-cool-shadow-aoob8xsr.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+	"postgresql://neondb_owner:npg_NTFYE8qIifC0@ep-cool-shadow-aoob8xsr.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require"
 )
+
+conn_max_age = int(os.getenv("DB_CONN_MAX_AGE", "600"))
+conn_health_checks = os.getenv("DB_CONN_HEALTH_CHECKS", "True").lower() in ("true", "1", "t")
+ssl_require = "sslmode=require" in db_url
 
 db_config = dj_database_url.parse(
 	db_url,
-	conn_max_age=0,
-	ssl_require=True,
+	conn_max_age=conn_max_age,
+	ssl_require=ssl_require,
 )
+db_config["CONN_HEALTH_CHECKS"] = conn_health_checks
 
-# Removed IPv4 resolution hack as it breaks Neon DB SNI handshake
-
-USE_SQLITE = os.getenv("USE_SQLITE", "True").lower() in ("true", "1", "t")
+USE_SQLITE = os.getenv("USE_SQLITE", "False").lower() in ("true", "1", "t")
 
 if USE_SQLITE:
 	DATABASES = {
@@ -124,4 +127,6 @@ REST_FRAMEWORK = {
 	"DEFAULT_PERMISSION_CLASSES": [
 		"rest_framework.permissions.IsAuthenticated",
 	],
+	"DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+	"PAGE_SIZE": 50,
 }

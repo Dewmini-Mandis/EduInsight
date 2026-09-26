@@ -24,6 +24,9 @@ class RegisterView(generics.CreateAPIView):
 	serializer_class = RegisterSerializer
 
 	def create(self, request, *args, **kwargs):
+		requested_role = request.data.get("role")
+		if requested_role in [Role.ROLE_TEACHER, "TEACHER"]:
+			raise PermissionDenied("Teacher self-registration is disabled. Teacher accounts must be created by a System Administrator.")
 		serializer = self.get_serializer(data=request.data)
 		serializer.is_valid(raise_exception=True)
 		user = serializer.save()

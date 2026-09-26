@@ -28,6 +28,10 @@ class RiskPrediction(models.Model):
 	prediction_date = models.DateTimeField(auto_now_add=True)
 	is_flagged = models.BooleanField(default=False)
 	flag_reason = models.TextField(blank=True)
+	class Meta:
+		indexes = [
+			models.Index(fields=["student", "-prediction_date"], name="idx_risk_student_date"),
+		]
 
 	def __str__(self):
 		return f"{self.student} - {self.risk_category}"

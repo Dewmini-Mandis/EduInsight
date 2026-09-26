@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getToken } from "../../auth/authUtils";
-import { FileText, Plus, UploadCloud } from "lucide-react";
+import { FileText, Plus, BookOpen } from "lucide-react";
 
 // Reusable Components
 import FilterBar from "../../components/FilterBar";
@@ -42,7 +42,6 @@ const QuizList = () => {
   const [filterLesson, setFilterLesson] = useState("All Topics");
   const [filterDifficulty, setFilterDifficulty] = useState("All Levels");
   
-  const [hoverUpload, setHoverUpload] = useState(false);
   const [hoverCreate, setHoverCreate] = useState(false);
 
   const navigate = useNavigate();
@@ -61,7 +60,7 @@ const QuizList = () => {
       });
       if (res.ok) {
         const data = await res.json();
-        setQuizzes(data);
+        setQuizzes(Array.isArray(data) ? data : (data.results || []));
       } else {
         setError("Failed to fetch quizzes");
       }
@@ -133,32 +132,6 @@ const QuizList = () => {
         </div>
 
         <div style={{ display: "flex", gap: "12px", width: isMobile ? "100%" : "auto", flexDirection: isMobile ? "column" : "row" }}>
-          <button 
-            onClick={() => navigate("/teacher/materials/create")}
-            onMouseEnter={() => setHoverUpload(true)}
-            onMouseLeave={() => setHoverUpload(false)}
-            style={{ 
-              display: "flex", 
-              alignItems: "center", 
-              justifyContent: "center",
-              gap: "8px", 
-              height: "42px", 
-              padding: "0 18px", 
-              borderRadius: "9px", 
-              border: "1px solid #126BFF", 
-              backgroundColor: hoverUpload ? "#EEF4FB" : "#FFFFFF", 
-              color: "#126BFF", 
-              fontSize: "14px", 
-              fontWeight: "600", 
-              cursor: "pointer",
-              transition: "all 150ms ease",
-              width: isMobile ? "100%" : "auto"
-            }}
-          >
-            <UploadCloud size={16} strokeWidth={2.5} />
-            Upload Material
-          </button>
-          
           <button 
             onClick={() => navigate("/teacher/quizzes/create")}
             onMouseEnter={() => setHoverCreate(true)}
@@ -255,7 +228,14 @@ const QuizList = () => {
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: "12px" }}>
+            <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+              <button 
+                onClick={() => navigate(`/teacher/materials?quiz=${quiz.id}`)}
+                style={{ padding: "10px 16px", borderRadius: "8px", border: "1px solid #126BFF", backgroundColor: "#EEF4FB", color: "#126BFF", fontSize: "14px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}
+              >
+                <BookOpen size={16} />
+                Materials
+              </button>
               <button 
                 onClick={() => navigate(`/teacher/quizzes/${quiz.id}`)}
                 style={{ padding: "10px 16px", borderRadius: "8px", border: "1px solid var(--border)", backgroundColor: "var(--surface)", color: "var(--text-primary)", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}

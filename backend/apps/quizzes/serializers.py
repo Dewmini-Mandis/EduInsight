@@ -45,6 +45,7 @@ class MaterialAttachmentSerializer(serializers.ModelSerializer):
 class LearningMaterialSerializer(serializers.ModelSerializer):
     created_by_name = serializers.CharField(source="created_by.get_full_name", read_only=True)
     lesson_title = serializers.CharField(source="lesson.title", read_only=True)
+    quiz_title = serializers.CharField(source="quiz.title", read_only=True, allow_null=True)
     assigned_class_name = serializers.CharField(source="assigned_class.name", read_only=True, allow_null=True)
     quiz_level_name = serializers.CharField(source="quiz_level.name", read_only=True, allow_null=True)
     difficulty_name = serializers.CharField(source="difficulty.name", read_only=True, allow_null=True)
@@ -178,6 +179,18 @@ class QuizSerializer(serializers.ModelSerializer):
         return ret
 
 
+    def validate(self, attrs):
+        status_val = attrs.get("status", getattr(self.instance, "status", Quiz.STATUS_DRAFT))
+        questions_data = attrs.get("questions", None)
+        
+        if status_val == Quiz.STATUS_PUBLISHED:
+            q_count = len(questions_data) if questions_data is not None else (self.instance.questions.count() if self.instance else 0)
+            if q_count < 10:
+                raise serializers.ValidationError({
+                    "status": f"Publication blocked: A published quiz must contain at least 10 valid questions matching the selected Skill (Current: {q_count}/10)."
+                })
+        return attrs
+
     def create(self, validated_data):
         questions_data = validated_data.pop("questions", [])
         request = self.context.get("request")
@@ -191,7 +204,7 @@ class QuizSerializer(serializers.ModelSerializer):
             hints_data = q_data.pop("hints", [])
             correct_value = q_data.pop("correct_value", None)
 
-            question = Question.objects.create(quiz=quiz, **q_data)
+            question = Question.objects.create(quiz=quiz, skill=quiz.skill, **q_data)
 
             if q_data.get("question_type") == Question.TYPE_MCQ:
                 for a_data in answers_data:

@@ -140,9 +140,18 @@ const EditQuiz = () => {
         fetch("/api/quizzes/difficulty-levels/", { headers: { Authorization: `Token ${token}` } }),
         fetch(`/api/quizzes/${quizId}/`, { headers: { Authorization: `Token ${token}` } }),
       ]);
-      if (termRes.ok) setTermsList(await termRes.json());
-      if (qlRes.ok) setQuizLevels(await qlRes.json());
-      if (dlRes.ok) setDiffLevels(await dlRes.json());
+      if (termRes.ok) {
+        const data = await termRes.json();
+        setTermsList(Array.isArray(data) ? data : data.results || []);
+      }
+      if (qlRes.ok) {
+        const data = await qlRes.json();
+        setQuizLevels(Array.isArray(data) ? data : data.results || []);
+      }
+      if (dlRes.ok) {
+        const data = await dlRes.json();
+        setDiffLevels(Array.isArray(data) ? data : data.results || []);
+      }
       if (quizRes.ok) {
         const quizData = await quizRes.json();
         setTitle(quizData.title || "");
@@ -171,7 +180,7 @@ const EditQuiz = () => {
         setAssignTo(quizData.assigned_class ? quizData.assigned_class.toString() : "");
         
         // Map questions
-        const mappedQuestions = quizData.questions.map((q: any) => {
+        const mappedQuestions = (quizData.questions || []).map((q: any) => {
           let qType = q.question_type;
           if (qType === "NUMERIC") qType = "Short Answer";
           return {
@@ -201,18 +210,16 @@ const EditQuiz = () => {
       setLessonsLoading(true);
       try {
         const res = await fetch(`/api/quizzes/lessons/?term=${termId}`, { headers: { Authorization: `Token ${token}` } });
-        if (res.ok) setLessons(await res.json());
+        if (res.ok) {
+          const data = await res.json();
+          setLessons(Array.isArray(data) ? data : data.results || []);
+        }
       } catch (err) { console.error(err); } finally {
         setLessonsLoading(false);
       }
     };
     fetchFilteredLessons();
   }, [termId]);
-
-  
-
-  
-
 
   useEffect(() => {
     if (!lessonId) {
@@ -223,7 +230,10 @@ const EditQuiz = () => {
       const token = getToken();
       try {
         const res = await fetch(`/api/quizzes/topics/?lesson=${lessonId}`, { headers: { Authorization: `Token ${token}` } });
-        if (res.ok) setTopicsList(await res.json());
+        if (res.ok) {
+          const data = await res.json();
+          setTopicsList(Array.isArray(data) ? data : data.results || []);
+        }
       } catch (err) { console.error(err); }
     };
     fetchFilteredTopics();
@@ -238,7 +248,10 @@ const EditQuiz = () => {
       const token = getToken();
       try {
         const res = await fetch(`/api/quizzes/skills/?topic=${topicId}`, { headers: { Authorization: `Token ${token}` } });
-        if (res.ok) setSkillsList(await res.json());
+        if (res.ok) {
+          const data = await res.json();
+          setSkillsList(Array.isArray(data) ? data : data.results || []);
+        }
       } catch (err) { console.error(err); }
     };
     fetchFilteredSkills();
@@ -382,14 +395,14 @@ const EditQuiz = () => {
               <Label>Academic Term</Label>
               <Select value={termId} onChange={(e: any) => { setTermId(e.target.value); setLessonId(""); setTopicId(""); setSkillId(""); }}>
                 <option value="">Select Term</option>
-                {termsList.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                {(Array.isArray(termsList) ? termsList : []).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </Select>
             </div>
             <div>
               <Label>Lesson</Label>
               <Select value={lessonId} onChange={(e: any) => { setLessonId(e.target.value); setTopicId(""); setSkillId(""); setFieldErrors({...fieldErrors, lessonId: null}); }} disabled={!termId}>
                 <option value="">{lessonsLoading ? "Loading..." : "Select Lesson"}</option>
-                {lessons.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
+                {(Array.isArray(lessons) ? lessons : []).map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
               </Select>
             </div>
           </div>
@@ -398,7 +411,7 @@ const EditQuiz = () => {
               <Label>Topic <span style={{ color: "red" }}>*</span></Label>
               <Select value={topicId} onChange={(e: any) => { setTopicId(e.target.value); setSkillId(""); setFieldErrors({...fieldErrors, topicId: null}); }} disabled={!lessonId}>
                 <option value="">Select Topic</option>
-                {topicsList.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                {(Array.isArray(topicsList) ? topicsList : []).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </Select>
               {fieldErrors.topicId && <span style={{ color: "#ef4444", fontSize: "11px", marginTop: "4px", display: "block" }}>{fieldErrors.topicId}</span>}
             </div>
@@ -406,7 +419,7 @@ const EditQuiz = () => {
               <Label>Skill <span style={{ color: "red" }}>*</span></Label>
               <Select value={skillId} onChange={(e: any) => { setSkillId(e.target.value); setFieldErrors({...fieldErrors, skillId: null}); }} disabled={!topicId}>
                 <option value="">Select Skill</option>
-                {skillsList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                {(Array.isArray(skillsList) ? skillsList : []).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </Select>
               {fieldErrors.skillId && <span style={{ color: "#ef4444", fontSize: "11px", marginTop: "4px", display: "block" }}>{fieldErrors.skillId}</span>}
             </div>
@@ -437,14 +450,14 @@ const EditQuiz = () => {
             <Label>Level</Label>
             <Select value={quizLevelId} onChange={(e: any) => setQuizLevelId(e.target.value)}>
                 <option value="">Select Level</option>
-                {quizLevels.map(ql => <option key={ql.id} value={ql.id}>{ql.name}</option>)}
+                {(Array.isArray(quizLevels) ? quizLevels : []).map(ql => <option key={ql.id} value={ql.id}>{ql.name}</option>)}
             </Select>
           </div>
           <div>
             <Label>Difficulty</Label>
             <Select value={diffLevelId} onChange={(e: any) => setDiffLevelId(e.target.value)}>
                 <option value="">Select Difficulty</option>
-                {diffLevels.map(dl => <option key={dl.id} value={dl.id}>{dl.name}</option>)}
+                {(Array.isArray(diffLevels) ? diffLevels : []).map(dl => <option key={dl.id} value={dl.id}>{dl.name}</option>)}
             </Select>
           </div>
           <div>

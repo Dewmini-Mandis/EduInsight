@@ -70,6 +70,7 @@ class TeacherProfile(models.Model):
 		on_delete=models.CASCADE,
 		related_name="teacher_profile",
 	)
+	teacher_id = models.CharField(max_length=50, blank=True, default="")
 	subjects = models.JSONField(default=list, blank=True)
 
 	def __str__(self) -> str:

@@ -171,7 +171,10 @@ const CreateQuiz = () => {
       setLessonsLoading(true);
       try {
         const res = await fetch(`/api/quizzes/lessons/?term=${termId}`, { headers: { Authorization: `Token ${token}` } });
-        if (res.ok) setLessons(await res.json());
+        if (res.ok) {
+          const data = await res.json();
+          setLessons(Array.isArray(data) ? data : (data.results || []));
+        }
       } catch (err) { console.error(err); } finally {
         setLessonsLoading(false);
       }
@@ -194,7 +197,10 @@ const CreateQuiz = () => {
       const token = getToken();
       try {
         const res = await fetch(`/api/quizzes/topics/?lesson=${lessonId}`, { headers: { Authorization: `Token ${token}` } });
-        if (res.ok) setTopicsList(await res.json());
+        if (res.ok) {
+          const data = await res.json();
+          setTopicsList(Array.isArray(data) ? data : (data.results || []));
+        }
       } catch (err) { console.error(err); }
     };
     fetchFilteredTopics();
@@ -210,7 +216,10 @@ const CreateQuiz = () => {
       const token = getToken();
       try {
         const res = await fetch(`/api/quizzes/skills/?topic=${topicId}`, { headers: { Authorization: `Token ${token}` } });
-        if (res.ok) setSkillsList(await res.json());
+        if (res.ok) {
+          const data = await res.json();
+          setSkillsList(Array.isArray(data) ? data : (data.results || []));
+        }
       } catch (err) { console.error(err); }
     };
     fetchFilteredSkills();
@@ -231,10 +240,14 @@ const CreateQuiz = () => {
     }
     setFieldErrors({});
 
+    if (questions.length < 10) {
+      setError(`At least 10 questions matching the skill are required to publish a quiz. Currently added: ${questions.length}/10.`);
+      return;
+    }
+
     setLoading(true);
     setError("");
 
-    // Map UI questions to backend format
     const formattedQuestions = questions.map((q) => {
       let qType = "MCQ";
       if (q.question_type === "Short Answer" || q.question_type === "Fill in the Blank") {
@@ -257,6 +270,7 @@ const CreateQuiz = () => {
     const payload = {
       title,
       description,
+      status: "PUBLISHED",
       lesson: lessonId ? parseInt(lessonId) : null,
       topic: topicId ? parseInt(topicId) : null,
       skill: skillId ? parseInt(skillId) : null,
@@ -282,12 +296,74 @@ const CreateQuiz = () => {
 
       if (!res.ok) {
         const errData = await res.json();
-        throw new Error(JSON.stringify(errData));
+        throw new Error(typeof errData === "object" ? JSON.stringify(errData) : errData);
       }
 
       navigate("/teacher/quizzes");
     } catch (err: any) {
       setError(err.message || "Failed to create quiz.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    const token = getToken();
+    if (!token) return;
+
+    setLoading(true);
+    setError("");
+
+    const formattedQuestions = questions.map((q) => {
+      let qType = "MCQ";
+      if (q.question_type === "Short Answer" || q.question_type === "Fill in the Blank") {
+        qType = "NUMERIC";
+      }
+      return {
+        question_text: q.question_text,
+        question_type: qType,
+        difficulty_level: q.difficulty_level,
+        answers: qType === "MCQ" ? q.answers : [],
+        correct_value: qType === "NUMERIC" ? q.correct_value : undefined,
+        hints: [],
+      };
+    });
+
+    const payload = {
+      title: title || "Untitled Quiz Draft",
+      description,
+      status: "DRAFT",
+      lesson: lessonId ? parseInt(lessonId) : null,
+      topic: topicId ? parseInt(topicId) : null,
+      skill: skillId ? parseInt(skillId) : null,
+      quiz_level: quizLevelId ? parseInt(quizLevelId) : null,
+      difficulty: diffLevelId ? parseInt(diffLevelId) : null,
+      order: parseInt(order) || 1,
+      pass_mark: parseInt(passMark) || 50,
+      estimated_time_minutes: parseInt(estimatedTime) || 10,
+      max_attempts: parseInt(attemptLimit) || 3,
+      assigned_class: assignTo ? parseInt(assignTo) : null,
+      questions: formattedQuestions,
+    };
+
+    try {
+      const res = await fetch("/api/quizzes/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Token ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(typeof errData === "object" ? JSON.stringify(errData) : errData);
+      }
+
+      navigate("/teacher/quizzes");
+    } catch (err: any) {
+      setError(err.message || "Failed to save draft.");
     } finally {
       setLoading(false);
     }
@@ -585,7 +661,17 @@ const CreateQuiz = () => {
             <div style={{ fontSize: "13px", color: "#64748b" }}>Add, edit and organize questions for your quiz.</div>
           </div>
           <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-            <span style={{ fontSize: "13px", color: "#3b82f6", fontWeight: "600", backgroundColor: "#eff6ff", padding: "6px 12px", borderRadius: "16px" }}>Total Questions: {questions.length}</span>
+            <span style={{ 
+              fontSize: "13px", 
+              color: questions.length >= 10 ? "#16a34a" : "#dc2626", 
+              fontWeight: "600", 
+              backgroundColor: questions.length >= 10 ? "#f0fdf4" : "#fef2f2", 
+              border: `1px solid ${questions.length >= 10 ? "#bbf7d0" : "#fecaca"}`, 
+              padding: "6px 12px", 
+              borderRadius: "16px" 
+            }}>
+              Total Questions: {questions.length} / 10 required {questions.length < 10 && "(Publishing locked)"}
+            </span>
 
             <button style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 16px", borderRadius: "8px", border: "1px solid #e2e8f0", backgroundColor: "#fff", color: "#3b82f6", fontSize: "13px", fontWeight: "600", cursor: "pointer" }}>
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -650,8 +736,8 @@ const CreateQuiz = () => {
                           newQ[idx].question_text = e.target.value;
                           setQuestions(newQ);
                         }}
-                        placeholder="Question text"
-                        style={{ width: "100%", padding: "8px", border: "none", outline: "none", fontSize: "14px", fontWeight: "500", color: "#1e293b" }}
+                        placeholder="Enter question statement..."
+                        style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "13px", outline: "none", color: "#1e293b", marginBottom: "8px" }}
                       />
                     </div>
                     <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -802,8 +888,8 @@ const CreateQuiz = () => {
 
       {/* Action Buttons */}
       <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "12px" }}>
-        <button style={{ padding: "10px 24px", borderRadius: "8px", border: "1px solid #3b82f6", backgroundColor: "#fff", color: "#3b82f6", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
-          Save Draft
+        <button onClick={handleSaveDraft} disabled={loading} style={{ padding: "10px 24px", borderRadius: "8px", border: "1px solid #3b82f6", backgroundColor: "#fff", color: "#3b82f6", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
+          {loading ? "Saving..." : "Save Draft"}
         </button>
         <button style={{ padding: "10px 24px", borderRadius: "8px", border: "none", backgroundColor: "#eff6ff", color: "#3b82f6", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
           Preview Quiz

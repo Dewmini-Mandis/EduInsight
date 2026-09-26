@@ -216,14 +216,15 @@ const TeacherQuizManager = () => {
       if (!quizzesRes.ok) throw new Error("Unable to load quizzes");
       if (!lessonsRes.ok) throw new Error("Unable to load lessons");
 
-      const schoolData = (await schoolsRes.json()) as School[];
-      const adminData = (await adminsRes.json()) as SchoolAdmin[];
-      const quizzesData = (await quizzesRes.json()) as any[];
-      const lessonsData = (await lessonsRes.json()) as any[];
-      setSchools(schoolData);
-      setAdmins(adminData);
-      setQuizzes(quizzesData);
-      setLessons(lessonsData);
+      const schoolRaw = await schoolsRes.json();
+      const adminRaw = await adminsRes.json();
+      const quizzesRaw = await quizzesRes.json();
+      const lessonsRaw = await lessonsRes.json();
+
+      setSchools(Array.isArray(schoolRaw) ? schoolRaw : (schoolRaw.results || []));
+      setAdmins(Array.isArray(adminRaw) ? adminRaw : (adminRaw.results || []));
+      setQuizzes(Array.isArray(quizzesRaw) ? quizzesRaw : (quizzesRaw.results || []));
+      setLessons(Array.isArray(lessonsRaw) ? lessonsRaw : (lessonsRaw.results || []));
     } catch (err: any) {
       setError(err.message || "Unable to load dashboard data");
     } finally {

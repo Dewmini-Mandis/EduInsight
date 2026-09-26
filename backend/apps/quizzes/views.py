@@ -1,4 +1,5 @@
 from rest_framework import viewsets
+from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from django.db import models
@@ -20,7 +21,11 @@ from .serializers import (
 )
 
 class LearningMaterialViewSet(viewsets.ModelViewSet):
-    queryset = LearningMaterial.objects.all().order_by("-created_at")
+    queryset = LearningMaterial.objects.all().select_related(
+        "created_by", "lesson", "quiz"
+    ).prefetch_related(
+        "engagement_questions", "video_questions", "attachments"
+    ).order_by("-created_at", "-id")
     serializer_class = LearningMaterialSerializer
     permission_classes = [IsAuthenticated]
 
@@ -29,12 +34,15 @@ class LearningMaterialViewSet(viewsets.ModelViewSet):
         lesson_id = self.request.query_params.get("lesson")
         topic_id = self.request.query_params.get("topic")
         skill_id = self.request.query_params.get("skill")
+        quiz_id = self.request.query_params.get("quiz")
         if lesson_id:
             qs = qs.filter(lesson_id=lesson_id)
         if topic_id:
             qs = qs.filter(topic_id=topic_id)
         if skill_id:
             qs = qs.filter(skill_id=skill_id)
+        if quiz_id:
+            qs = qs.filter(quiz_id=quiz_id)
         return qs
 
     def perform_create(self, serializer):
@@ -104,11 +112,13 @@ class AcademicTermViewSet(viewsets.ModelViewSet):
     queryset = AcademicTerm.objects.all().order_by("order")
     serializer_class = AcademicTermSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = None
 
 class TopicViewSet(viewsets.ModelViewSet):
     queryset = Topic.objects.all()
     serializer_class = TopicSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = None
     
     def get_queryset(self):
         qs = super().get_queryset()
@@ -117,10 +127,19 @@ class TopicViewSet(viewsets.ModelViewSet):
             qs = qs.filter(lesson_id=lesson_id)
         return qs
 
+    def perform_destroy(self, instance):
+        user = self.request.user
+        if not user.is_role(Role.ROLE_SYSTEM_ADMIN, Role.ROLE_TEACHER):
+            raise PermissionDenied("You do not have permission to delete topics.")
+        if instance.skills.filter(quizzes__isnull=False).exists():
+            raise PermissionDenied("Cannot delete topic associated with active quizzes.")
+        instance.delete()
+
 class SkillViewSet(viewsets.ModelViewSet):
     queryset = Skill.objects.all()
     serializer_class = SkillSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = None
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -132,15 +151,25 @@ class SkillViewSet(viewsets.ModelViewSet):
             qs = qs.filter(lesson_id=lesson_id)
         return qs
 
+    def perform_destroy(self, instance):
+        user = self.request.user
+        if not user.is_role(Role.ROLE_SYSTEM_ADMIN, Role.ROLE_TEACHER):
+            raise PermissionDenied("You do not have permission to delete skills.")
+        if instance.quizzes.exists() or instance.questions.exists():
+            raise PermissionDenied("Cannot delete skill associated with active quizzes or questions.")
+        instance.delete()
+
 class QuizLevelViewSet(viewsets.ModelViewSet):
     queryset = QuizLevel.objects.all().order_by("order")
     serializer_class = QuizLevelSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = None
 
 class DifficultyLevelViewSet(viewsets.ModelViewSet):
     queryset = DifficultyLevel.objects.all().order_by("order")
     serializer_class = DifficultyLevelSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = None
 
 class LessonViewSet(viewsets.ModelViewSet):
     serializer_class = LessonSerializer
@@ -148,6 +177,7 @@ class LessonViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         term = self.request.query_params.get("term")
+        grade = self.request.query_params.get("grade")
         queryset = Lesson.objects.all().order_by("created_at")
 
         user = self.request.user
@@ -159,6 +189,8 @@ class LessonViewSet(viewsets.ModelViewSet):
 
         if term:
             queryset = queryset.filter(term=term)
+        if grade:
+            queryset = queryset.filter(grade=grade)
         return queryset
 
     def perform_create(self, serializer):
@@ -177,6 +209,8 @@ class LessonViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if not user.is_role(Role.ROLE_SYSTEM_ADMIN, Role.ROLE_TEACHER):
             raise PermissionDenied("You do not have permission to delete lessons.")
+        if instance.quizzes.exists() or instance.topics.filter(skills__quizzes__isnull=False).exists():
+            raise PermissionDenied("Cannot delete lesson associated with active quizzes.")
         instance.delete()
 
 
@@ -186,7 +220,11 @@ class QuizViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        queryset = Quiz.objects.all().prefetch_related("questions__answers", "questions__correct_answer")
+        queryset = Quiz.objects.all().select_related(
+            "created_by", "school", "lesson", "assigned_class", "quiz_level", "difficulty", "blueprint"
+        ).prefetch_related(
+            "questions__answers", "questions__hints", "questions__correct_answer"
+        ).order_by("-id")
 
         lesson_id = self.request.query_params.get("lesson")
         if lesson_id:
@@ -207,9 +245,30 @@ class QuizViewSet(viewsets.ModelViewSet):
             q_filter = models.Q(created_by__role__role_name=Role.ROLE_SYSTEM_ADMIN)
             if hasattr(user, 'student_profile') and user.student_profile.registered_by_id:
                 q_filter |= models.Q(created_by_id=user.student_profile.registered_by_id)
-            return queryset.filter(q_filter)
+            if user.school_id:
+                q_filter |= models.Q(school_id=user.school_id)
+            return queryset.filter(q_filter).order_by("order", "id")
 
         return Quiz.objects.none()
+
+    @action(detail=True, methods=['get'])
+    def attempt_questions(self, request, pk=None):
+        from rest_framework.decorators import action
+        from apps.quizzes.serializers import QuestionSerializer
+        from apps.quizzes.services.question_pool_service import get_questions_for_attempt
+        from apps.classes.models import Student
+
+        quiz = self.get_object()
+        user = request.user
+        attempt_number = int(request.query_params.get("attempt_number", 1))
+
+        student = None
+        if hasattr(user, 'student_profile') or user.is_role(Role.ROLE_STUDENT):
+            student, _ = Student.objects.get_or_create(user=user)
+
+        questions = get_questions_for_attempt(student, quiz, attempt_number)
+        serializer = QuestionSerializer(questions, many=True)
+        return Response(serializer.data)
 
     def perform_create(self, serializer):
         user = self.request.user

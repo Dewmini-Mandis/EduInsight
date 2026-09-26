@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { getToken } from "../../auth/authUtils";
 
-import { FileText, Plus, UploadCloud, Search } from "lucide-react";
+import { FileText, Plus, UploadCloud, Search, X } from "lucide-react";
 import MaterialRow from "./materials/MaterialRow";
 
 const useMediaQuery = (query: string) => {
@@ -34,6 +34,9 @@ const MaterialList = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("All Types");
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const quizParam = searchParams.get("quiz");
+
   const navigate = useNavigate();
   const isMobile = useMediaQuery("(max-width: 768px)");
 
@@ -41,9 +44,11 @@ const MaterialList = () => {
     setLoading(true);
     const token = getToken();
     try {
-      const res = await fetch("/api/quizzes/materials/", { headers: { Authorization: `Token ${token}` } });
+      const url = quizParam ? `/api/quizzes/materials/?quiz=${quizParam}` : "/api/quizzes/materials/";
+      const res = await fetch(url, { headers: { Authorization: `Token ${token}` } });
       if (res.ok) {
-        setMaterials(await res.json());
+        const data = await res.json();
+        setMaterials(Array.isArray(data) ? data : (data.results || []));
       } else {
         console.error("Failed to fetch materials");
       }
@@ -56,7 +61,7 @@ const MaterialList = () => {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [quizParam]);
 
   const handleDelete = async (id: number) => {
     if (window.confirm("Are you sure you want to delete this material?")) {
@@ -117,11 +122,21 @@ const MaterialList = () => {
             <FileText size={24} />
           </div>
           <div>
-            <h2 style={{ margin: 0, fontSize: "28px", fontWeight: "700", color: "#0B1F3A" }}>
-              Materials
-            </h2>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <h2 style={{ margin: 0, fontSize: "28px", fontWeight: "700", color: "#0B1F3A" }}>
+                Materials
+              </h2>
+              {quizParam && (
+                <span style={{ backgroundColor: "#FEF3C7", color: "#D97706", padding: "4px 10px", borderRadius: "8px", fontSize: "12px", fontWeight: "600", display: "flex", alignItems: "center", gap: "6px" }}>
+                  Quiz #{quizParam}
+                  <button onClick={() => setSearchParams({})} style={{ background: "none", border: "none", color: "#D97706", cursor: "pointer", display: "flex", padding: 0 }}>
+                    <X size={14} />
+                  </button>
+                </span>
+              )}
+            </div>
             <p style={{ margin: "4px 0 0 0", fontSize: "15px", color: "#5D78A3" }}>
-              Manage and assign learning materials.
+              {quizParam ? `Showing materials for Quiz #${quizParam}` : "Manage and assign learning materials."}
             </p>
           </div>
         </div>

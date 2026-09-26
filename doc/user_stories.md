@@ -6,6 +6,10 @@
 
 **As a System Admin, I want to create, update, deactivate, and archive teacher accounts so that I can control teacher access to the platform.**
 
+### SA-01A: Manage Schools and Educational Zones
+
+**As a System Admin, I want to create, update, search, and manage school profiles (including province, district, zone, and location details) so that schools can be organized systematically across educational zones.**
+
 ### SA-02: Manage User Roles and Permissions
 
 **As a System Admin, I want to assign roles and permissions so that System Admins, Teachers, and Students can access only their authorized functions.**
@@ -204,13 +208,13 @@
 
 **As a Teacher, I want to archive outdated learning materials so that they are no longer assigned while historical records remain available.**
 
-### T-33: Link Materials to Topics and Skills
+### T-33: Link Materials to Quizzes, Topics, and Skills
 
-**As a Teacher, I want to link theories, videos, summaries, and activities to specific topics and skills so that failed students receive relevant remedial content.**
+**As a Teacher, I want to link learning materials to specific quizzes, topics, and skills so that failed students are automatically assigned and directed to the relevant remedial material.**
 
-### T-34: Classify Remedial Activities
+### T-34: Custom Section Display Order
 
-**As a Teacher, I want to mark remedial activities as required, optional, or additional practice so that the learning pathway can be controlled.**
+**As a Teacher, I want to arrange Note Content, Attachments, and Video Materials in any user-desired sequence so that materials are displayed according to my preferred instructional layout.**
 
 ### T-35: Restrict Materials Until Failure
 
@@ -702,9 +706,9 @@
 
 ## 3.4 Failed Quiz and Lesson Access
 
-### ST-27: Unlock Lesson Materials After Failure
+### ST-27: Navigation to Related Learning Material After Failure
 
-**As a Student, I want the related theory, summaries, videos, and remedial activities to unlock only after I fail a quiz so that I can study the areas where I need support.**
+**As a Student, I want to be automatically navigated to the related learning material after failing all allowed attempts on a quiz so that I can immediately review the required concepts.**
 
 ### ST-28: View Incorrect Topics and Skills
 

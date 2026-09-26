@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { getToken } from "../../auth/authUtils";
-import { FileText, Calendar, BookOpen, Layers, Target, Save } from "lucide-react";
+import { FileText, Calendar, BookOpen, Layers, Target, Save, HelpCircle, ArrowUp, ArrowDown } from "lucide-react";
 
 import LearningNoteHeader from "../../components/materials/LearningNoteHeader";
 import RichTextEditor from "../../components/materials/RichTextEditor";
@@ -47,16 +47,29 @@ const CreateNoteMaterial = () => {
   const [lessonsList, setLessonsList] = useState<any[]>([]);
   const [topicsList, setTopicsList] = useState<any[]>([]);
   const [skillsList, setSkillsList] = useState<any[]>([]);
+  const [quizzesList, setQuizzesList] = useState<any[]>([]);
 
   const [termId, setTermId] = useState("");
   const [lessonId, setLessonId] = useState("");
   const [topicId, setTopicId] = useState("");
   const [skillId, setSkillId] = useState("");
+  const [quizId, setQuizId] = useState("");
 
-  useEffect(() => { fetchTerms(); }, []);
+  const [sectionOrder, setSectionOrder] = useState<string[]>(["NOTE", "ATTACHMENTS", "VIDEO"]);
+
+  useEffect(() => { fetchTerms(); fetchQuizzes(); }, []);
+  
   const fetchTerms = async () => {
     const res = await fetch("/api/quizzes/terms/", { headers: { Authorization: `Token ${getToken()}` } });
     if (res.ok) setTermsList(await res.json());
+  };
+
+  const fetchQuizzes = async () => {
+    const res = await fetch("/api/quizzes/", { headers: { Authorization: `Token ${getToken()}` } });
+    if (res.ok) {
+      const data = await res.json();
+      setQuizzesList(Array.isArray(data) ? data : data.results || []);
+    }
   };
 
   useEffect(() => {
@@ -72,6 +85,10 @@ const CreateNoteMaterial = () => {
         const data = await res.json();
         setTitle(data.title || "");
         setContent(data.content || "");
+        if (data.quiz) setQuizId(data.quiz.toString());
+        if (data.section_order && Array.isArray(data.section_order) && data.section_order.length > 0) {
+          setSectionOrder(data.section_order);
+        }
         if (data.lesson) {
           setLessonId(data.lesson.toString());
           const lessonRes = await fetch(`/api/quizzes/lessons/${data.lesson}/`, { headers: { Authorization: `Token ${getToken()}` } });
@@ -92,19 +109,19 @@ const CreateNoteMaterial = () => {
   useEffect(() => {
     if (!termId) { setLessonsList([]); return; }
     fetch(`/api/quizzes/lessons/?term=${termId}`, { headers: { Authorization: `Token ${getToken()}` } })
-      .then(r => r.json()).then(setLessonsList);
+      .then(r => r.json()).then(data => setLessonsList(Array.isArray(data) ? data : data.results || []));
   }, [termId]);
 
   useEffect(() => {
     if (!lessonId) { setTopicsList([]); setTopicId(""); return; }
     fetch(`/api/quizzes/topics/?lesson=${lessonId}`, { headers: { Authorization: `Token ${getToken()}` } })
-      .then(r => r.json()).then(setTopicsList);
+      .then(r => r.json()).then(data => setTopicsList(Array.isArray(data) ? data : data.results || []));
   }, [lessonId]);
 
   useEffect(() => {
     if (!topicId) { setSkillsList([]); setSkillId(""); return; }
     fetch(`/api/quizzes/skills/?topic=${topicId}`, { headers: { Authorization: `Token ${getToken()}` } })
-      .then(r => r.json()).then(setSkillsList);
+      .then(r => r.json()).then(data => setSkillsList(Array.isArray(data) ? data : data.results || []));
   }, [topicId]);
 
   const handleAddFiles = (files: File[]) => {
@@ -135,6 +152,24 @@ const CreateNoteMaterial = () => {
     }
   };
 
+  const moveSectionUp = (index: number) => {
+    if (index === 0) return;
+    const newOrder = [...sectionOrder];
+    const temp = newOrder[index - 1];
+    newOrder[index - 1] = newOrder[index];
+    newOrder[index] = temp;
+    setSectionOrder(newOrder);
+  };
+
+  const moveSectionDown = (index: number) => {
+    if (index === sectionOrder.length - 1) return;
+    const newOrder = [...sectionOrder];
+    const temp = newOrder[index + 1];
+    newOrder[index + 1] = newOrder[index];
+    newOrder[index] = temp;
+    setSectionOrder(newOrder);
+  };
+
   const handleSubmit = async () => {
     if (!title || !lessonId) {
       setError("Title and Lesson are required.");
@@ -156,6 +191,8 @@ const CreateNoteMaterial = () => {
       formData.append("lesson", lessonId);
       if (topicId) formData.append("topic", topicId);
       if (skillId) formData.append("skill", skillId);
+      if (quizId) formData.append("quiz", quizId);
+      formData.append("section_order", JSON.stringify(sectionOrder));
 
       for (let file of attachments) {
         formData.append("attachments", file);
@@ -190,7 +227,7 @@ const CreateNoteMaterial = () => {
         onBack={() => navigate("/teacher/materials")} 
         title={materialId ? "Edit Learning Note" : "Create Learning Note"}
         subtitle="Create rich text materials with attachments."
-        helperText="Add a summary, select the relevant term, lesson, topic, and skill, and attach supporting files."
+        helperText="Add a summary, select the relevant term, lesson, topic, skill, and associated quiz, and arrange section order."
         icon={FileText}
       />
 
@@ -240,6 +277,37 @@ const CreateNoteMaterial = () => {
                 {skillsList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </Select>
             </InputWrapper>
+          </div>
+        </div>
+
+        <div>
+          <Label>Associated Quiz (Optional - Redirects failed students to this material)</Label>
+          <InputWrapper icon={HelpCircle}>
+            <Select value={quizId} onChange={(e: any) => setQuizId(e.target.value)}>
+              <option value="">-- None (No Direct Quiz Link) --</option>
+              {quizzesList.map(q => <option key={q.id} value={q.id}>{q.title}</option>)}
+            </Select>
+          </InputWrapper>
+        </div>
+
+        <div>
+          <Label>Section Display Order</Label>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {sectionOrder.map((section, idx) => (
+              <div key={section} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", backgroundColor: "#F8FBFF", border: "1px solid #DCE6F3", borderRadius: "8px" }}>
+                <span style={{ fontSize: "14px", fontWeight: "600", color: "#0B1F3A" }}>
+                  {idx + 1}. {section === "NOTE" ? "Note Content" : section === "ATTACHMENTS" ? "Attachments & Documents" : "Video Material"}
+                </span>
+                <div style={{ display: "flex", gap: "6px" }}>
+                  <button type="button" onClick={() => moveSectionUp(idx)} disabled={idx === 0} style={{ padding: "4px 8px", borderRadius: "4px", border: "1px solid #DCE6F3", backgroundColor: idx === 0 ? "#EFEFEF" : "#FFFFFF", cursor: idx === 0 ? "default" : "pointer" }}>
+                    <ArrowUp size={14} />
+                  </button>
+                  <button type="button" onClick={() => moveSectionDown(idx)} disabled={idx === sectionOrder.length - 1} style={{ padding: "4px 8px", borderRadius: "4px", border: "1px solid #DCE6F3", backgroundColor: idx === sectionOrder.length - 1 ? "#EFEFEF" : "#FFFFFF", cursor: idx === sectionOrder.length - 1 ? "default" : "pointer" }}>
+                    <ArrowDown size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 

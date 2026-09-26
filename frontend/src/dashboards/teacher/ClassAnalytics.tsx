@@ -47,19 +47,32 @@ const ClassAnalytics = () => {
           }),
         ]);
 
-        if (!usersRes.ok || !attemptsRes.ok || !quizzesRes.ok) {
-          throw new Error("Unable to fetch analytics data.");
-        }
+        const usersRaw = await usersRes.json();
+        const attemptsRaw = await attemptsRes.json();
+        const quizzesRaw = await quizzesRes.json();
 
-        const usersData = await usersRes.json() as any[];
-        const attemptsData = await attemptsRes.json() as any[];
-        const quizzesData = await quizzesRes.json() as any[];
+        const usersData: any[] = Array.isArray(usersRaw) ? usersRaw : (usersRaw?.results || []);
+        const attemptsData: any[] = Array.isArray(attemptsRaw) ? attemptsRaw : (attemptsRaw?.results || []);
+        const quizzesData: any[] = Array.isArray(quizzesRaw) ? quizzesRaw : (quizzesRaw?.results || []);
 
         const totalQuizzes = quizzesData.length || 1;
 
-        // Group attempts by student
+        // Build stable map lookup by numeric student ID to eliminate O(N*M) nested filtering
+        const attemptsByStudentMap = new Map<number, any[]>();
+        attemptsData.forEach((att) => {
+          const studentId = Number(att.student);
+          if (!isNaN(studentId)) {
+            if (!attemptsByStudentMap.has(studentId)) {
+              attemptsByStudentMap.set(studentId, []);
+            }
+            attemptsByStudentMap.get(studentId)!.push(att);
+          }
+        });
+
+        // Group attempts by student using O(1) Map lookups
         const performanceList = usersData.map((user) => {
-          const studentAttempts = attemptsData.filter(att => att.student === user.id || att.student_name === user.full_name);
+          const userId = Number(user.id);
+          const studentAttempts = attemptsByStudentMap.get(userId) || [];
           
           let avgScore = 0;
           let completion = 0;

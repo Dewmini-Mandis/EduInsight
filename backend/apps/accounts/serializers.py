@@ -8,6 +8,8 @@ from apps.schools.models import School
 from .models import Role, User
 
 
+from common.scope_constants import FIXED_SUBJECT
+
 class RoleSerializer(serializers.ModelSerializer):
 	class Meta:
 		model = Role
@@ -37,6 +39,7 @@ class UserSerializer(serializers.ModelSerializer):
 			"student_profile",
 			"teacher_profile",
 			"is_active",
+			"must_change_password",
 		]
 
 	def get_full_name(self, obj: User) -> str:
@@ -113,6 +116,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
 		class_name = validated_data.pop("class_name", "")
 		class_room_id = validated_data.pop("class_room_id", None)
 		subjects = validated_data.pop("subjects", [])
+		validated_data["must_change_password"] = True
 		user = User.objects.create_user(password=password, **validated_data)
 		if role and role.role_name == Role.ROLE_STUDENT:
 			student = Student.objects.create(
@@ -131,7 +135,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
 				except SchoolClass.DoesNotExist:
 					pass
 		if role and role.role_name == Role.ROLE_TEACHER:
-			TeacherProfile.objects.create(user=user, subjects=subjects or [])
+			TeacherProfile.objects.create(user=user, subjects=subjects or [FIXED_SUBJECT])
 		return user
 
 
@@ -270,7 +274,8 @@ class ProfileUpdateSerializer(serializers.ModelSerializer):
 		
 		if new_password:
 			instance.set_password(new_password)
-			instance.save(update_fields=["password"])
+			instance.must_change_password = False
+			instance.save(update_fields=["password", "must_change_password"])
 			
 		if classrooms is not None and instance.is_role(Role.ROLE_TEACHER):
 			from apps.classes.models import SchoolClass, TeacherClassroom

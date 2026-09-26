@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Map, BookOpen, Target, Trophy, Clock, CheckCircle, ChevronRight, Lock, Calendar, ChevronDown, Check } from "lucide-react";
+import { Map, BookOpen, Target, Trophy, Clock, CheckCircle, ChevronRight, Lock, Calendar, ChevronDown, Check, AlertTriangle } from "lucide-react";
 
 import { getToken, getUser } from "../../auth/authUtils";
 import StudentSidebar from "../../components/StudentSidebar";
@@ -206,6 +206,9 @@ const StudentDashboard = () => {
   const [actionLoading, setActionLoading] = useState(false);
   
   // Quiz Session State
+  const [activeAttemptId, setActiveAttemptId] = useState<number | null>(null);
+  const [expiresAtTime, setExpiresAtTime] = useState<number | null>(null);
+  const [snapshotQuestions, setSnapshotQuestions] = useState<any[]>([]);
   const [quizStartTime, setQuizStartTime] = useState<number | null>(null);
   const [timeElapsed, setTimeElapsed] = useState<number>(0);
 
@@ -225,40 +228,37 @@ const StudentDashboard = () => {
     setError("");
     try {
       const token = getToken();
-      // Fetch available quizzes
-      const quizRes = await fetch("/api/quizzes/", {
-        headers: { Authorization: `Token ${token}` },
-      });
-      if (!quizRes.ok) throw new Error("Unable to fetch quizzes");
-      const quizData = await quizRes.json();
-      setQuizzes(Array.isArray(quizData) ? quizData : quizData.results || []);
+      const headers = { Authorization: `Token ${token}` };
 
-      // Fetch attempts history
-      const attemptRes = await fetch("/api/attempts/attempts/", {
-        headers: { Authorization: `Token ${token}` },
-      });
-      if (!attemptRes.ok) throw new Error("Unable to fetch attempts");
-      const attemptData = await attemptRes.json();
-      setAttempts(Array.isArray(attemptData) ? attemptData : attemptData.results || []);
+      const [quizResult, attemptResult, lessonsResult, materialsResult] = await Promise.allSettled([
+        fetch("/api/quizzes/", { headers }),
+        fetch("/api/attempts/attempts/", { headers }),
+        fetch("/api/quizzes/lessons/", { headers }),
+        fetch("/api/quizzes/materials/", { headers }),
+      ]);
 
-      // Fetch lessons
-      const lessonsRes = await fetch("/api/quizzes/lessons/", {
-        headers: { Authorization: `Token ${token}` },
-      });
-      if (!lessonsRes.ok) throw new Error("Unable to fetch lessons");
-      const lessonsData = await lessonsRes.json();
-      const lessonsArray = Array.isArray(lessonsData) ? lessonsData : lessonsData.results || [];
-      setLessons(lessonsArray);
+      if (quizResult.status === "fulfilled" && quizResult.value.ok) {
+        const quizData = await quizResult.value.json();
+        setQuizzes(Array.isArray(quizData) ? quizData : quizData.results || []);
+      }
 
-      // Fetch materials for recommendations
-      const materialsRes = await fetch("/api/quizzes/materials/", {
-        headers: { Authorization: `Token ${token}` },
-      });
-      if (materialsRes.ok) {
-        const materialsData = await materialsRes.json();
+      if (attemptResult.status === "fulfilled" && attemptResult.value.ok) {
+        const attemptData = await attemptResult.value.json();
+        setAttempts(Array.isArray(attemptData) ? attemptData : attemptData.results || []);
+      }
+
+      let lessonsArray: any[] = [];
+      if (lessonsResult.status === "fulfilled" && lessonsResult.value.ok) {
+        const lessonsData = await lessonsResult.value.json();
+        lessonsArray = Array.isArray(lessonsData) ? lessonsData : lessonsData.results || [];
+        setLessons(lessonsArray);
+      }
+
+      if (materialsResult.status === "fulfilled" && materialsResult.value.ok) {
+        const materialsData = await materialsResult.value.json();
         setMaterials(Array.isArray(materialsData) ? materialsData : materialsData.results || []);
       }
-      
+
       if (lessonsArray.length > 0) {
         // Find default lesson for current term or first available
         const defaultL = lessonsArray.find((l: any) => l.term_name === "Term 1") || lessonsArray[0];
@@ -275,18 +275,25 @@ const StudentDashboard = () => {
     fetchData();
   }, []);
 
-  // Timer Effect
+  // Authoritative Expiration Timer Effect
   useEffect(() => {
     let timerId: NodeJS.Timeout;
-    if (quizAction === "attempt" && quizStartTime !== null) {
+    if (quizAction === "attempt" && expiresAtTime !== null) {
       timerId = setInterval(() => {
-        setTimeElapsed(Math.floor((Date.now() - quizStartTime) / 1000));
+        const now = Date.now();
+        const diff = Math.max(0, Math.floor((expiresAtTime - now) / 1000));
+        setTimeElapsed(diff);
+        if (diff <= 0) {
+          clearInterval(timerId);
+          // Auto submit on time expiration
+          handleSubmitAttempt();
+        }
       }, 1000);
     }
     return () => {
       if (timerId) clearInterval(timerId);
     };
-  }, [quizAction, quizStartTime]);
+  }, [quizAction, expiresAtTime, activeAttemptId]);
 
   // Compute stats for metrics
   const stats = useMemo(() => {
@@ -384,63 +391,106 @@ const StudentDashboard = () => {
     };
   }, [lessons, quizzes, attempts, selectedTerm, selectedLessonId]);
 
-  const handleStartAttempt = (quiz: any) => {
-    // Check for remediation
-    const quizAttempts = attempts.filter(att => att.quiz === quiz.id).sort((a,b) => b.attempt_number - a.attempt_number);
-    if (quizAttempts.length > 0) {
-      const lastAttempt = quizAttempts[0];
-      if (lastAttempt.score !== null && lastAttempt.score < (quiz.pass_mark || 75)) {
-        // They failed the last attempt. Check if required remedial lessons are completed.
-        const requiredLessons = quiz.remedial_lessons || []; // backend might need to provide this in quiz serializer, or we check if lesson.quiz == quiz.id
-        // As a fallback, check if ANY lesson linked to this quiz is incomplete
-        const linkedLessons = lessons.filter((l: any) => l.quiz === quiz.id);
-        const incompleteLessons = linkedLessons.filter((l: any) => {
-          const prog = lessonProgress.find((p: any) => p.lesson === l.id);
-          return !prog || prog.status !== "COMPLETED";
-        });
-        
-        if (incompleteLessons.length > 0) {
-          setError(`You must complete the required remedial lessons before retaking this quiz.`);
-          return;
-        }
-      }
-    }
-
-    setSelectedQuiz(quiz);
-    
-    // Autosave Recovery
-    const savedStateStr = localStorage.getItem(`quiz_autosave_${quiz.id}`);
-    if (savedStateStr) {
-      try {
-        const savedState = JSON.parse(savedStateStr);
-        setAttemptAnswers(savedState.answers || {});
-        setHintsUsed(savedState.hints || {});
-        setQuizStartTime(savedState.startTime || Date.now());
-      } catch (e) {
-        setAttemptAnswers({});
-        setHintsUsed({});
-        setQuizStartTime(Date.now());
-      }
-    } else {
-      setAttemptAnswers({});
-      setHintsUsed({});
-      setQuizStartTime(Date.now());
-    }
-
+  const handleStartAttempt = async (quiz: any) => {
     setError("");
     setSuccessMessage("");
-    setQuizAction("attempt");
-    setActiveSection("quizzes");
+    setActionLoading(true);
+
+    try {
+      const token = getToken();
+      const res = await fetch("/api/attempts/attempts/start/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Token ${token}`,
+        },
+        body: JSON.stringify({ quiz: quiz.id }),
+      });
+
+      const resData = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(resData?.detail || "Unable to start quiz attempt.");
+        if (resData?.detail && resData.detail.includes("maximum limit")) {
+          handleViewAnswers(quiz);
+        }
+        setActionLoading(false);
+        return;
+      }
+
+      const attemptObj = resData;
+      setActiveAttemptId(attemptObj.id);
+      setSelectedQuiz(quiz);
+
+      // Snapshot questions locking order
+      if (attemptObj.attempt_questions && attemptObj.attempt_questions.length > 0) {
+        const snapshot = attemptObj.attempt_questions
+          .sort((a: any, b: any) => (a.order || 0) - (b.order || 0))
+          .map((aq: any) => aq.question_detail)
+          .filter(Boolean);
+        setSnapshotQuestions(snapshot);
+      } else {
+        setSnapshotQuestions(quiz.questions || []);
+      }
+
+      // Restored answers from active attempt
+      const restoredAnswers: Record<number, { selected_answer?: number; typed_answer?: string }> = {};
+      if (attemptObj.answers) {
+        attemptObj.answers.forEach((ans: any) => {
+          restoredAnswers[ans.question] = {
+            selected_answer: ans.selected_answer,
+            typed_answer: ans.typed_answer,
+          };
+        });
+      }
+      setAttemptAnswers(restoredAnswers);
+
+      const startMs = attemptObj.start_time ? new Date(attemptObj.start_time).getTime() : Date.now();
+      const expiryMs = attemptObj.expires_at ? new Date(attemptObj.expires_at).getTime() : startMs + (quiz.estimated_time_minutes || 10) * 60000;
+      setQuizStartTime(startMs);
+      setExpiresAtTime(expiryMs);
+
+      setQuizAction("attempt");
+      setActiveSection("quizzes");
+    } catch (err: any) {
+      setError(err.message || "Failed to start quiz attempt.");
+    } finally {
+      setActionLoading(false);
+    }
   };
 
-  // Autosave Function
-  const persistAutosave = (answers: any, hints: any, startTime: number | null, quizId: number) => {
-    if (!quizId) return;
-    localStorage.setItem(`quiz_autosave_${quizId}`, JSON.stringify({
-      answers,
-      hints,
-      startTime
-    }));
+  const saveProgressiveAnswers = async (currentAttemptId: number | null, answersMap: any, hintsMap: any) => {
+    if (!currentAttemptId) return;
+    try {
+      const token = getToken();
+      const payload = {
+        answers: Object.entries(answersMap).map(([qId, val]: [string, any]) => ({
+          question: Number(qId),
+          selected_answer: val?.selected_answer || null,
+          typed_answer: val?.typed_answer || "",
+          hint_count: hintsMap[Number(qId)] || 0,
+        })),
+      };
+
+      const res = await fetch(`/api/attempts/attempts/${currentAttemptId}/save_answers/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Token ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.expired && data.attempt) {
+          setSelectedAttempt(data.attempt);
+          setSuccessMessage("Time limit expired. Quiz auto-submitted.");
+          setQuizAction("result");
+        }
+      }
+    } catch (e) {
+      console.error("Progressive save failed:", e);
+    }
   };
 
   const handleAnswerSelect = (questionId: number, answerId: number) => {
@@ -449,7 +499,7 @@ const StudentDashboard = () => {
         ...prev,
         [questionId]: { ...prev[questionId], selected_answer: answerId },
       };
-      if (selectedQuiz) persistAutosave(updated, hintsUsed, quizStartTime, selectedQuiz.id);
+      if (activeAttemptId) saveProgressiveAnswers(activeAttemptId, updated, hintsUsed);
       return updated;
     });
   };
@@ -460,33 +510,30 @@ const StudentDashboard = () => {
         ...prev,
         [questionId]: { ...prev[questionId], typed_answer: val },
       };
-      if (selectedQuiz) persistAutosave(updated, hintsUsed, quizStartTime, selectedQuiz.id);
+      if (activeAttemptId) saveProgressiveAnswers(activeAttemptId, updated, hintsUsed);
       return updated;
     });
   };
 
-  const handleSubmitAttempt = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedQuiz) return;
+  const handleSubmitAttempt = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!selectedQuiz || !activeAttemptId) return;
     setError("");
     setActionLoading(true);
 
     try {
       const token = getToken();
+      const questionsToUse = snapshotQuestions.length > 0 ? snapshotQuestions : (selectedQuiz.questions || []);
       const payload = {
-        quiz: selectedQuiz.id,
-        start_time: quizStartTime ? new Date(quizStartTime).toISOString() : new Date().toISOString(),
-        answers: selectedQuiz.questions.map((q: any) => {
-          return {
-            question: q.id,
-            selected_answer: attemptAnswers[q.id]?.selected_answer || null,
-            typed_answer: attemptAnswers[q.id]?.typed_answer || "",
-            hint_count: hintsUsed[q.id] || 0,
-          };
-        }),
+        answers: questionsToUse.map((q: any) => ({
+          question: q.id,
+          selected_answer: attemptAnswers[q.id]?.selected_answer || null,
+          typed_answer: attemptAnswers[q.id]?.typed_answer || "",
+          hint_count: hintsUsed[q.id] || 0,
+        })),
       };
 
-      const res = await fetch("/api/attempts/attempts/", {
+      const res = await fetch(`/api/attempts/attempts/${activeAttemptId}/submit/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -502,10 +549,14 @@ const StudentDashboard = () => {
 
       const resultData = await res.json();
       setSelectedAttempt(resultData);
-      setSuccessMessage("Quiz submitted successfully!");
+      setSuccessMessage(resultData.auto_submitted ? "Time limit expired. Quiz auto-submitted!" : "Quiz submitted successfully!");
 
-      // Clear autosave
-      localStorage.removeItem(`quiz_autosave_${selectedQuiz.id}`);
+      if (resultData.has_failed_all_attempts && resultData.redirect_to_material_id) {
+        setSuccessMessage("You have completed all allowed attempts for this quiz. Redirecting you to the related Learning Material...");
+        setTimeout(() => {
+          navigate(`/student/materials/${resultData.redirect_to_material_id}/preview`);
+        }, 1500);
+      }
 
       setQuizAction("result");
       
@@ -514,7 +565,7 @@ const StudentDashboard = () => {
       });
       if (attemptRes.ok) {
         const attemptData = await attemptRes.json();
-        setAttempts(attemptData);
+        setAttempts(Array.isArray(attemptData) ? attemptData : attemptData.results || []);
       }
     } catch (err: any) {
       setError(err.message || "Failed to submit attempt");
@@ -870,6 +921,9 @@ const StudentDashboard = () => {
                     ) : (
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "16px" }}>
                         {learningPathData.lessonQuizzes.map((quiz, index) => {
+                          const attemptsCount = attempts.filter((att) => att.quiz === quiz.id).length;
+                          const maxAttempts = quiz.max_attempts || 3;
+                          const isLimitReached = attemptsCount >= maxAttempts;
                           const isCompleted = learningPathData.isQuizCompleted(quiz.id);
                           const isLocked = index > 0 && !learningPathData.isQuizCompleted(learningPathData.lessonQuizzes[index - 1].id);
                           return (
@@ -877,26 +931,44 @@ const StudentDashboard = () => {
                               key={quiz.id} 
                               onClick={() => {
                                 if (!isLocked) {
-                                  handleStartAttempt(quiz);
+                                  if (isLimitReached) {
+                                    handleViewAnswers(quiz);
+                                  } else {
+                                    handleStartAttempt(quiz);
+                                  }
                                 }
                               }} 
-                              style={{ padding: "16px", border: `1px solid ${isCompleted ? "#dcfce7" : isLocked ? "#f1f5f9" : "#e2e8f0"}`, borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: isLocked ? "not-allowed" : "pointer", background: isLocked ? "#f8fafc" : "white", transition: "all 0.2s", opacity: isLocked ? 0.6 : 1 }} 
-                              onMouseEnter={(e) => { if (!isLocked) e.currentTarget.style.borderColor = "#3b82f6"; }} 
-                              onMouseLeave={(e) => { if (!isLocked) e.currentTarget.style.borderColor = isCompleted ? "#dcfce7" : "#e2e8f0"; }}
+                              style={{
+                                padding: "16px",
+                                border: `1px solid ${isCompleted ? "#dcfce7" : isLimitReached ? "#fee2e2" : isLocked ? "#f1f5f9" : "#e2e8f0"}`,
+                                borderRadius: "12px",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                cursor: isLocked ? "not-allowed" : "pointer",
+                                background: isLocked ? "#f8fafc" : isLimitReached ? "#fff5f5" : "white",
+                                transition: "all 0.2s",
+                                opacity: isLocked ? 0.6 : 1
+                              }} 
+                              onMouseEnter={(e) => { if (!isLocked) e.currentTarget.style.borderColor = isLimitReached ? "#ef4444" : "#3b82f6"; }} 
+                              onMouseLeave={(e) => { if (!isLocked) e.currentTarget.style.borderColor = isCompleted ? "#dcfce7" : isLimitReached ? "#fee2e2" : "#e2e8f0"; }}
                             >
                               <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-                                <div style={{ background: isCompleted ? "#3b82f6" : isLocked ? "#cbd5e1" : "#f1f5f9", borderRadius: "50%", width: "40px", height: "40px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                  {isCompleted ? <Check size={20} color="white" /> : isLocked ? <Lock size={20} color="white" /> : <Map size={20} color="#3b82f6" />}
+                                <div style={{ background: isCompleted ? "#22c55e" : isLimitReached ? "#ef4444" : isLocked ? "#cbd5e1" : "#f1f5f9", borderRadius: "50%", width: "40px", height: "40px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                  {isCompleted ? <Check size={20} color="white" /> : isLimitReached ? <AlertTriangle size={20} color="white" /> : isLocked ? <Lock size={20} color="white" /> : <Map size={20} color="#3b82f6" />}
                                 </div>
                                 <div>
                                   <div style={{ fontSize: "14px", fontWeight: "700", color: isLocked ? "#94a3b8" : "var(--navy-900)", marginBottom: "4px" }}>{quiz.title}</div>
-                                  <div style={{ fontSize: "12px", color: isCompleted ? "#16a34a" : isLocked ? "#94a3b8" : "#64748b", fontWeight: "500" }}>
-                                    Quiz {quiz.order || index + 1} &bull; {isCompleted ? "Completed" : isLocked ? "Locked" : "In Progress"}
+                                  <div style={{ fontSize: "12px", color: isCompleted ? "#16a34a" : isLimitReached ? "#dc2626" : isLocked ? "#94a3b8" : "#64748b", fontWeight: "600" }}>
+                                    Quiz {quiz.order || index + 1} &bull; {isCompleted ? "Completed" : isLimitReached ? "Attempts Exhausted" : isLocked ? "Locked" : "In Progress"}
+                                  </div>
+                                  <div style={{ fontSize: "11px", color: isLimitReached ? "#b91c1c" : "#64748b", marginTop: "2px", fontWeight: "600" }}>
+                                    Attempts: {attemptsCount} / {maxAttempts}
                                   </div>
                                 </div>
                               </div>
-                              <div style={{ width: "24px", height: "24px", borderRadius: "50%", border: `1px solid ${isCompleted ? "#16a34a" : isLocked ? "transparent" : "#e2e8f0"}`, display: "flex", alignItems: "center", justifyContent: "center", background: isCompleted ? "#dcfce7" : "transparent" }}>
-                                {isCompleted ? <Check size={14} color="#16a34a" /> : isLocked ? <Lock size={14} color="#94a3b8" /> : <ChevronRight size={14} color="#3b82f6" />}
+                              <div style={{ width: "24px", height: "24px", borderRadius: "50%", border: `1px solid ${isCompleted ? "#16a34a" : isLimitReached ? "#ef4444" : isLocked ? "transparent" : "#e2e8f0"}`, display: "flex", alignItems: "center", justifyContent: "center", background: isCompleted ? "#dcfce7" : isLimitReached ? "#fee2e2" : "transparent" }}>
+                                {isCompleted ? <Check size={14} color="#16a34a" /> : isLimitReached ? <AlertTriangle size={14} color="#dc2626" /> : isLocked ? <Lock size={14} color="#94a3b8" /> : <ChevronRight size={14} color="#3b82f6" />}
                               </div>
                             </div>
                           );
@@ -1222,7 +1294,7 @@ const StudentDashboard = () => {
                   </div>
 
                   <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-                    {selectedQuiz.questions?.map((q: any, qIdx: number) => (
+                    {(snapshotQuestions.length > 0 ? snapshotQuestions : (selectedQuiz.questions || []))?.map((q: any, qIdx: number) => (
                       <div
                         key={q.id}
                         style={{
@@ -1308,7 +1380,7 @@ const StudentDashboard = () => {
                                   if (currentCount < q.hints.length) {
                                     const updatedHints = { ...hintsUsed, [q.id]: currentCount + 1 };
                                     setHintsUsed(updatedHints);
-                                    if (selectedQuiz) persistAutosave(attemptAnswers, updatedHints, quizStartTime, selectedQuiz.id);
+                                     if (activeAttemptId) saveProgressiveAnswers(activeAttemptId, attemptAnswers, updatedHints);
                                   }
                                 }}
                                 disabled={(hintsUsed[q.id] || 0) >= q.hints.length}
@@ -1399,9 +1471,70 @@ const StudentDashboard = () => {
                       {selectedAttempt.score}%
                     </div>
                     <div style={{ fontSize: "0.9rem", color: "#1e3a8a", fontWeight: "500" }}>
-                      Attempt #{selectedAttempt.attempt_number} &bull; Completed successfully
+                      Attempt #{selectedAttempt.attempt_number} ({selectedAttempt.attempt_number === 1 ? "Main Quiz" : selectedAttempt.attempt_number === 2 ? "Reassessment 1" : "Reassessment 2"}) &bull; Completed
                     </div>
                   </div>
+
+                  {/* Immediate ML Risk Prediction Card */}
+                  {selectedAttempt?.risk_prediction && (
+                    <div style={{
+                      background: selectedAttempt.risk_prediction.risk_level === "High Risk" ? "#fef2f2" : "#f0fdf4",
+                      border: `1px solid ${selectedAttempt.risk_prediction.risk_level === "High Risk" ? "#fecaca" : "#bbf7d0"}`,
+                      borderRadius: "12px",
+                      padding: "16px 20px",
+                      marginBottom: "1.5rem",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between"
+                    }}>
+                      <div>
+                        <div style={{ fontSize: "14px", fontWeight: "700", color: selectedAttempt.risk_prediction.risk_level === "High Risk" ? "#991b1b" : "#166534" }}>
+                          Immediate ML Risk Assessment: {selectedAttempt.risk_prediction.risk_level}
+                        </div>
+                        <div style={{ fontSize: "12px", color: selectedAttempt.risk_prediction.risk_level === "High Risk" ? "#7f1d1d" : "#14532d", marginTop: "4px" }}>
+                          Model Confidence Probability: {selectedAttempt.risk_prediction.high_risk_probability != null ? (selectedAttempt.risk_prediction.high_risk_probability * 100).toFixed(1) + "%" : "Evaluated"}
+                        </div>
+                      </div>
+                      <span style={{
+                        padding: "6px 14px",
+                        borderRadius: "20px",
+                        fontWeight: "700",
+                        fontSize: "12px",
+                        backgroundColor: selectedAttempt.risk_prediction.risk_level === "High Risk" ? "#ef4444" : "#22c55e",
+                        color: "white"
+                      }}>
+                        {selectedAttempt.risk_prediction.risk_level}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Remediation Assignment Notice */}
+                  {selectedAttempt.score < (selectedQuiz?.pass_mark || 75) && (
+                    <div style={{
+                      background: "#fffbebf5",
+                      border: "1px solid #fde68a",
+                      borderRadius: "12px",
+                      padding: "16px 20px",
+                      marginBottom: "1.5rem"
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#92400e", fontWeight: "700", fontSize: "15px", marginBottom: "6px" }}>
+                        <AlertTriangle size={18} color="#d97706" />
+                        Remedial Learning Assigned
+                      </div>
+                      <div style={{ fontSize: "13px", color: "#78350f", marginBottom: selectedAttempt.redirect_to_material_id ? "12px" : "0px" }}>
+                        Your score ({selectedAttempt.score}%) is below the required pass mark ({selectedQuiz?.pass_mark || 75}%). Required learning materials have been assigned to your profile. Please complete them before attempting reassessments.
+                      </div>
+                      {selectedAttempt.redirect_to_material_id && (
+                        <button
+                          className="admin-primary-btn"
+                          style={{ backgroundColor: "#126BFF", padding: "8px 16px", fontSize: "13px", width: "auto" }}
+                          onClick={() => navigate(`/student/materials/${selectedAttempt.redirect_to_material_id}/preview`)}
+                        >
+                          View Related Learning Material
+                        </button>
+                      )}
+                    </div>
+                  )}
 
                   {(() => {
                     const currentAttemptsCount = attempts.filter((att) => att.quiz === selectedQuiz?.id).length;

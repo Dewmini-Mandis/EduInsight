@@ -1,7 +1,18 @@
 from django.db import models
+from django.utils import timezone
 
 
 class QuizAttempt(models.Model):
+	STATUS_IN_PROGRESS = "IN_PROGRESS"
+	STATUS_SUBMITTED = "SUBMITTED"
+	STATUS_EXPIRED = "EXPIRED"
+
+	STATUS_CHOICES = [
+		(STATUS_IN_PROGRESS, "In Progress"),
+		(STATUS_SUBMITTED, "Submitted"),
+		(STATUS_EXPIRED, "Expired"),
+	]
+
 	student = models.ForeignKey(
 		"classes.Student",
 		on_delete=models.CASCADE,
@@ -15,10 +26,17 @@ class QuizAttempt(models.Model):
 	attempt_number = models.PositiveIntegerField()
 	start_time = models.DateTimeField()
 	end_time = models.DateTimeField(null=True, blank=True)
+	expires_at = models.DateTimeField(null=True, blank=True)
+	status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_SUBMITTED)
+	auto_submitted = models.BooleanField(default=False)
 	score = models.FloatField(null=True, blank=True)
 
 	class Meta:
 		unique_together = ("student", "quiz", "attempt_number")
+		indexes = [
+			models.Index(fields=["-start_time"], name="idx_attempt_start_time"),
+			models.Index(fields=["student", "quiz", "status"], name="idx_attempt_stud_quiz_stat"),
+		]
 
 	def __str__(self) -> str:
 		return f"Attempt {self.attempt_number} - {self.quiz.title}"
@@ -42,9 +60,13 @@ class AttemptQuestion(models.Model):
 		blank=True,
 		related_name="attempt_questions",
 	)
+	order = models.PositiveIntegerField(default=1)
+
+	class Meta:
+		ordering = ["order", "id"]
 
 	def __str__(self) -> str:
-		return f"Attempt {self.attempt_id} - Question {self.question_id}"
+		return f"Attempt {self.attempt_id} - Question {self.question_id} (Order {self.order})"
 
 
 class AttemptAnswer(models.Model):
@@ -77,6 +99,15 @@ class AttemptAnswer(models.Model):
 	response_time = models.FloatField(null=True, blank=True)
 	hint_count = models.PositiveIntegerField(default=0)
 	attempt_count = models.PositiveIntegerField(default=1)
+	answered_at = models.DateTimeField(default=timezone.now)
+	skill = models.ForeignKey(
+		"quizzes.Skill",
+		on_delete=models.SET_NULL,
+		null=True,
+		blank=True,
+		related_name="attempt_answers",
+	)
+	model_eligible = models.BooleanField(default=True)
 
 	def __str__(self) -> str:
 		return f"Answer {self.id}"
@@ -125,6 +156,7 @@ class TeacherOverride(models.Model):
 	previous_value = models.CharField(max_length=255, null=True, blank=True)
 	new_value = models.CharField(max_length=255)
 	reason = models.TextField()
+	is_consumed = models.BooleanField(default=False)
 	created_at = models.DateTimeField(auto_now_add=True)
 
 	def __str__(self) -> str:
@@ -181,3 +213,33 @@ class StudentEngagementAnswer(models.Model):
 
 	def __str__(self):
 		return f"{self.student.user.username} - {self.question.id} - {'Correct' if self.is_correct else 'Incorrect'}"
+
+class TeacherIntervention(models.Model):
+	OUTCOME_IMPROVED = "IMPROVED"
+	OUTCOME_STABLE = "STABLE"
+	OUTCOME_STILL_STRUGGLING = "STILL_STRUGGLING"
+	
+	OUTCOME_CHOICES = [
+		(OUTCOME_IMPROVED, "Improved"),
+		(OUTCOME_STABLE, "Stable"),
+		(OUTCOME_STILL_STRUGGLING, "Still Struggling"),
+	]
+
+	TYPE_EXTRA_PRACTICE = "EXTRA_PRACTICE"
+	TYPE_1ON1 = "1ON1"
+	
+	TYPE_CHOICES = [
+		(TYPE_EXTRA_PRACTICE, "Extra Practice"),
+		(TYPE_1ON1, "1-on-1 Session"),
+	]
+
+	teacher = models.ForeignKey("accounts.User", on_delete=models.CASCADE, related_name="recorded_interventions")
+	student = models.ForeignKey("classes.Student", on_delete=models.CASCADE, related_name="interventions")
+	skill = models.ForeignKey("quizzes.Skill", on_delete=models.CASCADE, related_name="interventions")
+	notes = models.TextField(blank=True)
+	intervention_type = models.CharField(max_length=50, choices=TYPE_CHOICES)
+	outcome = models.CharField(max_length=50, choices=OUTCOME_CHOICES, blank=True)
+	date_recorded = models.DateTimeField(auto_now_add=True)
+
+	def __str__(self) -> str:
+		return f"Intervention for {self.student.user.username} by {self.teacher.username}"

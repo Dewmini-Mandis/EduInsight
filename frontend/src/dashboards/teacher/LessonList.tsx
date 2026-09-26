@@ -49,8 +49,10 @@ const LessonList = () => {
       ]);
       
       if (termsRes.ok && lessonsRes.ok) {
-        setTerms(await termsRes.json());
-        setLessons(await lessonsRes.json());
+        const termsData = await termsRes.json();
+        const lessonsData = await lessonsRes.json();
+        setTerms(Array.isArray(termsData) ? termsData : (termsData.results || []));
+        setLessons(Array.isArray(lessonsData) ? lessonsData : (lessonsData.results || []));
       } else {
         console.error("Failed to fetch data");
       }

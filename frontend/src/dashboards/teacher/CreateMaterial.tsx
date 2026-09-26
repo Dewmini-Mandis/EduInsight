@@ -63,7 +63,10 @@ const CreateMaterial = () => {
       const token = getToken();
       try {
         const res = await fetch(`/api/quizzes/lessons/?term=${termId}`, { headers: { Authorization: `Token ${token}` } });
-        if (res.ok) setLessonsList(await res.json());
+        if (res.ok) {
+          const data = await res.json();
+          setLessonsList(Array.isArray(data) ? data : (data.results || []));
+        }
       } catch (err) { console.error(err); }
     };
     fetchFilteredLessons();
@@ -75,7 +78,10 @@ const CreateMaterial = () => {
       const token = getToken();
       try {
         const res = await fetch(`/api/quizzes/topics/?lesson=${lessonId}`, { headers: { Authorization: `Token ${token}` } });
-        if (res.ok) setTopicsList(await res.json());
+        if (res.ok) {
+          const data = await res.json();
+          setTopicsList(Array.isArray(data) ? data : (data.results || []));
+        }
       } catch (err) { console.error(err); }
     };
     fetchFilteredTopics();
@@ -87,7 +93,10 @@ const CreateMaterial = () => {
       const token = getToken();
       try {
         const res = await fetch(`/api/quizzes/skills/?topic=${topicId}`, { headers: { Authorization: `Token ${token}` } });
-        if (res.ok) setSkillsList(await res.json());
+        if (res.ok) {
+          const data = await res.json();
+          setSkillsList(Array.isArray(data) ? data : (data.results || []));
+        }
       } catch (err) { console.error(err); }
     };
     fetchFilteredSkills();

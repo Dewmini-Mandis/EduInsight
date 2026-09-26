@@ -18,6 +18,7 @@ class Lesson(models.Model):
 		null=True,
 		related_name="lessons",
 	)
+	grade = models.CharField(max_length=20, default="Grade 10", blank=True)
 	created_by = models.ForeignKey(
 		"accounts.User",
 		on_delete=models.SET_NULL,
@@ -89,6 +90,7 @@ class LearningMaterial(models.Model):
 	lesson = models.ForeignKey(Lesson, on_delete=models.SET_NULL, null=True, blank=True, related_name="materials")
 	topic = models.ForeignKey(Topic, on_delete=models.SET_NULL, null=True, blank=True, related_name="materials")
 	skill = models.ForeignKey(Skill, on_delete=models.SET_NULL, null=True, blank=True, related_name="materials")
+	quiz = models.ForeignKey("quizzes.Quiz", on_delete=models.SET_NULL, null=True, blank=True, related_name="learning_materials")
 	
 	created_by = models.ForeignKey(
 		"accounts.User",
@@ -98,8 +100,15 @@ class LearningMaterial(models.Model):
 	)
 	created_at = models.DateTimeField(auto_now_add=True)
 	
-	order = models.PositiveIntegerField(default=1)
 	is_required = models.BooleanField(default=True)
+	order = models.PositiveIntegerField(default=1)
+	section_order = models.JSONField(default=list, blank=True, help_text="Ordered list of section types, e.g. ['NOTE', 'ATTACHMENTS', 'VIDEO']")
+	class Meta:
+		indexes = [
+			models.Index(fields=["-created_at"], name="idx_mat_created_at"),
+			models.Index(fields=["skill", "lesson"], name="idx_mat_skill_lesson"),
+		]
+
 	def __str__(self) -> str:
 		return self.title
 
@@ -134,8 +143,19 @@ class VideoQuestion(models.Model):
 
 
 class Quiz(models.Model):
+	STATUS_DRAFT = "DRAFT"
+	STATUS_PUBLISHED = "PUBLISHED"
+	STATUS_UNPUBLISHED = "UNPUBLISHED"
+	
+	STATUS_CHOICES = [
+		(STATUS_DRAFT, "Draft"),
+		(STATUS_PUBLISHED, "Published"),
+		(STATUS_UNPUBLISHED, "Unpublished"),
+	]
+
 	title = models.CharField(max_length=255)
 	description = models.TextField(blank=True)
+	status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_DRAFT)
 	lesson = models.ForeignKey(
 		Lesson,
 		on_delete=models.SET_NULL,
@@ -170,8 +190,24 @@ class Quiz(models.Model):
 		blank=True,
 		related_name="quizzes",
 	)
+	skills = models.ManyToManyField(Skill, blank=True, related_name="multi_skill_quizzes")
 	created_at = models.DateTimeField(auto_now_add=True)
 	max_attempts = models.PositiveIntegerField(default=3)
+
+	def get_covered_skills(self):
+		skills = set()
+		if self.skill_id:
+			skills.add(self.skill)
+		for s in self.skills.all():
+			skills.add(s)
+		qs_skill_ids = set(self.questions.exclude(skill_id=None).values_list("skill_id", flat=True))
+		if qs_skill_ids:
+			skills.update(Skill.objects.filter(id__in=qs_skill_ids))
+		if not skills and self.topic_id:
+			skills.update(self.topic.skills.all())
+		if not skills and self.lesson_id:
+			skills.update(self.lesson.skills.all())
+		return list(skills)
 
 	def __str__(self) -> str:
 		return self.title
@@ -222,6 +258,7 @@ class Question(models.Model):
 
 	quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name="questions", null=True, blank=True)
 	question_bank = models.ForeignKey(QuestionBank, on_delete=models.CASCADE, related_name="questions", null=True, blank=True)
+	skill = models.ForeignKey("quizzes.Skill", on_delete=models.SET_NULL, null=True, blank=True, related_name="questions")
 	question_text = models.TextField()
 	question_type = models.CharField(max_length=20, choices=QUESTION_TYPES)
 	difficulty_level = models.CharField(max_length=50, blank=True)

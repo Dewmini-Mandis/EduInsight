@@ -1,5 +1,13 @@
 from rest_framework import serializers
-from apps.attempts.models import QuizAttempt, AttemptAnswer, ManualMark, TeacherOverride
+from apps.attempts.models import QuizAttempt, AttemptQuestion, AttemptAnswer, ManualMark, TeacherOverride
+from apps.quizzes.serializers import QuestionSerializer
+
+class AttemptQuestionSerializer(serializers.ModelSerializer):
+    question_detail = QuestionSerializer(source="question", read_only=True)
+
+    class Meta:
+        model = AttemptQuestion
+        fields = ["id", "question", "order", "question_detail"]
 
 class AttemptAnswerSerializer(serializers.ModelSerializer):
     class Meta:
@@ -15,6 +23,7 @@ class AttemptAnswerSerializer(serializers.ModelSerializer):
 
 class QuizAttemptSerializer(serializers.ModelSerializer):
     answers = AttemptAnswerSerializer(many=True, read_only=True)
+    attempt_questions = AttemptQuestionSerializer(many=True, read_only=True)
     quiz_title = serializers.CharField(source="quiz.title", read_only=True)
     student_name = serializers.CharField(source="student.user.get_full_name", read_only=True)
 
@@ -29,10 +38,14 @@ class QuizAttemptSerializer(serializers.ModelSerializer):
             "attempt_number",
             "start_time",
             "end_time",
+            "expires_at",
+            "status",
+            "auto_submitted",
             "score",
             "answers",
+            "attempt_questions",
         ]
-        read_only_fields = ["student", "attempt_number", "start_time", "score"]
+        read_only_fields = ["student", "attempt_number", "start_time", "expires_at", "status", "auto_submitted", "score"]
 
 
 class ManualMarkSerializer(serializers.ModelSerializer):

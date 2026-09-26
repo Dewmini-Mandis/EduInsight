@@ -81,16 +81,19 @@
 
 .teacher-sidebar-brand {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  padding: 24px 24px 0 24px;
-  margin-bottom: 28px;
+  padding: 8px 8px 0 8px;
+  margin-bottom: 24px;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .teacher-sidebar.collapsed .teacher-sidebar-brand {
   flex-direction: column;
   align-items: center;
-  padding: 24px 0 0 0;
+  padding: 8px 0 0 0;
   gap: 16px;
 }
 
@@ -98,10 +101,13 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 .sidebar-logo {
-  width: 165px;
+  width: 145px;
+  max-width: 100%;
   height: auto;
   object-fit: contain;
   transition: width 0.2s ease;
@@ -109,25 +115,48 @@
 
 @media (max-width: 1024px) {
   .sidebar-logo {
-    width: 135px;
+    width: 125px;
+  }
+  .sidebar-role {
+    margin-left: 36px;
+    font-size: 9.5px;
   }
 }
 
 .teacher-sidebar.collapsed .sidebar-logo {
-  width: 40px;
+  width: 36px;
 }
 
 .sidebar-role {
-  margin-top: 2px;
-  margin-left: 46px; /* Aligns under the text part of the logo */
+  margin-top: 1px;
+  margin-left: 42px; /* Aligns under the 'EduInsight' text part of the logo */
   font-family: Inter, system-ui, sans-serif;
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 1.8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 1.6px;
   line-height: 1.2;
   text-transform: uppercase;
   color: #27A7FF;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.2s ease, margin-left 0.2s ease;
+}
+
+.sidebar-collapse-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.sidebar-collapse-btn:hover {
+  color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
 .teacher-sidebar.collapsed .sidebar-role {

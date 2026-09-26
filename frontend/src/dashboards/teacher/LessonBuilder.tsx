@@ -47,7 +47,8 @@ const LessonBuilder = () => {
         headers: { Authorization: `Token ${token}` }
       });
       if (materialsRes.ok) {
-        setMaterials(await materialsRes.json());
+        const matData = await materialsRes.json();
+        setMaterials(Array.isArray(matData) ? matData : (matData.results || []));
       }
     } catch (err: any) {
       setError(err.message || "Failed to load lesson builder.");

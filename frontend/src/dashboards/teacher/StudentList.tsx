@@ -41,7 +41,7 @@ const StudentList = () => {
       });
       if (res.ok) {
         const data = await res.json();
-        const users = data.results || data;
+        const users = Array.isArray(data) ? data : (data.results || []);
         
         const processedUsers = users.map((u: any) => {
           const fn = u.first_name || "";

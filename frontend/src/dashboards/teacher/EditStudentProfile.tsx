@@ -279,4 +279,4 @@ const EditStudentProfile = () => {
   );
 };
 
-export default EditStudentProfile;
+export default EditStudentProfile; // force HMR

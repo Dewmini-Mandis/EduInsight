@@ -34,6 +34,7 @@ class User(AbstractUser):
 		on_delete=models.SET_NULL,
 		related_name="users",
 	)
+	must_change_password = models.BooleanField(default=False)
 
 	def is_role(self, *roles: str) -> bool:
 		return bool(self.role) and self.role.role_name in roles

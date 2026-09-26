@@ -6,11 +6,15 @@ import ChartCard from "../../components/ChartCard";
 import DataTable, { Column } from "../../components/DataTable";
 import StatusBadge from "../../components/StatusBadge";
 import FilterBar from "../../components/FilterBar";
+import InterventionModal from "./InterventionModal";
 
 type RiskAlert = {
   id: number;
+  student_id: number;
   student_name: string;
   student_class: string;
+  skill_id?: number;
+  skill_name?: string;
   topic_lesson: string;
   risk_category: string;
   severity: "Critical" | "High" | "Moderate" | "Low";
@@ -24,7 +28,7 @@ const RiskAlerts = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filterSeverity, setFilterSeverity] = useState("All Risk Levels");
-  const [filterCategory, setFilterCategory] = useState("All Categories");
+  const [selectedAlert, setSelectedAlert] = useState<RiskAlert | null>(null);
 
   const fetchAlerts = async () => {
     const token = getToken();
@@ -42,24 +46,28 @@ const RiskAlerts = () => {
       const data = await res.json() as any[];
       
       const mappedData: RiskAlert[] = data.map(a => {
-        const name = a.student_name || "Unknown";
+        const name = a.student_name || `Student #${a.student}`;
         const initials = name.split(" ").slice(0, 2).map((n: string) => n[0]).join("").toUpperCase();
         
         let trigger_reason = "No data";
         if (a.contributing_factors && Object.keys(a.contributing_factors).length > 0) {
-            trigger_reason = JSON.stringify(a.contributing_factors);
+          const keys = Object.keys(a.contributing_factors).slice(0, 3);
+          trigger_reason = keys.map(k => `${k}: ${a.contributing_factors[k]}`).join(", ");
         }
 
         return {
           id: a.id,
+          student_id: a.student,
           student_name: name,
           initials,
+          skill_id: a.skill,
+          skill_name: a.skill_name || "",
           student_class: a.student_class || "Grade 10",
           topic_lesson: a.topic_lesson || "-",
           risk_category: "Performance",
-          severity: a.risk_category || "Moderate",
+          severity: a.risk_category === "High Risk" ? "High" : "Moderate",
           trigger_reason: trigger_reason,
-          last_updated: a.prediction_date
+          last_updated: a.prediction_date ? new Date(a.prediction_date).toLocaleDateString() : ""
         };
       });
 
@@ -76,23 +84,8 @@ const RiskAlerts = () => {
   }, []);
 
   const filteredAlerts = alerts.filter(alert => {
-    const matchesSeverity = filterSeverity === "All Risk Levels" || alert.severity === filterSeverity;
-    const matchesCategory = filterCategory === "All Categories" || alert.risk_category === filterCategory;
-    return matchesSeverity && matchesCategory;
+    return filterSeverity === "All Risk Levels" || alert.severity === filterSeverity;
   });
-
-  if (loading) {
-    return <div style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted)" }}>Syncing warning alerts...</div>;
-  }
-
-  if (error) {
-    return (
-      <div style={{ padding: "24px", color: "var(--danger)" }}>
-        <h3>Alerts Offline</h3>
-        <p>{error}</p>
-      </div>
-    );
-  }
 
   const columns: Column<RiskAlert>[] = [
     {
@@ -118,7 +111,8 @@ const RiskAlerts = () => {
     },
     {
       key: "topic_lesson",
-      header: "Topic / Lesson"
+      header: "Topic / Skill",
+      render: (item) => <span>{item.skill_name || item.topic_lesson}</span>
     },
     {
       key: "risk_category",
@@ -132,23 +126,26 @@ const RiskAlerts = () => {
     },
     {
       key: "trigger_reason",
-      header: "Trigger Reason",
-      render: (item) => <span style={{ color: "var(--text-secondary)", fontSize: "13px" }}>{item.trigger_reason}</span>
+      header: "Trigger Factors",
+      render: (item) => <span style={{ color: "var(--text-secondary)", fontSize: "12px" }}>{item.trigger_reason}</span>
     },
     {
       key: "action",
       header: "Action",
-      render: () => (
-        <button style={{ 
-          backgroundColor: "var(--blue-600)", 
-          color: "white", 
-          border: "none", 
-          borderRadius: "6px", 
-          padding: "6px 12px", 
-          fontSize: "12px", 
-          fontWeight: "500", 
-          cursor: "pointer" 
-        }}>
+      render: (item) => (
+        <button 
+          onClick={() => setSelectedAlert(item)}
+          style={{ 
+            backgroundColor: "var(--blue-600)", 
+            color: "white", 
+            border: "none", 
+            borderRadius: "6px", 
+            padding: "6px 12px", 
+            fontSize: "12px", 
+            fontWeight: "500", 
+            cursor: "pointer" 
+          }}
+        >
           Intervene
         </button>
       )
@@ -156,7 +153,7 @@ const RiskAlerts = () => {
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
       <FilterBar 
         filters={[
           {
@@ -164,50 +161,37 @@ const RiskAlerts = () => {
             value: filterSeverity,
             options: [
               { label: "All Risk Levels", value: "All Risk Levels" },
-              { label: "Critical", value: "Critical" },
               { label: "High", value: "High" },
               { label: "Moderate", value: "Moderate" },
               { label: "Low", value: "Low" }
             ],
             onChange: setFilterSeverity
-          },
-          {
-            label: "Category",
-            value: filterCategory,
-            options: [
-              { label: "All Categories", value: "All Categories" },
-              { label: "Performance", value: "Performance" },
-              { label: "Engagement", value: "Engagement" },
-              { label: "Understanding", value: "Understanding" }
-            ],
-            onChange: setFilterCategory
           }
         ]}
-        onExport={() => {
-            const csvContent = "data:text/csv;charset=utf-8," + 
-                "Student Name,Class,Topic/Lesson,Risk Category,Severity,Trigger Reason\n" +
-                filteredAlerts.map(a => `${a.student_name},${a.student_class},${a.topic_lesson},${a.risk_category},${a.severity},"${a.trigger_reason}"`).join("\n");
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", "risk_alerts.csv");
-            document.body.appendChild(link);
-            link.click();
-        }}
       />
 
-      <ChartCard 
-        title="Active Risk Alerts" 
-        subtitle="Students flagged by AI as requiring intervention"
-      >
+      <ChartCard title="Risk Alerts" subtitle="AI-identified students requiring academic intervention">
         <div style={{ margin: "0 -20px" }}>
-          <DataTable 
-            columns={columns} 
-            data={filteredAlerts} 
-            keyExtractor={(a) => a.id} 
-          />
+          {loading ? (
+            <div style={{ padding: "24px", textAlign: "center", color: "var(--text-muted)" }}>Loading risk alerts...</div>
+          ) : (
+            <DataTable columns={columns} data={filteredAlerts} keyExtractor={(item) => item.id} />
+          )}
         </div>
       </ChartCard>
+
+      {selectedAlert && (
+        <InterventionModal
+          studentId={selectedAlert.student_id}
+          studentName={selectedAlert.student_name}
+          skillId={selectedAlert.skill_id}
+          skillName={selectedAlert.skill_name}
+          onClose={() => setSelectedAlert(null)}
+          onSuccess={() => {
+            fetchAlerts();
+          }}
+        />
+      )}
     </div>
   );
 };
