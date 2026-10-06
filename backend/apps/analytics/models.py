@@ -18,6 +18,7 @@ class Analytics(models.Model):
 
 class RiskPrediction(models.Model):
 	student = models.ForeignKey("classes.Student", on_delete=models.CASCADE, related_name="risk_predictions")
+	attempt = models.ForeignKey("attempts.QuizAttempt", on_delete=models.CASCADE, null=True, blank=True, related_name="risk_predictions")
 	skill = models.ForeignKey("quizzes.Skill", on_delete=models.SET_NULL, null=True, blank=True, related_name="risk_predictions")
 	risk_category = models.CharField(max_length=50, default="Insufficient Data") 
 	confidence_score = models.FloatField(null=True, blank=True)
@@ -25,6 +26,10 @@ class RiskPrediction(models.Model):
 	threshold = models.FloatField(default=0.50)
 	model_version = models.CharField(max_length=100, blank=True)
 	contributing_factors = models.JSONField(default=dict)
+	explanation_factors = models.JSONField(default=dict, blank=True)
+	shap_base_value = models.FloatField(null=True, blank=True)
+	explanation_method = models.CharField(max_length=50, default="SHAP", blank=True)
+	explainer_version = models.CharField(max_length=100, blank=True)
 	prediction_date = models.DateTimeField(auto_now_add=True)
 	is_flagged = models.BooleanField(default=False)
 	flag_reason = models.TextField(blank=True)

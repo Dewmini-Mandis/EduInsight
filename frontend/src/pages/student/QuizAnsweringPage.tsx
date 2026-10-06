@@ -1,139 +1,27 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { BookOpen, Clock, LogOut, ChevronLeft, ChevronRight, CheckCircle2, AlertTriangle } from "lucide-react";
 import Breadcrumbs from "../../components/student/Breadcrumbs";
 import { getToken } from "../../auth/authUtils";
 import "../../styles/student.css";
 
-// Fallback questions for demonstration matching screenshot 1
-const mockQuizQuestions = [
-  {
-    id: 1,
-    question_text: "What is the perimeter of a rectangle with length 12 cm and width 5 cm?",
-    question_type: "MCQ",
-    answers: [
-      { id: 101, answer_text: "17 cm" },
-      { id: 102, answer_text: "34 cm" },
-      { id: 103, answer_text: "60 cm" },
-      { id: 104, answer_text: "24 cm" },
-    ],
-  },
-  {
-    id: 2,
-    question_text: "A square field has a side length of 8 meters. What is its total perimeter?",
-    question_type: "MCQ",
-    answers: [
-      { id: 105, answer_text: "16 m" },
-      { id: 106, answer_text: "64 m" },
-      { id: 107, answer_text: "32 m" },
-      { id: 108, answer_text: "24 m" },
-    ],
-  },
-  {
-    id: 3,
-    question_text: "What is the square root of 144?",
-    question_type: "MCQ",
-    answers: [
-      { id: 109, answer_text: "10" },
-      { id: 110, answer_text: "12" },
-      { id: 111, answer_text: "14" },
-      { id: 112, answer_text: "16" },
-    ],
-  },
-  {
-    id: 4,
-    question_text: "Calculate the perimeter of an equilateral triangle with a side of 9 cm.",
-    question_type: "MCQ",
-    answers: [
-      { id: 113, answer_text: "18 cm" },
-      { id: 114, answer_text: "27 cm" },
-      { id: 115, answer_text: "36 cm" },
-      { id: 116, answer_text: "81 cm" },
-    ],
-  },
-  {
-    id: 5,
-    question_text: "If the area of a square is 49 cm², what is its perimeter?",
-    question_type: "MCQ",
-    answers: [
-      { id: 117, answer_text: "14 cm" },
-      { id: 118, answer_text: "28 cm" },
-      { id: 119, answer_text: "35 cm" },
-      { id: 120, answer_text: "49 cm" },
-    ],
-  },
-  {
-    id: 6,
-    question_text: "Find the perimeter of a regular pentagon with side length 6 cm.",
-    question_type: "MCQ",
-    answers: [
-      { id: 121, answer_text: "24 cm" },
-      { id: 122, answer_text: "30 cm" },
-      { id: 123, answer_text: "36 cm" },
-      { id: 124, answer_text: "40 cm" },
-    ],
-  },
-  {
-    id: 7,
-    question_text: "What is the perimeter of a triangle with sides 5 cm, 7 cm, and 10 cm?",
-    question_type: "MCQ",
-    answers: [
-      { id: 125, answer_text: "22 cm" },
-      { id: 126, answer_text: "24 cm" },
-      { id: 127, answer_text: "35 cm" },
-      { id: 128, answer_text: "70 cm" },
-    ],
-  },
-  {
-    id: 8,
-    question_text: "A rectangular garden is 15 m long and 10 m wide. How much fencing is needed to enclose it?",
-    question_type: "MCQ",
-    answers: [
-      { id: 129, answer_text: "25 m" },
-      { id: 130, answer_text: "50 m" },
-      { id: 131, answer_text: "150 m" },
-      { id: 132, answer_text: "30 m" },
-    ],
-  },
-  {
-    id: 9,
-    question_text: "What is the square root of 81?",
-    question_type: "MCQ",
-    answers: [
-      { id: 133, answer_text: "7" },
-      { id: 134, answer_text: "8" },
-      { id: 135, answer_text: "9" },
-      { id: 136, answer_text: "18" },
-    ],
-  },
-  {
-    id: 10,
-    question_text: "Find the side length of a square whose perimeter is 40 cm.",
-    question_type: "MCQ",
-    answers: [
-      { id: 137, answer_text: "5 cm" },
-      { id: 138, answer_text: "10 cm" },
-      { id: 139, answer_text: "15 cm" },
-      { id: 140, answer_text: "20 cm" },
-    ],
-  },
-];
-
 const QuizAnsweringPage: React.FC = () => {
   const { quizId } = useParams<{ quizId: string }>();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
 
   const termName = searchParams.get("termName") || "Term 1";
   const lessonTitleParam = searchParams.get("lessonTitle") || "Square Root";
   const lessonIdParam = searchParams.get("lessonId") || "";
 
-  const [quizTitle, setQuizTitle] = useState<string>("Square Root 2");
+  const [quizTitle, setQuizTitle] = useState<string>("Quiz");
   const [subjectName, setSubjectName] = useState<string>("Mathematics");
-  const [questions, setQuestions] = useState<any[]>(mockQuizQuestions);
+  const [questions, setQuestions] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
   const [typedAnswers, setTypedAnswers] = useState<Record<number, string>>({});
+  const [apiError, setApiError] = useState<string | null>(null);
 
   // Attempt & Timer state
   const [attemptId, setAttemptId] = useState<number | null>(null);
@@ -142,14 +30,73 @@ const QuizAnsweringPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState<boolean>(false);
+  const [showIncompletePopup, setShowIncompletePopup] = useState<boolean>(false);
+  const [incompleteUnansweredCount, setIncompleteUnansweredCount] = useState<number>(0);
+  const [firstUnansweredIndex, setFirstUnansweredIndex] = useState<number>(0);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const autosaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const selectedAnswersRef = useRef<Record<number, number>>({});
+  const typedAnswersRef = useRef<Record<number, string>>({});
+
+  useEffect(() => {
+    selectedAnswersRef.current = selectedAnswers;
+  }, [selectedAnswers]);
+
+  useEffect(() => {
+    typedAnswersRef.current = typedAnswers;
+  }, [typedAnswers]);
 
   // 1. Initialize or resume quiz attempt
   useEffect(() => {
     const initQuizAttempt = async () => {
       setLoading(true);
+      setApiError(null);
+      setQuestions([]);
+      setSelectedAnswers({});
+      setTypedAnswers({});
+      setCurrentIndex(0);
+      setAttemptId(null);
+
+      // Check if attempt data was passed directly via navigation state
+      const initialAttempt = (location.state as any)?.initialAttempt;
+      if (
+        initialAttempt &&
+        (String(initialAttempt.quiz) === String(quizId) ||
+          String(initialAttempt.quiz?.id) === String(quizId) ||
+          String(initialAttempt.quiz_id) === String(quizId))
+      ) {
+        setAttemptId(initialAttempt.id);
+        if (initialAttempt.quiz_title) setQuizTitle(initialAttempt.quiz_title);
+        if (initialAttempt.subject_name || initialAttempt.subject) {
+          setSubjectName(initialAttempt.subject_name || initialAttempt.subject);
+        }
+        if (initialAttempt.expires_at) {
+          const expireTime = new Date(initialAttempt.expires_at).getTime();
+          const now = Date.now();
+          const rem = Math.max(0, Math.floor((expireTime - now) / 1000));
+          setSecondsRemaining(rem);
+        }
+        if (initialAttempt.attempt_questions && initialAttempt.attempt_questions.length > 0) {
+          const qList = initialAttempt.attempt_questions
+            .map((aq: any) => aq.question_detail)
+            .filter(Boolean);
+          if (qList.length > 0) setQuestions(qList);
+        }
+        if (initialAttempt.answers) {
+          const restoredSel: Record<number, number> = {};
+          const restoredTyp: Record<number, string> = {};
+          initialAttempt.answers.forEach((ans: any) => {
+            if (ans.selected_answer) restoredSel[ans.question] = ans.selected_answer;
+            if (ans.typed_answer) restoredTyp[ans.question] = ans.typed_answer;
+          });
+          setSelectedAnswers(restoredSel);
+          setTypedAnswers(restoredTyp);
+        }
+        setLoading(false);
+        return;
+      }
+
       const token = getToken();
 
       if (token && quizId) {
@@ -200,23 +147,30 @@ const QuizAnsweringPage: React.FC = () => {
               setSelectedAnswers(restoredSel);
               setTypedAnswers(restoredTyp);
             }
+
+            // Restore local storage offline backup if available
+            try {
+              const cached = localStorage.getItem(`draft_attempt_${quizId}`);
+              if (cached) {
+                const parsed = JSON.parse(cached);
+                if (parsed.selectedAnswers) setSelectedAnswers(parsed.selectedAnswers);
+                if (parsed.typedAnswers) setTypedAnswers(parsed.typedAnswers);
+              }
+            } catch (e) {
+              console.error("Local storage read error:", e);
+            }
+          } else {
+            const errData = await startRes.json().catch(() => ({}));
+            const errorMsg = errData.detail || "This quiz is unavailable or may have been deleted.";
+            setApiError(errorMsg);
           }
         } catch (err) {
           console.error("Error starting quiz attempt:", err);
+          setApiError("Unable to connect to the quiz server. Please try again.");
           setSyncStatus("offline");
         }
-      }
-
-      // Restore local storage offline backup if available
-      try {
-        const cached = localStorage.getItem(`draft_attempt_${quizId}`);
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (parsed.selectedAnswers) setSelectedAnswers(parsed.selectedAnswers);
-          if (parsed.typedAnswers) setTypedAnswers(parsed.typedAnswers);
-        }
-      } catch (e) {
-        console.error("Local storage read error:", e);
+      } else {
+        setApiError("Invalid quiz parameters or authentication required.");
       }
 
       setLoading(false);
@@ -304,37 +258,82 @@ const QuizAnsweringPage: React.FC = () => {
   );
 
   const handleSelectOption = (questionId: number, answerId: number) => {
-    const nextSel = { ...selectedAnswers, [questionId]: answerId };
+    const nextSel = { ...selectedAnswersRef.current, [questionId]: answerId };
+    selectedAnswersRef.current = nextSel;
     setSelectedAnswers(nextSel);
 
     if (autosaveTimeoutRef.current) clearTimeout(autosaveTimeoutRef.current);
     autosaveTimeoutRef.current = setTimeout(() => {
-      saveAnswersToBackend(nextSel, typedAnswers);
+      saveAnswersToBackend(nextSel, typedAnswersRef.current);
     }, 500);
   };
 
   const handleSaveAndExit = async () => {
     setSyncStatus("saving");
-    await saveAnswersToBackend(selectedAnswers, typedAnswers);
+    if (autosaveTimeoutRef.current) clearTimeout(autosaveTimeoutRef.current);
+    await saveAnswersToBackend(selectedAnswersRef.current, typedAnswersRef.current);
     navigate(`/student/learning-path/term/${encodeURIComponent(termName)}/lessons/${lessonIdParam}`);
   };
 
-  // 4. Final Submission
+  // 4. Submission Validation & Final Submission Action
+  const handleSubmitClick = () => {
+    if (submitting) return;
+
+    // Check latest answered questions using synchronous refs
+    const currentSel = selectedAnswersRef.current;
+    const currentTyp = typedAnswersRef.current;
+
+    const answeredSet = new Set(
+      questions
+        .filter(
+          (q) =>
+            currentSel[q.id] !== undefined ||
+            (currentTyp[q.id] !== undefined && String(currentTyp[q.id]).trim() !== "")
+        )
+        .map((q) => q.id)
+    );
+
+    const answeredCount = answeredSet.size;
+    const unansweredCount = Math.max(0, questions.length - answeredCount);
+
+    if (unansweredCount > 0) {
+      // BUSINESS RULE: Block manual submission if any question is unanswered
+      const firstUnansIdx = questions.findIndex((q) => !answeredSet.has(q.id));
+      setIncompleteUnansweredCount(unansweredCount);
+      setFirstUnansweredIndex(firstUnansIdx !== -1 ? firstUnansIdx : 0);
+      setShowIncompletePopup(true);
+      return;
+    }
+
+    // All questions answered: Proceed to final submission
+    handleFinalSubmit(false);
+  };
+
   const handleFinalSubmit = async (isAutoSubmit = false) => {
+    if (submitting) return;
     setSubmitting(true);
+    setShowIncompletePopup(false);
     setShowSubmitConfirm(false);
 
+    if (autosaveTimeoutRef.current) clearTimeout(autosaveTimeoutRef.current);
+
     const token = getToken();
-    let scorePct = 80;
+    let scorePct = 0;
     let finalAttemptId = attemptId;
+
+    const currentSel = selectedAnswersRef.current;
+    const currentTyp = typedAnswersRef.current;
+
+    let submittedAttemptData: any = null;
 
     if (token && attemptId) {
       try {
         const payload = {
+          is_auto_submit: isAutoSubmit,
           answers: questions.map((q) => ({
             question: q.id,
-            selected_answer: selectedAnswers[q.id] || null,
-            typed_answer: typedAnswers[q.id] || "",
+            selected_answer: currentSel[q.id] !== undefined ? currentSel[q.id] : null,
+            typed_answer: currentTyp[q.id] !== undefined ? currentTyp[q.id] : "",
             hint_count: 0,
           })),
         };
@@ -350,23 +349,37 @@ const QuizAnsweringPage: React.FC = () => {
 
         if (res.ok) {
           const resData = await res.json();
-          scorePct = resData.score !== undefined ? resData.score : scorePct;
+          submittedAttemptData = resData;
+          scorePct = resData.score !== undefined ? Math.round(resData.score) : 0;
           finalAttemptId = resData.id || attemptId;
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          console.error("Submit API error:", errData);
+          setSubmitting(false);
+          if (errData.detail) {
+            alert(errData.detail);
+          } else {
+            alert("Quiz submission failed. Please ensure all questions are answered and try again.");
+          }
+          return;
         }
       } catch (err) {
         console.error("Submit API error:", err);
+        setSubmitting(false);
+        alert("Network error during quiz submission. Please try again.");
+        return;
       }
     } else {
       // Offline / fallback calculation
       let correct = 0;
       questions.forEach((q) => {
-        const chosen = selectedAnswers[q.id];
+        const chosen = currentSel[q.id];
         const correctAns = q.answers?.find((a: any) => a.is_correct);
         if (chosen && correctAns && chosen === correctAns.id) {
           correct++;
         }
       });
-      scorePct = questions.length > 0 ? Math.round((correct / questions.length) * 100) : 80;
+      scorePct = questions.length > 0 ? Math.round((correct / questions.length) * 100) : 0;
       finalAttemptId = attemptId || 999;
     }
 
@@ -379,7 +392,8 @@ const QuizAnsweringPage: React.FC = () => {
     navigate(
       `/student/quizzes/${quizId}/results/${finalAttemptId}?termName=${encodeURIComponent(
         termName
-      )}&lessonTitle=${encodeURIComponent(lessonTitleParam)}&lessonId=${lessonIdParam}&score=${scorePct}&auto=${isAutoSubmit}`
+      )}&lessonTitle=${encodeURIComponent(lessonTitleParam)}&lessonId=${lessonIdParam}&score=${scorePct}&auto=${isAutoSubmit}`,
+      { state: { result: submittedAttemptData, attempt: submittedAttemptData } }
     );
   };
 
@@ -402,9 +416,9 @@ const QuizAnsweringPage: React.FC = () => {
   const isWarningTimer = secondsRemaining <= 120; // 2 minutes warning
 
   const breadcrumbsList = [
-    { label: "Home", path: "/student/learning-path" },
-    { label: "Learning Path", path: "/student/learning-path" },
-    { label: termName, path: `/student/learning-path/term/${encodeURIComponent(termName)}/lessons` },
+    { label: "Home", path: "/student/my-learning" },
+    { label: "My Learning", path: "/student/my-learning" },
+    { label: termName, path: `/student/my-learning/term/${encodeURIComponent(termName)}/lessons` },
     { label: lessonTitleParam },
   ];
 
@@ -413,6 +427,32 @@ const QuizAnsweringPage: React.FC = () => {
       <div className="student-full-page-container">
         <div style={{ padding: "60px", textAlign: "center", color: "#5D78A3", fontSize: "16px" }}>
           Loading quiz assessment...
+        </div>
+      </div>
+    );
+  }
+
+  if (apiError || questions.length === 0) {
+    return (
+      <div className="student-full-page-container">
+        <Breadcrumbs items={breadcrumbsList} />
+        <div className="student-card" style={{ padding: "40px", textAlign: "center", maxWidth: "600px", margin: "40px auto" }}>
+          <div style={{ width: "56px", height: "56px", borderRadius: "50%", background: "#FFF1F3", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px" }}>
+            <AlertTriangle size={32} color="#EF4444" />
+          </div>
+          <h2 style={{ fontSize: "20px", fontWeight: "700", color: "#0B1F3A", marginBottom: "8px" }}>
+            Quiz Unavailable
+          </h2>
+          <p style={{ fontSize: "14px", color: "#5D78A3", marginBottom: "24px" }}>
+            {apiError || "No questions found for this quiz. Please contact your teacher."}
+          </p>
+          <button
+            type="button"
+            className="student-btn-primary"
+            onClick={() => navigate(lessonIdParam ? `/student/learning-path/term/${encodeURIComponent(termName)}/lessons/${lessonIdParam}` : "/student/learning-path")}
+          >
+            Return to Lesson
+          </button>
         </div>
       </div>
     );
@@ -558,9 +598,10 @@ const QuizAnsweringPage: React.FC = () => {
             <button
               type="button"
               className="student-btn-primary"
-              onClick={() => setShowSubmitConfirm(true)}
+              disabled={submitting}
+              onClick={handleSubmitClick}
             >
-              Submit Quiz
+              {submitting ? "Submitting..." : "Submit Quiz"}
               <ChevronRight size={18} />
             </button>
           )}
@@ -583,53 +624,45 @@ const QuizAnsweringPage: React.FC = () => {
         </div>
       </div>
 
-      {/* SUBMISSION CONFIRMATION DIALOG */}
-      {showSubmitConfirm && (
+      {/* INCOMPLETE QUIZ POPUP MODAL (BLOCKS SUBMISSION - ONLY ONE BUTTON: Return to Quiz) */}
+      {showIncompletePopup && (
         <div className="student-quiz-modal-overlay">
           <div className="student-quiz-modal" style={{ maxWidth: "480px" }}>
             <div className="student-quiz-modal-header">
               <h3 style={{ margin: 0, fontSize: "18px", fontWeight: "700", color: "#0B1F3A" }}>
-                Confirm Quiz Submission
+                Complete All Questions
               </h3>
             </div>
-            <div className="student-quiz-modal-body" style={{ textAlign: "center", padding: "24px" }}>
-              {unansweredCount > 0 ? (
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
-                  <AlertTriangle size={36} color="#D97706" />
-                  <p style={{ margin: 0, fontSize: "15px", color: "#0B1F3A" }}>
-                    You have <strong style={{ color: "#D97706" }}>{unansweredCount} unanswered questions</strong>.
-                  </p>
-                  <p style={{ margin: 0, fontSize: "13px", color: "#5D78A3" }}>
-                    Are you sure you want to submit your quiz now? Unanswered questions will be marked as 0.
-                  </p>
+            <div className="student-quiz-modal-body" style={{ textAlign: "center", padding: "28px 24px" }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
+                <div style={{ width: "52px", height: "52px", borderRadius: "50%", background: "#FFF1F3", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <AlertTriangle size={28} color="#EF4444" />
                 </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
-                  <CheckCircle2 size={36} color="#16B978" />
-                  <p style={{ margin: 0, fontSize: "15px", color: "#0B1F3A" }}>
-                    All <strong>{totalQuestions} questions</strong> have been answered!
-                  </p>
-                  <p style={{ margin: 0, fontSize: "13px", color: "#5D78A3" }}>
-                    Ready to complete and submit your assessment?
-                  </p>
-                </div>
-              )}
+                <h4 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: "#0B1F3A" }}>
+                  You still have <span style={{ color: "#EF4444" }}>{incompleteUnansweredCount} unanswered {incompleteUnansweredCount === 1 ? "question" : "questions"}</span>.
+                </h4>
+                <p style={{ margin: 0, fontSize: "14px", color: "#5D78A3", lineHeight: "1.5" }}>
+                  Please answer every question before submitting the quiz.
+                </p>
+                <p style={{ margin: 0, fontSize: "12px", color: "#8C9BAE", fontWeight: "500" }}>
+                  Your current answers are saved.
+                </p>
+              </div>
 
-              <div style={{ display: "flex", gap: "12px", justifyContent: "center", marginTop: "20px" }}>
-                <button
-                  type="button"
-                  className="student-btn-secondary"
-                  onClick={() => setShowSubmitConfirm(false)}
-                >
-                  Return to Quiz
-                </button>
+              {/* ONLY ONE PRIMARY ACTION BUTTON: Return to Quiz. NO SUBMIT BUTTON! */}
+              <div style={{ display: "flex", justifyContent: "center", marginTop: "24px" }}>
                 <button
                   type="button"
                   className="student-btn-primary"
-                  disabled={submitting}
-                  onClick={() => handleFinalSubmit(false)}
+                  style={{ width: "100%", maxWidth: "220px" }}
+                  onClick={() => {
+                    setShowIncompletePopup(false);
+                    if (firstUnansweredIndex >= 0 && firstUnansweredIndex < questions.length) {
+                      setCurrentIndex(firstUnansweredIndex);
+                    }
+                  }}
                 >
-                  {submitting ? "Submitting..." : "Yes, Submit Quiz"}
+                  Return to Quiz
                 </button>
               </div>
             </div>

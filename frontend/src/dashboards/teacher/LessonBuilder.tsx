@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { getToken } from "../../auth/authUtils";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { getToken, getUser } from "../../auth/authUtils";
 import "../../styles/teacher.css";
 
 const Card = ({ children, style }: any) => (
@@ -12,6 +12,10 @@ const Card = ({ children, style }: any) => (
 const LessonBuilder = () => {
   const { lessonId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const user = getUser();
+  const isReadOnly = location.pathname.startsWith("/teacher") || user?.role === "TEACHER";
+
   const [lesson, setLesson] = useState<any>(null);
   const [materials, setMaterials] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,6 +67,7 @@ const LessonBuilder = () => {
 
   const handleAddMaterial = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isReadOnly) return;
     const token = getToken();
     try {
       const url = editMaterialId ? `/api/quizzes/materials/${editMaterialId}/` : "/api/quizzes/materials/";
@@ -96,6 +101,7 @@ const LessonBuilder = () => {
   };
 
   const handleEditMaterial = (material: any) => {
+    if (isReadOnly) return;
     setEditMaterialId(material.id);
     setNewTitle(material.title);
     setNewType(material.material_type);
@@ -105,6 +111,7 @@ const LessonBuilder = () => {
   };
 
   const handleDeleteMaterial = async (id: number) => {
+    if (isReadOnly) return;
     if (!window.confirm("Delete this material?")) return;
     const token = getToken();
     await fetch(`/api/quizzes/materials/${id}/`, {
@@ -116,6 +123,7 @@ const LessonBuilder = () => {
 
   const handleAddEngagement = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isReadOnly) return;
     const token = getToken();
     try {
       const payload = {
@@ -154,7 +162,7 @@ const LessonBuilder = () => {
   return (
     <div style={{ maxWidth: "800px", margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
-        <h2>Lesson Builder: {lesson?.title}</h2>
+        <h2>{isReadOnly ? "Lesson Content: " : "Lesson Builder: "}{lesson?.title}</h2>
         <button onClick={() => navigate(-1)} className="teacher-btn-secondary">Back</button>
       </div>
 
@@ -163,15 +171,19 @@ const LessonBuilder = () => {
           <Card>
             <div style={{ textAlign: "center", padding: "40px 20px" }}>
               <h3 style={{ color: "#64748b", marginBottom: "16px" }}>No learning materials yet</h3>
-              <p style={{ color: "#94a3b8", marginBottom: "24px" }}>Create learning materials that students can study when they need additional support.</p>
-              <button onClick={() => setIsAddingMaterial(true)} className="teacher-btn-primary">+ Add Material</button>
+              <p style={{ color: "#94a3b8", marginBottom: "24px" }}>
+                {isReadOnly ? "No learning materials have been added to this lesson yet." : "Create learning materials that students can study when they need additional support."}
+              </p>
+              {!isReadOnly && <button onClick={() => setIsAddingMaterial(true)} className="teacher-btn-primary">+ Add Material</button>}
             </div>
           </Card>
         ) : (
           <>
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
-               <button onClick={() => setIsAddingMaterial(true)} className="teacher-btn-primary">+ Add Material</button>
-            </div>
+            {!isReadOnly && (
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button onClick={() => setIsAddingMaterial(true)} className="teacher-btn-primary">+ Add Material</button>
+              </div>
+            )}
             {materials.map((mat: any, index: number) => (
               <Card key={mat.id}>
                 <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #f1f5f9", paddingBottom: "12px" }}>
@@ -179,7 +191,9 @@ const LessonBuilder = () => {
                     <h3 style={{ fontSize: "16px", margin: 0 }}>{mat.title}</h3>
                     <span style={{ fontSize: "12px", color: "#64748b", textTransform: "uppercase" }}>{mat.material_type} • {mat.is_required ? "Required" : "Optional"}</span>
                   </div>
-                  <button onClick={() => handleDeleteMaterial(mat.id)} style={{ color: "#ef4444", background: "none", border: "none", cursor: "pointer" }}>Delete</button>
+                  {!isReadOnly && (
+                    <button onClick={() => handleDeleteMaterial(mat.id)} style={{ color: "#ef4444", background: "none", border: "none", cursor: "pointer" }}>Delete</button>
+                  )}
                 </div>
                 
                 {mat.material_type === "VIDEO" && (
@@ -191,7 +205,9 @@ const LessonBuilder = () => {
                 <div style={{ marginTop: "16px" }}>
                   <h4 style={{ fontSize: "14px", marginBottom: "12px", display: "flex", justifyContent: "space-between" }}>
                     Engagement Questions
-                    <button onClick={() => setActiveMaterialId(mat.id)} style={{ fontSize: "12px", background: "none", border: "none", color: "#2563eb", cursor: "pointer" }}>+ Add Question</button>
+                    {!isReadOnly && (
+                      <button onClick={() => setActiveMaterialId(mat.id)} style={{ fontSize: "12px", background: "none", border: "none", color: "#2563eb", cursor: "pointer" }}>+ Add Question</button>
+                    )}
                   </h4>
                   
                   {mat.engagement_questions && mat.engagement_questions.length > 0 ? (

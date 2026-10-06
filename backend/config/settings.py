@@ -79,9 +79,10 @@ db_config = dj_database_url.parse(
 )
 db_config["CONN_HEALTH_CHECKS"] = conn_health_checks
 
+import sys
 USE_SQLITE = os.getenv("USE_SQLITE", "False").lower() in ("true", "1", "t")
 
-if USE_SQLITE:
+if 'test' in sys.argv or USE_SQLITE:
 	DATABASES = {
 		"default": {
 			"ENGINE": "django.db.backends.sqlite3",
@@ -127,6 +128,6 @@ REST_FRAMEWORK = {
 	"DEFAULT_PERMISSION_CLASSES": [
 		"rest_framework.permissions.IsAuthenticated",
 	],
-	"DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+	"DEFAULT_PAGINATION_CLASS": "apps.accounts.pagination.FlexiblePagination",
 	"PAGE_SIZE": 50,
 }

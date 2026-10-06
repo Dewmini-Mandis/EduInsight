@@ -13,6 +13,14 @@ class QuizAttempt(models.Model):
 		(STATUS_EXPIRED, "Expired"),
 	]
 
+	TYPE_ORDINARY = "ORDINARY"
+	TYPE_REASSESSMENT = "REASSESSMENT"
+
+	ATTEMPT_TYPES = [
+		(TYPE_ORDINARY, "Ordinary Attempt"),
+		(TYPE_REASSESSMENT, "Post-Remedial Reassessment"),
+	]
+
 	student = models.ForeignKey(
 		"classes.Student",
 		on_delete=models.CASCADE,
@@ -24,6 +32,7 @@ class QuizAttempt(models.Model):
 		related_name="attempts",
 	)
 	attempt_number = models.PositiveIntegerField()
+	attempt_type = models.CharField(max_length=20, choices=ATTEMPT_TYPES, default=TYPE_ORDINARY)
 	start_time = models.DateTimeField()
 	end_time = models.DateTimeField(null=True, blank=True)
 	expires_at = models.DateTimeField(null=True, blank=True)
@@ -32,7 +41,7 @@ class QuizAttempt(models.Model):
 	score = models.FloatField(null=True, blank=True)
 
 	class Meta:
-		unique_together = ("student", "quiz", "attempt_number")
+		unique_together = ("student", "quiz", "attempt_type", "attempt_number")
 		indexes = [
 			models.Index(fields=["-start_time"], name="idx_attempt_start_time"),
 			models.Index(fields=["student", "quiz", "status"], name="idx_attempt_stud_quiz_stat"),
@@ -214,6 +223,63 @@ class StudentEngagementAnswer(models.Model):
 	def __str__(self):
 		return f"{self.student.user.username} - {self.question.id} - {'Correct' if self.is_correct else 'Incorrect'}"
 
+class StudentRemediationState(models.Model):
+	STATUS_PENDING_MATERIALS = "PENDING_MATERIALS"
+	STATUS_REASSESSMENT_UNLOCKED = "REASSESSMENT_UNLOCKED"
+	STATUS_REASSESSMENT_IN_PROGRESS = "REASSESSMENT_IN_PROGRESS"
+	STATUS_COMPLETED_SUCCESS = "COMPLETED_SUCCESS"
+	STATUS_ESCALATED_TEACHER = "ESCALATED_TEACHER"
+
+	STATUS_CHOICES = [
+		(STATUS_PENDING_MATERIALS, "Pending Required Materials"),
+		(STATUS_REASSESSMENT_UNLOCKED, "Reassessment Unlocked"),
+		(STATUS_REASSESSMENT_IN_PROGRESS, "Reassessment In Progress"),
+		(STATUS_COMPLETED_SUCCESS, "Remediation Passed"),
+		(STATUS_ESCALATED_TEACHER, "Escalated to Teacher"),
+	]
+
+	student = models.ForeignKey(
+		"classes.Student",
+		on_delete=models.CASCADE,
+		related_name="remediation_states",
+	)
+	quiz = models.ForeignKey(
+		"quizzes.Quiz",
+		on_delete=models.CASCADE,
+		related_name="remediation_states",
+	)
+	status = models.CharField(
+		max_length=30,
+		choices=STATUS_CHOICES,
+		default=STATUS_PENDING_MATERIALS,
+	)
+	weak_skills = models.ManyToManyField(
+		"quizzes.Skill",
+		blank=True,
+		related_name="remediation_weak_states",
+	)
+	required_materials = models.ManyToManyField(
+		"quizzes.LearningMaterial",
+		blank=True,
+		related_name="remediation_required_states",
+	)
+	reassessment_attempt = models.ForeignKey(
+		QuizAttempt,
+		on_delete=models.SET_NULL,
+		null=True,
+		blank=True,
+		related_name="remediation_states",
+	)
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		unique_together = ("student", "quiz")
+
+	def __str__(self) -> str:
+		return f"RemediationState: {self.student.user.username} - {self.quiz.title} ({self.status})"
+
+
 class TeacherIntervention(models.Model):
 	OUTCOME_IMPROVED = "IMPROVED"
 	OUTCOME_STABLE = "STABLE"
@@ -233,13 +299,24 @@ class TeacherIntervention(models.Model):
 		(TYPE_1ON1, "1-on-1 Session"),
 	]
 
-	teacher = models.ForeignKey("accounts.User", on_delete=models.CASCADE, related_name="recorded_interventions")
+	teacher = models.ForeignKey("accounts.User", on_delete=models.CASCADE, related_name="recorded_interventions", null=True, blank=True)
 	student = models.ForeignKey("classes.Student", on_delete=models.CASCADE, related_name="interventions")
-	skill = models.ForeignKey("quizzes.Skill", on_delete=models.CASCADE, related_name="interventions")
+	quiz = models.ForeignKey("quizzes.Quiz", on_delete=models.CASCADE, related_name="teacher_interventions", null=True, blank=True)
+	skill = models.ForeignKey("quizzes.Skill", on_delete=models.CASCADE, related_name="interventions", null=True, blank=True)
+	remediation_state = models.ForeignKey(
+		StudentRemediationState,
+		on_delete=models.SET_NULL,
+		null=True,
+		blank=True,
+		related_name="teacher_interventions",
+	)
+	is_pending = models.BooleanField(default=True)
 	notes = models.TextField(blank=True)
-	intervention_type = models.CharField(max_length=50, choices=TYPE_CHOICES)
+	intervention_type = models.CharField(max_length=50, choices=TYPE_CHOICES, blank=True)
 	outcome = models.CharField(max_length=50, choices=OUTCOME_CHOICES, blank=True)
 	date_recorded = models.DateTimeField(auto_now_add=True)
 
 	def __str__(self) -> str:
-		return f"Intervention for {self.student.user.username} by {self.teacher.username}"
+		t_name = self.teacher.username if self.teacher else "Pending System Alert"
+		return f"Intervention for {self.student.user.username} (Teacher: {t_name}, Pending: {self.is_pending})"
+

@@ -5,34 +5,7 @@ import Breadcrumbs from "../../components/student/Breadcrumbs";
 import LessonProgressCard from "../../components/student/LessonProgressCard";
 import LessonQuizCard, { QuizItem } from "../../components/student/LessonQuizCard";
 import { getToken } from "../../auth/authUtils";
-import "../../styles/student.css";
-
-const fallbackQuizzes: QuizItem[] = [
-  {
-    id: "q1",
-    title: "Perimeter 1",
-    order: 1,
-    questionCount: 10,
-    durationMinutes: 10,
-    passMark: 75,
-    maxAttempts: 3,
-    attemptsUsed: 0,
-    status: "AVAILABLE",
-  },
-  {
-    id: "q2",
-    title: "Perimeter 2",
-    order: 2,
-    questionCount: 10,
-    durationMinutes: 10,
-    passMark: 75,
-    maxAttempts: 3,
-    attemptsUsed: 0,
-    status: "LOCKED",
-    lockedReason: "Complete Perimeter 1 and pass to unlock this quiz.",
-    previousQuizTitle: "Perimeter 1",
-  },
-];
+import { sortQuizzesByProgression } from "../../utils/quizOrdering";
 
 const LessonQuizzesPage: React.FC = () => {
   const { termName: paramTerm, lessonId } = useParams<{ termName: string; lessonId: string }>();
@@ -40,20 +13,25 @@ const LessonQuizzesPage: React.FC = () => {
 
   const termName = paramTerm ? decodeURIComponent(paramTerm) : "Term 1";
 
-  const [lessonTitle, setLessonTitle] = useState<string>("Perimeter");
+  const [lessonTitle, setLessonTitle] = useState<string>("Lesson Quizzes");
   const [lessonDescription, setLessonDescription] = useState<string>(
     "Master the fundamentals of this topic."
   );
   const [quizzes, setQuizzes] = useState<QuizItem[]>([]);
   const [overallProgress, setOverallProgress] = useState<number>(0);
   const [completedQuizzesCount, setCompletedQuizzesCount] = useState<number>(0);
-  const [totalQuizzesCount, setTotalQuizzesCount] = useState<number>(3);
+  const [totalQuizzesCount, setTotalQuizzesCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
-  const [activeSectionTitle, setActiveSectionTitle] = useState<string>("Quiz 1");
+  const [activeSectionTitle, setActiveSectionTitle] = useState<string>("Lesson Quizzes");
 
   useEffect(() => {
     const fetchLessonData = async () => {
       setLoading(true);
+      setQuizzes([]);
+      setTotalQuizzesCount(0);
+      setCompletedQuizzesCount(0);
+      setOverallProgress(0);
+
       try {
         const token = getToken();
         if (token && lessonId) {
@@ -88,19 +66,30 @@ const LessonQuizzesPage: React.FC = () => {
           }
 
           if (quizListRaw.length > 0) {
-            // Sort quizzes by order / id
-            quizListRaw.sort((a, b) => (a.order || 0) - (b.order || 0) || a.id - b.id);
+            quizListRaw = sortQuizzesByProgression(quizListRaw);
 
-            // Determine pass status for each quiz
-            const processedQuizzes = quizListRaw.map((q) => {
-              const passMark = q.pass_mark || 75;
-              const qAttempts = attemptsList.filter((att) => att.quiz === q.id);
-              const submittedAttempts = qAttempts.filter((att) => att.status === "SUBMITTED");
+            // Fetch remediation status for each quiz in parallel
+            const remStatusPromises = quizListRaw.map((q) =>
+              fetch(`/api/attempts/attempts/remediation_status/?quiz=${q.id}`, {
+                headers: { Authorization: `Token ${token}` },
+              })
+                .then((res) => (res.ok ? res.json() : null))
+                .catch(() => null)
+            );
+            const remStatuses = await Promise.all(remStatusPromises);
+
+            // Determine status for each quiz
+            const processedQuizzes = quizListRaw.map((q, idx) => {
+              const passMark = q.pass_mark || 50;
+              const remData = remStatuses[idx];
+              const qAttempts = attemptsList.filter((att) => String(att.quiz) === String(q.id) || String(att.quiz?.id) === String(q.id));
+              const ordinarySubmitted = qAttempts.filter(
+                (att) => (att.attempt_type === "ORDINARY" || !att.attempt_type) && (att.status === "SUBMITTED" || att.status === "EXPIRED")
+              );
               const inProgressAttempt = qAttempts.find((att) => att.status === "IN_PROGRESS");
-              const passedAttempt = submittedAttempts.find((att) => att.score !== null && att.score >= passMark);
+              const passedAttempt = qAttempts.find((att) => att.score !== null && att.score >= passMark);
 
-              // Latest attempt id for viewing results
-              const latestAtt = qAttempts[0] || null;
+              const latestAtt = ordinarySubmitted[0] || qAttempts[0] || null;
 
               return {
                 rawQuiz: q,
@@ -111,18 +100,25 @@ const LessonQuizzesPage: React.FC = () => {
                 durationMinutes: q.estimated_time_minutes || 10,
                 passMark,
                 maxAttempts: q.max_attempts || 3,
-                attemptsUsed: submittedAttempts.length,
-                isPassed: !!passedAttempt,
+                attemptsUsed: remData ? remData.ordinary_attempts_used : ordinarySubmitted.length,
+                attemptsRemaining: remData ? remData.ordinary_attempts_remaining : Math.max(0, (q.max_attempts || 3) - ordinarySubmitted.length),
+                isPassed: remData ? remData.has_passed : !!passedAttempt,
                 hasInProgress: !!inProgressAttempt,
                 latestAttemptId: latestAtt ? latestAtt.id : null,
                 latestScore: latestAtt ? latestAtt.score : null,
+
+                remediationState: remData?.remediation_state || null,
+                requiredMaterials: remData?.required_materials || [],
+                allMaterialsCompleted: remData?.all_materials_completed || false,
+                reassessmentStatus: remData?.reassessment_status || "NOT_ELIGIBLE",
+                highRiskWarning: remData?.high_risk_warning || false,
+                highRiskDetails: remData?.high_risk_details || null,
               };
             });
 
             // Find index of first unpassed quiz (active quiz step)
             let firstUnpassedIdx = processedQuizzes.findIndex((pq) => !pq.isPassed);
             if (firstUnpassedIdx === -1) {
-              // All quizzes passed
               firstUnpassedIdx = processedQuizzes.length;
             }
 
@@ -130,14 +126,12 @@ const LessonQuizzesPage: React.FC = () => {
             const totalCount = processedQuizzes.length;
             const pct = Math.round((passedCount / totalCount) * 100);
 
-            // Construct visible quizzes list sequentially
             const visibleQuizzesList: QuizItem[] = [];
 
             for (let i = 0; i < processedQuizzes.length; i++) {
               const pq = processedQuizzes[i];
 
               if (i < firstUnpassedIdx) {
-                // Previously passed quiz
                 visibleQuizzesList.push({
                   id: pq.id,
                   title: pq.title,
@@ -147,19 +141,25 @@ const LessonQuizzesPage: React.FC = () => {
                   passMark: pq.passMark,
                   maxAttempts: pq.maxAttempts,
                   attemptsUsed: pq.attemptsUsed,
+                  attemptsRemaining: pq.attemptsRemaining,
                   status: "PASSED",
                   latestAttemptId: pq.latestAttemptId,
                   latestScore: pq.latestScore,
+                  remediationState: pq.remediationState,
+                  requiredMaterials: pq.requiredMaterials,
+                  allMaterialsCompleted: pq.allMaterialsCompleted,
+                  reassessmentStatus: pq.reassessmentStatus,
+                  highRiskWarning: pq.highRiskWarning,
+                  highRiskDetails: pq.highRiskDetails,
                 });
               } else if (i === firstUnpassedIdx) {
-                // Current active/unlocked quiz
                 let status: QuizItem["status"] = "AVAILABLE";
                 if (pq.hasInProgress) {
                   status = "IN_PROGRESS";
                 } else if (pq.attemptsUsed >= pq.maxAttempts) {
-                  status = "EXHAUSTED";
+                  status = "FAILED_EXHAUSTED";
                 } else if (pq.attemptsUsed > 0) {
-                  status = "FAILED";
+                  status = "FAILED_RETRYABLE";
                 }
 
                 visibleQuizzesList.push({
@@ -171,12 +171,18 @@ const LessonQuizzesPage: React.FC = () => {
                   passMark: pq.passMark,
                   maxAttempts: pq.maxAttempts,
                   attemptsUsed: pq.attemptsUsed,
+                  attemptsRemaining: pq.attemptsRemaining,
                   status,
                   latestAttemptId: pq.latestAttemptId,
                   latestScore: pq.latestScore,
+                  remediationState: pq.remediationState,
+                  requiredMaterials: pq.requiredMaterials,
+                  allMaterialsCompleted: pq.allMaterialsCompleted,
+                  reassessmentStatus: pq.reassessmentStatus,
+                  highRiskWarning: pq.highRiskWarning,
+                  highRiskDetails: pq.highRiskDetails,
                 });
               } else if (i === firstUnpassedIdx + 1) {
-                // Next locked teaser card
                 const prevPq = processedQuizzes[i - 1];
                 visibleQuizzesList.push({
                   id: pq.id,
@@ -187,15 +193,14 @@ const LessonQuizzesPage: React.FC = () => {
                   passMark: pq.passMark,
                   maxAttempts: pq.maxAttempts,
                   attemptsUsed: pq.attemptsUsed,
+                  attemptsRemaining: pq.attemptsRemaining,
                   status: "LOCKED",
                   lockedReason: `Complete ${prevPq.title} and pass to unlock this quiz.`,
                   previousQuizTitle: prevPq.title,
                 });
               }
-              // i > firstUnpassedIdx + 1 remain COMPLETELY HIDDEN
             }
 
-            // Section title header
             if (firstUnpassedIdx < processedQuizzes.length) {
               setActiveSectionTitle(`Quiz ${firstUnpassedIdx + 1}`);
             } else {
@@ -214,23 +219,59 @@ const LessonQuizzesPage: React.FC = () => {
         console.error("Error fetching lesson quizzes:", err);
       }
 
-      setQuizzes(fallbackQuizzes);
-      setTotalQuizzesCount(3);
+      setQuizzes([]);
+      setTotalQuizzesCount(0);
       setCompletedQuizzesCount(0);
       setOverallProgress(0);
       setLoading(false);
     };
 
     fetchLessonData();
-  }, [lessonId]);
+  }, [lessonId, paramTerm]);
 
-  // Handle Start / Resume / Try Again
-  const handleStartQuiz = (quizItem: QuizItem) => {
-    navigate(
-      `/student/quizzes/${quizItem.id}/attempt?termName=${encodeURIComponent(
-        termName
-      )}&lessonTitle=${encodeURIComponent(lessonTitle)}&lessonId=${lessonId}`
-    );
+  const [startingQuizId, setStartingQuizId] = useState<number | string | null>(null);
+
+  // Handle Start / Resume / Retake / Reassessment
+  const handleStartQuiz = async (quizItem: QuizItem, isReassessment: boolean = false) => {
+    if (startingQuizId) return;
+    setStartingQuizId(quizItem.id);
+    const token = getToken();
+
+    if (!token) {
+      alert("Authentication token missing. Please log in again.");
+      setStartingQuizId(null);
+      return;
+    }
+
+    try {
+      const endpoint = isReassessment ? "/api/attempts/attempts/start_reassessment/" : "/api/attempts/attempts/start/";
+      const startRes = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Token ${token}`,
+        },
+        body: JSON.stringify({ quiz: quizItem.id }),
+      });
+
+      if (startRes.ok) {
+        const attemptData = await startRes.json();
+        navigate(
+          `/student/quizzes/${quizItem.id}/attempt?termName=${encodeURIComponent(
+            termName
+          )}&lessonTitle=${encodeURIComponent(lessonTitle)}&lessonId=${lessonId}`,
+          { state: { initialAttempt: attemptData } }
+        );
+      } else {
+        const errData = await startRes.json().catch(() => ({}));
+        alert(errData.detail || "Unable to start quiz attempt. Please complete required steps.");
+      }
+    } catch (err) {
+      console.error("Error starting quiz attempt:", err);
+      alert("Network error. Unable to connect to quiz server.");
+    } finally {
+      setStartingQuizId(null);
+    }
   };
 
   // Handle View Results
@@ -247,9 +288,9 @@ const LessonQuizzesPage: React.FC = () => {
   };
 
   const breadcrumbsList = [
-    { label: "Home", path: "/student/learning-path" },
-    { label: "Learning Path", path: "/student/learning-path" },
-    { label: termName, path: `/student/learning-path/term/${encodeURIComponent(termName)}/lessons` },
+    { label: "Home", path: "/student/my-learning" },
+    { label: "My Learning", path: "/student/my-learning" },
+    { label: termName, path: `/student/my-learning/term/${encodeURIComponent(termName)}/lessons` },
     { label: lessonTitle },
   ];
 
@@ -273,7 +314,7 @@ const LessonQuizzesPage: React.FC = () => {
           type="button"
           className="student-btn-secondary"
           onClick={() =>
-            navigate(`/student/learning-path/term/${encodeURIComponent(termName)}/lessons`)
+            navigate(`/student/my-learning/term/${encodeURIComponent(termName)}/lessons`)
           }
         >
           <ArrowLeft size={16} />

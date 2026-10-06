@@ -14,24 +14,36 @@ def get_client_ip(request):
 
 @receiver(post_save, sender=User)
 def log_user_changes(sender, instance, created, **kwargs):
-    # This is a basic signal. In a real app we'd pass the request 
-    # via thread locals or explicitly in the view to get the actor.
-    # For now we'll just log the event.
     action = "CREATED" if created else "UPDATED"
+    name = f"{instance.first_name} {instance.last_name}".strip() or instance.username
+    role_name = instance.role.role_name if hasattr(instance, "role") and instance.role else "User"
+    role_str = "teacher" if role_name.upper() in ["TEACHER", "ROLE_TEACHER"] else "student" if role_name.upper() in ["STUDENT", "ROLE_STUDENT"] else "user"
+    
     AuditLog.objects.create(
+        user=instance,
+        actor_name=name,
+        role=role_name,
         action=f"{action}_USER",
         entity_type="User",
         entity_id=str(instance.id),
+        description=f"{'Created new' if created else 'Updated'} {role_str} account ({name})",
         new_value=instance.username,
         reason="System Auto-log"
     )
 
 @receiver(post_delete, sender=User)
 def log_user_deletion(sender, instance, **kwargs):
+    name = f"{instance.first_name} {instance.last_name}".strip() or instance.username
+    role_name = instance.role.role_name if hasattr(instance, "role") and instance.role else "User"
+    role_str = "teacher" if role_name.upper() in ["TEACHER", "ROLE_TEACHER"] else "student" if role_name.upper() in ["STUDENT", "ROLE_STUDENT"] else "user"
+    
     AuditLog.objects.create(
+        actor_name=name,
+        role=role_name,
         action="DELETED_USER",
         entity_type="User",
         entity_id=str(instance.id),
+        description=f"Deleted {role_str} account ({name})",
         previous_value=instance.username,
         reason="System Auto-log"
     )

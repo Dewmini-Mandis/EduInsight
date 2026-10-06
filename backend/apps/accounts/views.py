@@ -1,4 +1,5 @@
 from rest_framework import generics, status, viewsets
+from rest_framework.decorators import action
 from rest_framework.authtoken.models import Token
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -17,6 +18,7 @@ from .serializers import (
 	SystemAccessLogSerializer,
 )
 from .models import Role, User, Notification
+from apps.audit.services import log_activity
 
 
 class RegisterView(generics.CreateAPIView):
@@ -75,7 +77,7 @@ class MeView(APIView):
 
 
 class UserViewSet(viewsets.ModelViewSet):
-	queryset = User.objects.select_related("role", "school")
+	queryset = User.objects.select_related("role", "school", "student_profile__registered_by")
 	permission_classes = [IsAuthenticated]
 
 	def get_queryset(self):
@@ -84,15 +86,40 @@ class UserViewSet(viewsets.ModelViewSet):
 		role_param = self.request.query_params.get('role')
 		if role_param:
 			queryset = queryset.filter(role__role_name=role_param)
+
+		# Support ordering by creation date
+		ordering_param = self.request.query_params.get('ordering') or self.request.query_params.get('sort')
+		if ordering_param in ['-date_joined', 'created_at_desc', '-created_at']:
+			queryset = queryset.order_by('-date_joined', '-id')
+		elif ordering_param in ['date_joined', 'created_at_asc', 'created_at']:
+			queryset = queryset.order_by('date_joined', 'id')
+		else:
+			queryset = queryset.order_by('-date_joined', '-id')
+
 		if user.is_role(Role.ROLE_SYSTEM_ADMIN):
 			return queryset
 		if user.is_role(Role.ROLE_TEACHER):
-			active_classrooms = [tc.classroom.id for tc in user.teacherclassroom_set.filter(is_active=True)]
+			from django.db.models import Q
+			teacher_class_ids = user.teacherclassroom_set.filter(is_active=True).values_list('classroom_id', flat=True)
 			return queryset.filter(
-				role__role_name=Role.ROLE_STUDENT,
-				student_profile__class_room__id__in=active_classrooms
-			)
+				role__role_name=Role.ROLE_STUDENT
+			).filter(
+				Q(student_profile__registered_by=user) | Q(student_profile__class_room_id__in=teacher_class_ids)
+			).distinct()
 		return queryset.none()
+
+	@action(detail=False, methods=["get"], url_path="stats")
+	def stats(self, request):
+		user = request.user
+		if not user.is_role(Role.ROLE_SYSTEM_ADMIN):
+			raise PermissionDenied("Only System Administrators can view user role statistics.")
+		teachers_count = User.objects.filter(role__role_name=Role.ROLE_TEACHER).count()
+		students_count = User.objects.filter(role__role_name=Role.ROLE_STUDENT).count()
+		return Response({
+			"teachers": teachers_count,
+			"students": students_count,
+			"total": teachers_count + students_count,
+		})
 
 	def get_serializer_class(self):
 		if self.action == "create":
@@ -109,9 +136,8 @@ class UserViewSet(viewsets.ModelViewSet):
 		if requester.is_role(Role.ROLE_TEACHER):
 			if not user.is_role(Role.ROLE_STUDENT):
 				raise PermissionDenied("You can only modify students.")
-			active_classrooms = [tc.classroom.id for tc in requester.teacherclassroom_set.filter(is_active=True)]
-			if not hasattr(user, 'student_profile') or user.student_profile.class_room_id not in active_classrooms:
-				raise PermissionDenied("You can only modify students in your assigned classrooms.")
+			if not hasattr(user, 'student_profile') or user.student_profile.registered_by_id != requester.id:
+				raise PermissionDenied("You can only modify students assigned to you.")
 		return super().update(request, *args, **kwargs)
 
 	def partial_update(self, request, *args, **kwargs):
@@ -122,9 +148,8 @@ class UserViewSet(viewsets.ModelViewSet):
 		if requester.is_role(Role.ROLE_TEACHER):
 			if not user.is_role(Role.ROLE_STUDENT):
 				raise PermissionDenied("You can only modify students.")
-			active_classrooms = [tc.classroom.id for tc in requester.teacherclassroom_set.filter(is_active=True)]
-			if not hasattr(user, 'student_profile') or user.student_profile.class_room_id not in active_classrooms:
-				raise PermissionDenied("You can only modify students in your assigned classrooms.")
+			if not hasattr(user, 'student_profile') or user.student_profile.registered_by_id != requester.id:
+				raise PermissionDenied("You can only modify students assigned to you.")
 		return super().partial_update(request, *args, **kwargs)
 
 	def destroy(self, request, *args, **kwargs):
@@ -135,10 +160,23 @@ class UserViewSet(viewsets.ModelViewSet):
 		if requester.is_role(Role.ROLE_TEACHER):
 			if not user.is_role(Role.ROLE_STUDENT):
 				raise PermissionDenied("You can only delete students.")
-			active_classrooms = [tc.classroom.id for tc in requester.teacherclassroom_set.filter(is_active=True)]
-			if not hasattr(user, 'student_profile') or user.student_profile.class_room_id not in active_classrooms:
-				raise PermissionDenied("You can only delete students in your assigned classrooms.")
-		return super().destroy(request, *args, **kwargs)
+			if not hasattr(user, 'student_profile') or user.student_profile.registered_by_id != requester.id:
+				raise PermissionDenied("You can only delete students assigned to you.")
+		
+		target_name = f"{user.first_name} {user.last_name}".strip() or user.username
+		target_role = "TEACHER" if user.is_role(Role.ROLE_TEACHER) else "STUDENT" if user.is_role(Role.ROLE_STUDENT) else "USER"
+		target_id = user.id
+
+		res = super().destroy(request, *args, **kwargs)
+
+		log_activity(
+			user=requester,
+			action="DELETE",
+			entity_type=target_role,
+			entity_id=target_id,
+			description=f"Deleted {target_role.lower()} {target_name}"
+		)
+		return res
 
 	def perform_create(self, serializer):
 		requester = self.request.user
@@ -156,32 +194,127 @@ class UserViewSet(viewsets.ModelViewSet):
 		if role.role_name not in allowed_roles:
 			raise PermissionDenied("You are not allowed to create this role.")
 
-		if role.role_name in (Role.ROLE_TEACHER, Role.ROLE_STUDENT):
-			if not requester.is_role(Role.ROLE_TEACHER) and not serializer.validated_data.get("school"):
-				raise ValidationError({"school_id": "School is required."})
-
 		if requester.is_role(Role.ROLE_TEACHER):
-			if not requester.school:
-				raise ValidationError("Teacher must belong to a school.")
-			serializer.validated_data["school"] = requester.school
+			if requester.school:
+				serializer.validated_data["school"] = requester.school
 
 		if role.role_name != Role.ROLE_STUDENT:
 			serializer.validated_data["username"] = serializer.validated_data.get(
 				"email"
 			)
 
-		serializer.save()
+		created_user = serializer.save()
+
+		name = f"{created_user.first_name} {created_user.last_name}".strip() or created_user.username
+		if role.role_name == Role.ROLE_TEACHER:
+			classrooms = [tc.classroom.name for tc in created_user.teacherclassroom_set.filter(is_active=True).select_related("classroom")]
+			desc = f"Created teacher {name}"
+			if classrooms:
+				desc += f" with assigned classes: {', '.join(classrooms)}"
+			log_activity(
+				user=requester,
+				action="CREATE",
+				entity_type="TEACHER",
+				entity_id=created_user.id,
+				description=desc,
+				metadata={"email": created_user.email, "classrooms": classrooms}
+			)
+		elif role.role_name == Role.ROLE_STUDENT:
+			desc = f"Created student {name}"
+			student_prof = getattr(created_user, 'student_profile', None)
+			c_name = student_prof.class_room.name if (student_prof and student_prof.class_room) else getattr(student_prof, 'class_name', '')
+			if c_name:
+				desc += f" assigned to class {c_name}"
+			log_activity(
+				user=requester,
+				action="CREATE",
+				entity_type="STUDENT",
+				entity_id=created_user.id,
+				description=desc,
+				metadata={"index_no": getattr(student_prof, 'index_no', ''), "class_name": c_name}
+			)
 
 	def perform_update(self, serializer):
 		requester = self.request.user
 		target = self.get_object()
+		old_active = target.is_active
+		old_teacher_classes = []
+		if target.is_role(Role.ROLE_TEACHER):
+			old_teacher_classes = list(target.teacherclassroom_set.filter(is_active=True).values_list("classroom__name", flat=True))
+
+		old_student_class = ""
+		if target.is_role(Role.ROLE_STUDENT) and hasattr(target, "student_profile") and target.student_profile and target.student_profile.class_room:
+			old_student_class = target.student_profile.class_room.name
+
 		if requester.is_role(Role.ROLE_TEACHER):
 			if not target.is_role(Role.ROLE_STUDENT):
 				raise PermissionDenied("You can only manage students.")
-			active_classrooms = [tc.classroom.id for tc in requester.teacherclassroom_set.filter(is_active=True)]
-			if not hasattr(target, 'student_profile') or target.student_profile.class_room_id not in active_classrooms:
-				raise PermissionDenied("You can only manage students in your assigned classrooms.")
-		serializer.save()
+			if not hasattr(target, 'student_profile') or target.student_profile.registered_by_id != requester.id:
+				raise PermissionDenied("You can only manage students assigned to you.")
+		
+		updated_user = serializer.save()
+		name = f"{updated_user.first_name} {updated_user.last_name}".strip() or updated_user.username
+
+		if old_active != updated_user.is_active:
+			act = "ACTIVATE" if updated_user.is_active else "DEACTIVATE"
+			desc = f"{'Activated' if updated_user.is_active else 'Deactivated'} {'teacher' if updated_user.is_role(Role.ROLE_TEACHER) else 'student'} {name}"
+			log_activity(
+				user=requester,
+				action=act,
+				entity_type="TEACHER" if updated_user.is_role(Role.ROLE_TEACHER) else "STUDENT",
+				entity_id=updated_user.id,
+				description=desc
+			)
+
+		if updated_user.is_role(Role.ROLE_TEACHER):
+			new_teacher_classes = list(updated_user.teacherclassroom_set.filter(is_active=True).values_list("classroom__name", flat=True))
+			if set(old_teacher_classes) != set(new_teacher_classes):
+				if new_teacher_classes:
+					log_activity(
+						user=requester,
+						action="ASSIGN",
+						entity_type="TEACHER",
+						entity_id=updated_user.id,
+						description=f"Assigned classes {', '.join(new_teacher_classes)} to {name}",
+						metadata={"classes": new_teacher_classes}
+					)
+				else:
+					log_activity(
+						user=requester,
+						action="UNASSIGN",
+						entity_type="TEACHER",
+						entity_id=updated_user.id,
+						description=f"Removed all assigned classes from {name}"
+					)
+			else:
+				log_activity(
+					user=requester,
+					action="UPDATE",
+					entity_type="TEACHER",
+					entity_id=updated_user.id,
+					description=f"Updated teacher {name}"
+				)
+		elif updated_user.is_role(Role.ROLE_STUDENT):
+			new_student_class = ""
+			if hasattr(updated_user, "student_profile") and updated_user.student_profile and updated_user.student_profile.class_room:
+				new_student_class = updated_user.student_profile.class_room.name
+			
+			if old_student_class != new_student_class and new_student_class:
+				log_activity(
+					user=requester,
+					action="ASSIGN",
+					entity_type="STUDENT",
+					entity_id=updated_user.id,
+					description=f"Moved student {name} to class {new_student_class}"
+				)
+			else:
+				log_activity(
+					user=requester,
+					action="UPDATE",
+					entity_type="STUDENT",
+					entity_id=updated_user.id,
+					description=f"Updated student {name}"
+				)
 
 class NotificationViewSet(viewsets.ModelViewSet):
 	serializer_class = NotificationSerializer

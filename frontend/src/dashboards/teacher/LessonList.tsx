@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { getToken } from "../../auth/authUtils";
+import { useNavigate, useLocation } from "react-router-dom";
+import { getToken, getUser } from "../../auth/authUtils";
 import { BookOpen, Plus } from "lucide-react";
 import TermSyllabusCard from "./lessons/TermSyllabusCard";
 import LessonTable from "./lessons/LessonTable";
@@ -37,7 +37,12 @@ const LessonList = () => {
   const [loading, setLoading] = useState(true);
   const [hoverAdd, setHoverAdd] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const isMobile = useMediaQuery("(max-width: 768px)");
+
+  const user = getUser() as any;
+  const isReadOnly = location.pathname.startsWith("/teacher") || user?.role?.role_name === "TEACHER" || user?.role === "TEACHER";
+  const basePath = isReadOnly ? "/teacher/lessons" : "/system-admin/lessons";
 
   const fetchData = async () => {
     setLoading(true);
@@ -68,7 +73,8 @@ const LessonList = () => {
   }, []);
 
   const handleDeleteLesson = async (lessonId: number) => {
-    if (window.confirm("Are you sure you want to delete this lesson? This will permanently delete all associated topics and skills.")) {
+    if (isReadOnly) return;
+    if (window.confirm("Are you sure you want to delete this lesson? This will permanently delete all associated skills.")) {
       const token = getToken();
       try {
         const res = await fetch(`/api/quizzes/lessons/${lessonId}/`, {
@@ -125,45 +131,47 @@ const LessonList = () => {
               Lessons
             </h2>
             <p style={{ margin: "4px 0 0 0", fontSize: "14px", color: "#5D78A3" }}>
-              Manage your lesson plans, topics, and skills.
+              {isReadOnly ? "View your syllabus lesson plans and skills." : "Manage your lesson plans and skills."}
             </p>
           </div>
         </div>
 
         {/* Right side */}
-        <div style={{ 
-          display: "flex", 
-          width: isMobile ? "100%" : "auto"
-        }}>
-          <button
-            onClick={() => navigate("/teacher/lessons/create")}
-            onMouseEnter={() => setHoverAdd(true)}
-            onMouseLeave={() => setHoverAdd(false)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "8px",
-              height: "42px",
-              padding: "0 20px",
-              background: "linear-gradient(135deg, #126BFF 0%, #169BFF 100%)",
-              border: "none",
-              borderRadius: "9px",
-              color: "white",
-              fontSize: "14px",
-              fontWeight: "600",
-              cursor: "pointer",
-              boxShadow: "0 5px 14px rgba(18, 107, 255, 0.20)",
-              transform: hoverAdd ? "translateY(-1px)" : "none",
-              filter: hoverAdd ? "brightness(0.95)" : "none",
-              transition: "all 150ms ease",
-              width: isMobile ? "100%" : "auto"
-            }}
-          >
-            <Plus size={16} strokeWidth={2.5} />
-            Create Lesson
-          </button>
-        </div>
+        {!isReadOnly && (
+          <div style={{ 
+            display: "flex", 
+            width: isMobile ? "100%" : "auto"
+          }}>
+            <button
+              onClick={() => navigate(`${basePath}/create`)}
+              onMouseEnter={() => setHoverAdd(true)}
+              onMouseLeave={() => setHoverAdd(false)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+                height: "42px",
+                padding: "0 20px",
+                background: "linear-gradient(135deg, #126BFF 0%, #169BFF 100%)",
+                border: "none",
+                borderRadius: "9px",
+                color: "white",
+                fontSize: "14px",
+                fontWeight: "600",
+                cursor: "pointer",
+                boxShadow: "0 5px 14px rgba(18, 107, 255, 0.20)",
+                transform: hoverAdd ? "translateY(-1px)" : "none",
+                filter: hoverAdd ? "brightness(0.95)" : "none",
+                transition: "all 150ms ease",
+                width: isMobile ? "100%" : "auto"
+              }}
+            >
+              <Plus size={16} strokeWidth={2.5} />
+              Create Lesson
+            </button>
+          </div>
+        )}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
@@ -183,7 +191,8 @@ const LessonList = () => {
             >
               <LessonTable 
                 lessons={termLessons} 
-                onManageTopics={(id: number) => navigate(`/teacher/lessons/${id}/topics`)} 
+                isReadOnly={isReadOnly}
+                onManageSkills={(id: number) => navigate(`${basePath}/${id}/skills`)} 
                 onDelete={handleDeleteLesson} 
               />
             </TermSyllabusCard>

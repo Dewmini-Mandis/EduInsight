@@ -15,11 +15,12 @@ const useMediaQuery = (query: string) => {
 
 interface LessonTableProps {
   lessons: any[];
-  onManageTopics: (lessonId: number) => void;
+  isReadOnly?: boolean;
+  onManageSkills: (lessonId: number) => void;
   onDelete: (lessonId: number) => void;
 }
 
-const LessonTable: React.FC<LessonTableProps> = ({ lessons, onManageTopics, onDelete }) => {
+const LessonTable: React.FC<LessonTableProps> = ({ lessons, isReadOnly, onManageSkills, onDelete }) => {
   const isMobile = useMediaQuery("(max-width: 768px)");
 
   return (
@@ -45,7 +46,8 @@ const LessonTable: React.FC<LessonTableProps> = ({ lessons, onManageTopics, onDe
           <LessonRow
             key={lesson.id}
             lesson={lesson}
-            onManageTopics={() => onManageTopics(lesson.id)}
+            isReadOnly={isReadOnly}
+            onManageSkills={() => onManageSkills(lesson.id)}
             onDelete={() => onDelete(lesson.id)}
           />
         ))}

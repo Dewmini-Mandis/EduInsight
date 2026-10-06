@@ -15,11 +15,12 @@ const useMediaQuery = (query: string) => {
 
 interface LessonRowProps {
   lesson: any;
-  onManageTopics: () => void;
+  isReadOnly?: boolean;
+  onManageSkills: () => void;
   onDelete: () => void;
 }
 
-const LessonRow: React.FC<LessonRowProps> = ({ lesson, onManageTopics, onDelete }) => {
+const LessonRow: React.FC<LessonRowProps> = ({ lesson, isReadOnly, onManageSkills, onDelete }) => {
   const isMobile = useMediaQuery("(max-width: 768px)");
 
   return (
@@ -64,7 +65,7 @@ const LessonRow: React.FC<LessonRowProps> = ({ lesson, onManageTopics, onDelete 
         justifyContent: isMobile ? "flex-end" : "flex-end",
         width: isMobile ? "100%" : "auto" 
       }}>
-        <LessonActions onManageTopics={onManageTopics} onDelete={onDelete} />
+        <LessonActions isReadOnly={isReadOnly} onManageSkills={onManageSkills} onDelete={onDelete} />
       </div>
     </div>
   );

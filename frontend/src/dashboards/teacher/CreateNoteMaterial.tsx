@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { getToken } from "../../auth/authUtils";
-import { FileText, Calendar, BookOpen, Layers, Target, Save, HelpCircle, ArrowUp, ArrowDown } from "lucide-react";
+import { FileText, BookOpen, Target, Save, ArrowUp, ArrowDown } from "lucide-react";
 
 import LearningNoteHeader from "../../components/materials/LearningNoteHeader";
 import RichTextEditor from "../../components/materials/RichTextEditor";
 import FileUploader from "../../components/materials/FileUploader";
+import SuccessBanner from "../../components/SuccessBanner";
 
 const MainCard = ({ children, style }: any) => (
   <div style={{ backgroundColor: "#FFFFFF", borderRadius: "16px", border: "1px solid #E4ECF6", boxShadow: "0 6px 20px rgba(18, 63, 110, 0.05)", padding: "22px", display: "flex", flexDirection: "column", gap: "20px", ...style }}>
@@ -35,43 +36,40 @@ const Select = ({ children, ...props }: any) => (
 const CreateNoteMaterial = () => {
   const navigate = useNavigate();
   const { materialId } = useParams();
+  const [searchParams] = useSearchParams();
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [attachments, setAttachments] = useState<File[]>([]);
   const [existingAttachments, setExistingAttachments] = useState<any[]>([]);
 
-  const [termsList, setTermsList] = useState<any[]>([]);
   const [lessonsList, setLessonsList] = useState<any[]>([]);
-  const [topicsList, setTopicsList] = useState<any[]>([]);
   const [skillsList, setSkillsList] = useState<any[]>([]);
-  const [quizzesList, setQuizzesList] = useState<any[]>([]);
 
-  const [termId, setTermId] = useState("");
-  const [lessonId, setLessonId] = useState("");
-  const [topicId, setTopicId] = useState("");
-  const [skillId, setSkillId] = useState("");
-  const [quizId, setQuizId] = useState("");
+  const [lessonId, setLessonId] = useState(searchParams.get("lessonId") || "");
+  const [skillId, setSkillId] = useState(searchParams.get("skillId") || "");
+  const [selectedLessonObj, setSelectedLessonObj] = useState<any>(null);
+  const [selectedSkillObj, setSelectedSkillObj] = useState<any>(null);
 
   const [sectionOrder, setSectionOrder] = useState<string[]>(["NOTE", "ATTACHMENTS", "VIDEO"]);
 
-  useEffect(() => { fetchTerms(); fetchQuizzes(); }, []);
-  
-  const fetchTerms = async () => {
-    const res = await fetch("/api/quizzes/terms/", { headers: { Authorization: `Token ${getToken()}` } });
-    if (res.ok) setTermsList(await res.json());
-  };
+  useEffect(() => {
+    fetchLessons();
+  }, []);
 
-  const fetchQuizzes = async () => {
-    const res = await fetch("/api/quizzes/", { headers: { Authorization: `Token ${getToken()}` } });
+  const fetchLessons = async () => {
+    const res = await fetch("/api/quizzes/lessons/", { headers: { Authorization: `Token ${getToken()}` } });
     if (res.ok) {
       const data = await res.json();
-      setQuizzesList(Array.isArray(data) ? data : data.results || []);
+      const list = Array.isArray(data) ? data : data.results || [];
+      setLessonsList(list);
     }
   };
-
+  
   useEffect(() => {
     if (materialId) {
       fetchMaterialDetails();
@@ -85,20 +83,15 @@ const CreateNoteMaterial = () => {
         const data = await res.json();
         setTitle(data.title || "");
         setContent(data.content || "");
-        if (data.quiz) setQuizId(data.quiz.toString());
         if (data.section_order && Array.isArray(data.section_order) && data.section_order.length > 0) {
           setSectionOrder(data.section_order);
         }
         if (data.lesson) {
           setLessonId(data.lesson.toString());
-          const lessonRes = await fetch(`/api/quizzes/lessons/${data.lesson}/`, { headers: { Authorization: `Token ${getToken()}` } });
-          if (lessonRes.ok) {
-            const lessonData = await lessonRes.json();
-            if (lessonData.term) setTermId(lessonData.term.toString());
-          }
         }
-        if (data.topic) setTopicId(data.topic.toString());
-        if (data.skill) setSkillId(data.skill.toString());
+        if (data.skill) {
+          setSkillId(data.skill.toString());
+        }
         if (data.attachments) setExistingAttachments(data.attachments);
       }
     } catch (e) {
@@ -107,22 +100,35 @@ const CreateNoteMaterial = () => {
   };
 
   useEffect(() => {
-    if (!termId) { setLessonsList([]); return; }
-    fetch(`/api/quizzes/lessons/?term=${termId}`, { headers: { Authorization: `Token ${getToken()}` } })
-      .then(r => r.json()).then(data => setLessonsList(Array.isArray(data) ? data : data.results || []));
-  }, [termId]);
+    if (!lessonId) {
+      setSkillsList([]);
+      setSkillId("");
+      setSelectedLessonObj(null);
+      return;
+    }
+
+    const match = lessonsList.find((l) => String(l.id) === String(lessonId));
+    if (match) setSelectedLessonObj(match);
+
+    fetch(`/api/quizzes/skills/?lesson=${lessonId}&active_only=true`, { headers: { Authorization: `Token ${getToken()}` } })
+      .then((r) => r.json())
+      .then((data) => {
+        const skillsData = Array.isArray(data) ? data : data.results || [];
+        setSkillsList(skillsData);
+        if (skillId && !skillsData.some((s: any) => String(s.id) === String(skillId))) {
+          setSkillId("");
+        }
+      });
+  }, [lessonId, lessonsList]);
 
   useEffect(() => {
-    if (!lessonId) { setTopicsList([]); setTopicId(""); return; }
-    fetch(`/api/quizzes/topics/?lesson=${lessonId}`, { headers: { Authorization: `Token ${getToken()}` } })
-      .then(r => r.json()).then(data => setTopicsList(Array.isArray(data) ? data : data.results || []));
-  }, [lessonId]);
-
-  useEffect(() => {
-    if (!topicId) { setSkillsList([]); setSkillId(""); return; }
-    fetch(`/api/quizzes/skills/?topic=${topicId}`, { headers: { Authorization: `Token ${getToken()}` } })
-      .then(r => r.json()).then(data => setSkillsList(Array.isArray(data) ? data : data.results || []));
-  }, [topicId]);
+    if (skillId && skillsList.length > 0) {
+      const match = skillsList.find((s) => String(s.id) === String(skillId));
+      if (match) setSelectedSkillObj(match);
+    } else {
+      setSelectedSkillObj(null);
+    }
+  }, [skillId, skillsList]);
 
   const handleAddFiles = (files: File[]) => {
     setAttachments([...attachments, ...files]);
@@ -171,13 +177,13 @@ const CreateNoteMaterial = () => {
   };
 
   const handleSubmit = async () => {
-    if (!title || !lessonId) {
-      setError("Title and Lesson are required.");
+    if (!title || !lessonId || !skillId) {
+      setError("Title, Lesson, and Skill are required.");
       return;
     }
     
-    if (attachments.length === 0 && existingAttachments.length === 0) {
-      setError("At least one attachment is required for note materials.");
+    if (attachments.length === 0 && existingAttachments.length === 0 && !content) {
+      setError("Content or at least one attachment is required for note materials.");
       return;
     }
     setLoading(true);
@@ -189,9 +195,7 @@ const CreateNoteMaterial = () => {
       formData.append("material_type", "TEXT");
       if (content) formData.append("content", content);
       formData.append("lesson", lessonId);
-      if (topicId) formData.append("topic", topicId);
-      if (skillId) formData.append("skill", skillId);
-      if (quizId) formData.append("quiz", quizId);
+      formData.append("skill", skillId);
       formData.append("section_order", JSON.stringify(sectionOrder));
 
       for (let file of attachments) {
@@ -212,7 +216,10 @@ const CreateNoteMaterial = () => {
         throw new Error(errorData.detail || "Failed to save note material.");
       }
 
-      navigate("/teacher/materials");
+      setSuccessMsg(materialId ? "Material updated successfully." : "Learning note created successfully.");
+      setTimeout(() => {
+        navigate(`/teacher/materials?lessonId=${lessonId}&skillId=${skillId}`);
+      }, 1000);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -224,69 +231,64 @@ const CreateNoteMaterial = () => {
     <div style={{ display: "flex", flexDirection: "column", maxWidth: "1240px", margin: "0 auto", padding: "24px 32px 32px 32px" }}>
       
       <LearningNoteHeader 
-        onBack={() => navigate("/teacher/materials")} 
+        onBack={() => navigate(`/teacher/materials${lessonId ? `?lessonId=${lessonId}&skillId=${skillId}` : ''}`)} 
         title={materialId ? "Edit Learning Note" : "Create Learning Note"}
         subtitle="Create rich text materials with attachments."
-        helperText="Add a summary, select the relevant term, lesson, topic, skill, and associated quiz, and arrange section order."
+        helperText="Create rich text note materials under the selected Skill."
         icon={FileText}
       />
+
+      {successMsg && (
+        <SuccessBanner 
+          message={successMsg} 
+          onClose={() => setSuccessMsg("")} 
+          style={{ marginTop: "16px", marginBottom: "8px" }} 
+        />
+      )}
 
       {error && <div style={{ color: "#FF4054", padding: "12px", backgroundColor: "#FDEDED", borderRadius: "8px", fontSize: "14px", fontWeight: "500", border: "1px solid #FADCDC", marginBottom: "16px" }}>{error}</div>}
 
       <MainCard>
-        <div>
-          <Label>Title <span style={{ color: "#126BFF" }}>*</span></Label>
-          <InputWrapper icon={FileText}>
-            <Input value={title} onChange={(e: any) => setTitle(e.target.value)} placeholder="E.g., Chapter 1 Summary" />
-          </InputWrapper>
-        </div>
-        
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-          <div>
-            <Label>Term <span style={{ color: "#126BFF" }}>*</span></Label>
-            <InputWrapper icon={Calendar}>
-              <Select value={termId} onChange={(e: any) => setTermId(e.target.value)}>
-                <option value="">Select Term</option>
-                {termsList.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </Select>
-            </InputWrapper>
+        {selectedLessonObj || selectedSkillObj ? (
+          <div style={{ backgroundColor: "#F0F6FF", border: "1px solid #BAE0FF", borderRadius: "10px", padding: "14px 18px", display: "flex", gap: "24px", alignItems: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <BookOpen size={18} color="#126BFF" />
+              <span style={{ fontSize: "13px", color: "#5D78A3" }}>Lesson:</span>
+              <strong style={{ fontSize: "14px", color: "#0B1F3A" }}>{selectedLessonObj ? selectedLessonObj.title : `Lesson #${lessonId}`}</strong>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <Target size={18} color="#126BFF" />
+              <span style={{ fontSize: "13px", color: "#5D78A3" }}>Skill:</span>
+              <strong style={{ fontSize: "14px", color: "#0B1F3A" }}>{selectedSkillObj ? selectedSkillObj.name : `Skill #${skillId}`}</strong>
+            </div>
           </div>
-          <div>
-            <Label>Lesson <span style={{ color: "#126BFF" }}>*</span></Label>
-            <InputWrapper icon={BookOpen}>
-              <Select value={lessonId} onChange={(e: any) => setLessonId(e.target.value)} disabled={!termId}>
-                <option value="">Select Lesson</option>
-                {lessonsList.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
-              </Select>
-            </InputWrapper>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+            <div>
+              <Label>Lesson <span className="required-marker">*</span></Label>
+              <InputWrapper icon={BookOpen}>
+                <Select value={lessonId} onChange={(e: any) => setLessonId(e.target.value)}>
+                  <option value="">Select Lesson</option>
+                  {lessonsList.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
+                </Select>
+              </InputWrapper>
+            </div>
+            <div>
+              <Label>Skill</Label>
+              <InputWrapper icon={Target}>
+                <Select value={skillId} onChange={(e: any) => setSkillId(e.target.value)} disabled={!lessonId}>
+                  <option value="">Select Skill</option>
+                  {skillsList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </Select>
+              </InputWrapper>
+            </div>
           </div>
-          <div>
-            <Label>Topic</Label>
-            <InputWrapper icon={Layers}>
-              <Select value={topicId} onChange={(e: any) => setTopicId(e.target.value)} disabled={!lessonId}>
-                <option value="">Select Topic</option>
-                {topicsList.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </Select>
-            </InputWrapper>
-          </div>
-          <div>
-            <Label>Skill</Label>
-            <InputWrapper icon={Target}>
-              <Select value={skillId} onChange={(e: any) => setSkillId(e.target.value)} disabled={!topicId}>
-                <option value="">Select Skill</option>
-                {skillsList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </Select>
-            </InputWrapper>
-          </div>
-        </div>
+        )}
 
         <div>
-          <Label>Associated Quiz (Optional - Redirects failed students to this material)</Label>
-          <InputWrapper icon={HelpCircle}>
-            <Select value={quizId} onChange={(e: any) => setQuizId(e.target.value)}>
-              <option value="">-- None (No Direct Quiz Link) --</option>
-              {quizzesList.map(q => <option key={q.id} value={q.id}>{q.title}</option>)}
-            </Select>
+          <Label>Title <span className="required-marker">*</span></Label>
+          <InputWrapper icon={FileText}>
+            <Input value={title} onChange={(e: any) => setTitle(e.target.value)} placeholder="E.g., Chapter 1 Summary" />
           </InputWrapper>
         </div>
 
@@ -317,7 +319,7 @@ const CreateNoteMaterial = () => {
         </div>
 
         <div>
-          <Label>Attachments (PDF / Images) <span style={{ color: "#126BFF" }}>*</span></Label>
+          <Label>Attachments (PDF / Images) <span className="required-marker">*</span></Label>
           <FileUploader 
             existingAttachments={existingAttachments}
             newAttachments={attachments}

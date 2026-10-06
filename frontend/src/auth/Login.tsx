@@ -23,19 +23,23 @@ const Login = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    const cleanUsername = username.trim();
     try {
       const res = await fetch("/api/accounts/login/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username: cleanUsername, password }),
       });
-      if (!res.ok) throw new Error("Invalid credentials");
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const errorMsg = data.non_field_errors?.[0] || data.detail || data.error || "Invalid username or password";
+        throw new Error(errorMsg);
+      }
       localStorage.setItem("token", data.token);
       setUser(data.user);
       navigate("/dashboard");
     } catch (err: any) {
-      setError(err.message || "Login failed");
+      setError(err.message || "Unable to connect to server");
     }
   };
 

@@ -1,255 +1,1099 @@
 import React, { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { getToken } from "../../auth/authUtils";
+import { useNavigate } from "react-router-dom";
+import { getToken, getUser } from "../../auth/authUtils";
 
-// Reusable Components
-import MetricCard from "../../components/MetricCard";
-import ChartCard from "../../components/ChartCard";
-import EmptyState from "../../components/EmptyState";
+interface SummaryData {
+  totalStudents: number;
+  activeQuizzes: number;
+  learningMaterials: number;
+  lessonsManaged: number;
+}
 
-type OverviewData = {
-  total_students: number;
-  active_learners: number;
-  active_lessons: number;
-  published_quizzes: number;
-  quiz_completion_rate: number;
-  at_risk_count: number;
-  avg_score: number;
-  recent_activities: any[];
-  recent_recommendations: any[];
-  performance_trend: { date: string; score: number }[];
-  risk_distribution: { high: number; moderate: number; low: number };
-};
+interface ClassPerformance {
+  className: string;
+  avgScore: number;
+}
 
-const TeacherDashboard = () => {
-  const [data, setData] = useState<OverviewData | null>(null);
-  const [alerts, setAlerts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+interface RiskStudent {
+  id: string;
+  name: string;
+  className: string;
+  riskLevel: "High Risk" | "Medium Risk" | "Low Risk";
+}
+
+interface QuizItem {
+  id: string;
+  title: string;
+  lesson: string;
+  assignedClass: string;
+  attempts: number;
+  status: "Active" | "Draft" | "Closed";
+}
+
+interface MaterialItem {
+  id: string;
+  title: string;
+  type: "Video" | "Note" | "Attachment";
+  uploadDate: string;
+}
+
+const TeacherDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const user = getUser();
+  const teacherName = user ? `${user.first_name || ""} ${user.last_name || ""}`.trim() || user.username || "Sarah Jenkins" : "Sarah Jenkins";
+  const teacherInitials = teacherName.split(" ").map((n: string) => n[0]).join("").toUpperCase() || "SJ";
+
+  const [loading, setLoading] = useState<boolean>(true);
+  const [summary, setSummary] = useState<SummaryData>({
+    totalStudents: 0,
+    activeQuizzes: 0,
+    learningMaterials: 0,
+    lessonsManaged: 0,
+  });
+
+  const [classPerformance, setClassPerformance] = useState<ClassPerformance[]>([]);
+  const [riskStudents, setRiskStudents] = useState<RiskStudent[]>([]);
+  const [recentQuizzes, setRecentQuizzes] = useState<QuizItem[]>([]);
+  const [recentMaterials, setRecentMaterials] = useState<MaterialItem[]>([]);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchMetrics = async () => {
       const token = getToken();
       if (!token) {
-        setError("User session is inactive.");
         setLoading(false);
         return;
       }
-
+      const headers = { Authorization: `Token ${token}` };
       try {
-        const [overviewRes, alertsRes] = await Promise.all([
-          fetch("/api/analytics/overview/", {
-            headers: { Authorization: `Token ${token}` },
-          }),
-          fetch("/api/analytics/alerts/", {
-            headers: { Authorization: `Token ${token}` },
-          }),
+        const [overviewRes, classesRes, riskRes, quizzesRes, materialsRes] = await Promise.allSettled([
+          fetch("/api/analytics/overview/", { headers }),
+          fetch("/api/classes/classrooms/", { headers }),
+          fetch("/api/analytics/risk/", { headers }),
+          fetch("/api/quizzes/", { headers }),
+          fetch("/api/materials/", { headers }),
         ]);
 
-        if (!overviewRes.ok || !alertsRes.ok) {
-          throw new Error("Failed to load dashboard metrics.");
+        if (overviewRes.status === "fulfilled" && overviewRes.value.ok) {
+          const apiData = await overviewRes.value.json();
+          setSummary({
+            totalStudents: apiData.total_students ?? 0,
+            activeQuizzes: apiData.published_quizzes ?? 0,
+            learningMaterials: apiData.learning_materials ?? apiData.total_materials ?? 0,
+            lessonsManaged: apiData.active_lessons ?? 0,
+          });
         }
 
-        const overviewData = await overviewRes.json() as OverviewData;
-        const alertsData = await alertsRes.json() as any[];
+        if (classesRes.status === "fulfilled" && classesRes.value.ok) {
+          const classesData = await classesRes.value.json();
+          const list = Array.isArray(classesData) ? classesData : classesData.results || [];
+          setClassPerformance(
+            list.map((c: any) => ({
+              className: c.name || c.grade_class || `Class #${c.id}`,
+              avgScore: c.average_score ?? 0,
+            }))
+          );
+        }
 
-        setData(overviewData);
-        setAlerts(alertsData);
-      } catch (err: any) {
-        setError(err.message || "An error occurred while fetching metrics.");
+        if (riskRes.status === "fulfilled" && riskRes.value.ok) {
+          const riskData = await riskRes.value.json();
+          const list = Array.isArray(riskData) ? riskData : riskData.results || [];
+          setRiskStudents(
+            list.slice(0, 5).map((r: any) => {
+              const cat = (r.risk_category || "").toString().toUpperCase();
+              return {
+                id: String(r.id),
+                name: r.student_name || r.student?.user?.first_name || `Student #${r.student}`,
+                className: r.student_class || r.student?.grade_class || "Class",
+                riskLevel: cat.includes("HIGH") && !cat.includes("NOT HIGH") ? "High Risk" : "Not High Risk",
+              };
+            })
+          );
+        }
+
+        if (quizzesRes.status === "fulfilled" && quizzesRes.value.ok) {
+          const quizData = await quizzesRes.value.json();
+          const list = Array.isArray(quizData) ? quizData : quizData.results || [];
+          const activeList = list.filter((q: any) => !q.is_deleted);
+          setRecentQuizzes(
+            activeList.slice(0, 5).map((q: any) => ({
+              id: String(q.id),
+              title: q.title,
+              lesson: typeof q.lesson === "object" ? q.lesson?.title : `Lesson #${q.lesson || ""}`,
+              assignedClass: q.assigned_class_name || "Assigned Class",
+              attempts: q.total_attempts ?? q.attempts_count ?? 0,
+              status: q.is_published ? "Active" : "Draft",
+            }))
+          );
+        }
+
+        if (materialsRes.status === "fulfilled" && materialsRes.value.ok) {
+          const matData = await materialsRes.value.json();
+          const list = Array.isArray(matData) ? matData : matData.results || [];
+          setRecentMaterials(
+            list.slice(0, 5).map((m: any) => ({
+              id: String(m.id),
+              title: m.title,
+              type: m.material_type === "VIDEO" ? "Video" : m.material_type === "NOTE" ? "Note" : "Attachment",
+              uploadDate: m.created_at ? new Date(m.created_at).toLocaleDateString() : "Recent",
+            }))
+          );
+        }
+      } catch (e) {
+        console.error("Error fetching dashboard metrics:", e);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchData();
+    fetchMetrics();
   }, []);
 
-  if (loading) {
-    return <div style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted)" }}>Syncing teaching insights...</div>;
-  }
-
-  if (error || !data) {
-    return (
-      <div style={{ padding: "24px", color: "var(--danger)" }}>
-        <h3>Metrics Unavailable</h3>
-        <p>{error || "Could not retrieve classroom statistics."}</p>
-        <button 
-          onClick={() => window.location.reload()}
-          style={{ padding: "8px 16px", borderRadius: "8px", border: "none", backgroundColor: "var(--blue-600)", color: "white", cursor: "pointer", marginTop: "16px" }}
-        >
-          Try Again
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-      {/* Metrics Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "24px" }}>
-        <div style={{ cursor: "pointer" }} onClick={() => navigate("/teacher/analytics")}>
-          <MetricCard 
-            title="Active Learners" 
-            value={data.active_learners} 
-            icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>}
-            trend={{ value: "12%", isPositive: true, label: "vs last 7 days" }}
-          />
+    <div style={{ display: "flex", flexDirection: "column", gap: "24px", width: "100%", maxWidth: "1280px", margin: "0 auto", padding: "16px 0 32px 0" }}>
+      
+      {/* 1. Page Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: "28px", fontWeight: "700", color: "#0B1F3A", letterSpacing: "-0.02em" }}>
+            Dashboard
+          </h1>
+          <p style={{ margin: "4px 0 0 0", fontSize: "15px", fontWeight: "400", color: "#5D78A3" }}>
+            Welcome back. Here’s an overview of your classes and teaching activity.
+          </p>
         </div>
-        <div style={{ cursor: "pointer" }} onClick={() => navigate("/teacher/risk-alerts")}>
-          <MetricCard 
-            title="At-Risk Students" 
-            value={data.at_risk_count} 
-            icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>}
-            iconBgColor="rgba(245, 34, 61, 0.1)"
-            iconColor="var(--danger)"
-            trend={{ value: "2%", isPositive: false, label: "vs last 7 days" }}
-          />
-        </div>
-        <div style={{ cursor: "pointer" }} onClick={() => navigate("/teacher/lessons")}>
-          <MetricCard 
-            title="Difficult Topics" 
-            value="3" 
-            icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M6 6h10M6 10h10"/></svg>}
-            iconBgColor="rgba(255, 153, 0, 0.1)"
-            iconColor="var(--warning)"
-            trend={{ value: "High failure rate", isPositive: false, label: "" }}
-          />
-        </div>
-        <div style={{ cursor: "pointer" }} onClick={() => navigate("/teacher/analytics")}>
-          <MetricCard 
-            title="Class Average" 
-            value={`${data.avg_score}%`} 
-            icon={<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>}
-            iconBgColor="rgba(24, 182, 91, 0.1)"
-            iconColor="var(--success)"
-            trend={{ value: "5%", isPositive: true, label: "vs last 7 days" }}
-          />
-        </div>
-      </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "24px" }}>
-        {/* Left column: Trend line */}
-        <ChartCard 
-          title="Class Performance Trend" 
-          subtitle="Average score over time"
-          headerAction={
-            <select style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid var(--border)", fontSize: "12px", outline: "none" }}>
-              <option>Last 8 Weeks</option>
-            </select>
-          }
-        >
-          <div style={{ flex: 1, display: "flex", alignItems: "flex-end", justifyContent: "space-between", padding: "16px 0 0 0", borderBottom: "1px solid var(--border)", position: "relative" }}>
-            <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, background: "linear-gradient(to top, rgba(20, 99, 243, 0.1) 0%, transparent 100%)", clipPath: "polygon(0% 60%, 20% 50%, 40% 40%, 60% 30%, 80% 35%, 100% 20%, 100% 100%, 0% 100%)" }} />
-            <svg viewBox="0 0 400 120" style={{ width: "100%", height: "100%", position: "absolute", zIndex: 1, overflow: "visible" }}>
-              <path d="M0,70 L80,60 L160,48 L240,36 L320,42 L400,24" fill="none" stroke="var(--blue-500)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+        {/* Top-Right Header Actions */}
+        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          {/* Notification Button */}
+          <button
+            title="Notifications"
+            style={{
+              position: "relative",
+              width: "40px",
+              height: "40px",
+              borderRadius: "50%",
+              backgroundColor: "#FFFFFF",
+              border: "1px solid #DCE6F3",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              boxShadow: "0 2px 6px rgba(6, 38, 83, 0.03)",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#5D78A3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>
-            <div style={{ display: "flex", justifyContent: "space-between", width: "100%", marginTop: "auto", paddingTop: "8px", fontSize: "10px", color: "var(--text-secondary)", zIndex: 2 }}>
-              <span>Wk 1</span><span>Wk 2</span><span>Wk 3</span><span>Wk 4</span><span>Wk 5</span><span>Wk 6</span><span>Wk 7</span><span>Wk 8</span>
-            </div>
-          </div>
-          <div style={{ display: "flex", alignItems: "flex-start", gap: "12px", marginTop: "16px", backgroundColor: "var(--surface-muted)", padding: "12px", borderRadius: "8px" }}>
-            <span style={{ fontSize: "20px" }}>🤖</span>
-            <div>
-              <div style={{ fontSize: "12px", fontWeight: "600", color: "var(--navy-950)" }}>Consistent improvement this month.</div>
-              <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Class average increased by 5% compared to previous 8 weeks.</div>
-            </div>
-          </div>
-        </ChartCard>
+            <span
+              style={{
+                position: "absolute",
+                top: "8px",
+                right: "8px",
+                width: "8px",
+                height: "8px",
+                borderRadius: "50%",
+                backgroundColor: "#FF4054",
+                border: "2px solid #FFFFFF",
+              }}
+            />
+          </button>
 
-        {/* Right column: Risk donut chart */}
-        <ChartCard title="Risk Overview" subtitle="Students by risk level" footer={
-          <Link to="/teacher/risk-alerts" style={{ fontSize: "13px", color: "var(--blue-600)", fontWeight: "600", textDecoration: "none", display: "flex", alignItems: "center", gap: "4px" }}>
-            View at-risk students &rarr;
-          </Link>
-        }>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flex: 1, padding: "16px 0" }}>
-            <div style={{ width: "100px", height: "100px", borderRadius: "50%", background: "conic-gradient(var(--success) 0% 70%, var(--warning) 70% 85%, var(--danger) 85% 100%)", position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <div style={{ width: "76px", height: "76px", borderRadius: "50%", backgroundColor: "var(--surface)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                <span style={{ fontSize: "20px", fontWeight: "700", color: "var(--navy-950)", lineHeight: 1 }}>{data.total_students}</span>
-                <span style={{ fontSize: "10px", color: "var(--text-secondary)" }}>Students</span>
-              </div>
+          {/* User Profile Dropdown Pill */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              backgroundColor: "#FFFFFF",
+              border: "1px solid #DCE6F3",
+              padding: "4px 14px 4px 6px",
+              borderRadius: "30px",
+              boxShadow: "0 2px 6px rgba(6, 38, 83, 0.03)",
+              cursor: "pointer",
+            }}
+            onClick={() => navigate("/teacher/profile")}
+          >
+            <div
+              style={{
+                width: "34px",
+                height: "34px",
+                borderRadius: "50%",
+                backgroundColor: "#126BFF",
+                color: "#FFFFFF",
+                fontWeight: "700",
+                fontSize: "13px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {teacherInitials}
             </div>
-            
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              {[
-                { label: "High Risk", count: data.risk_distribution.high, color: "var(--danger)" },
-                { label: "Moderate Risk", count: data.risk_distribution.moderate, color: "var(--warning)" },
-                { label: "Low Risk", count: data.risk_distribution.low, color: "var(--success)" }
-              ].map(item => (
-                <div key={item.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <div style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: item.color }} />
-                    <span style={{ fontSize: "12px", color: "var(--navy-950)", fontWeight: "500" }}>{item.label}</span>
-                  </div>
-                  <span style={{ fontSize: "12px", fontWeight: "600", color: "var(--navy-950)" }}>{item.count}</span>
-                </div>
-              ))}
-            </div>
+            <span style={{ fontSize: "14px", fontWeight: "600", color: "#0B1F3A" }}>
+              {teacherName}
+            </span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5D78A3" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
           </div>
-        </ChartCard>
+        </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
-        {/* Left: Manage Content & Students */}
-        <ChartCard title="Manage Content & Students" subtitle="Create assessments and manage your classes.">
-          <div style={{ display: "flex", gap: "16px", flex: 1, alignItems: "center" }}>
-            <Link to="/teacher/quizzes/create" style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "flex-start", padding: "16px", borderRadius: "12px", backgroundColor: "rgba(20, 99, 243, 0.05)", textDecoration: "none", border: "1px solid rgba(20, 99, 243, 0.1)", transition: "background-color 0.2s" }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor="rgba(20, 99, 243, 0.1)"} onMouseLeave={(e) => e.currentTarget.style.backgroundColor="rgba(20, 99, 243, 0.05)"}>
-              <div style={{ width: "40px", height: "40px", borderRadius: "8px", backgroundColor: "var(--blue-100)", color: "var(--blue-600)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "12px" }}>
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-              </div>
-              <span style={{ fontSize: "14px", fontWeight: "600", color: "var(--navy-950)", marginBottom: "4px" }}>Create Quiz</span>
-              <p style={{ fontSize: "12px", color: "var(--text-secondary)", margin: 0 }}>Build quizzes and assessments.</p>
-            </Link>
-            
-            <Link to="/teacher/students/create" style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "flex-start", padding: "16px", borderRadius: "12px", backgroundColor: "rgba(101, 61, 245, 0.05)", textDecoration: "none", border: "1px solid rgba(101, 61, 245, 0.1)", transition: "background-color 0.2s" }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor="rgba(101, 61, 245, 0.1)"} onMouseLeave={(e) => e.currentTarget.style.backgroundColor="rgba(101, 61, 245, 0.05)"}>
-              <div style={{ width: "40px", height: "40px", borderRadius: "8px", backgroundColor: "rgba(101, 61, 245, 0.1)", color: "var(--purple)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "12px" }}>
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
-              </div>
-              <span style={{ fontSize: "14px", fontWeight: "600", color: "var(--navy-950)", marginBottom: "4px" }}>Register Student</span>
-              <p style={{ fontSize: "12px", color: "var(--text-secondary)", margin: 0 }}>Add new students to classes.</p>
-            </Link>
+      {/* 2. Top Summary Cards (4 in a row) */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: "20px",
+        }}
+      >
+        {/* Card 1 */}
+        <div
+          style={{
+            backgroundColor: "#FFFFFF",
+            border: "1px solid #DCE6F3",
+            borderRadius: "14px",
+            padding: "20px",
+            boxShadow: "0 2px 8px rgba(6, 38, 83, 0.03)",
+            display: "flex",
+            alignItems: "center",
+            gap: "16px",
+          }}
+        >
+          <div
+            style={{
+              width: "48px",
+              height: "48px",
+              borderRadius: "12px",
+              backgroundColor: "rgba(18, 107, 255, 0.08)",
+              color: "#126BFF",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
           </div>
-        </ChartCard>
+          <div>
+            <div style={{ fontSize: "28px", fontWeight: "700", color: "#0B1F3A", lineHeight: "1.1" }}>
+              {summary.totalStudents}
+            </div>
+            <div style={{ fontSize: "13px", fontWeight: "500", color: "#5D78A3", marginTop: "4px" }}>
+              Total Students
+            </div>
+          </div>
+        </div>
 
-        {/* Right: Recent Alerts list */}
-        <ChartCard title="Recent Alerts" subtitle="AI-driven warnings" footer={
-          <Link to="/teacher/risk-alerts" style={{ fontSize: "13px", color: "var(--blue-600)", fontWeight: "600", textDecoration: "none", display: "flex", alignItems: "center", gap: "4px" }}>
-            View all alerts &rarr;
-          </Link>
-        }>
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "8px" }}>
-            {alerts.slice(0, 3).map((alert, idx) => {
-              let color = "var(--blue-500)";
-              let bg = "rgba(20, 99, 243, 0.1)";
-              if (alert.severity === "Critical" || alert.severity === "High") {
-                color = "var(--danger)"; bg = "rgba(245, 34, 61, 0.1)";
-              }
-              else if (alert.severity === "Moderate") {
-                color = "var(--warning)"; bg = "rgba(255, 153, 0, 0.1)";
-              }
+        {/* Card 2 */}
+        <div
+          style={{
+            backgroundColor: "#FFFFFF",
+            border: "1px solid #DCE6F3",
+            borderRadius: "14px",
+            padding: "20px",
+            boxShadow: "0 2px 8px rgba(6, 38, 83, 0.03)",
+            display: "flex",
+            alignItems: "center",
+            gap: "16px",
+          }}
+        >
+          <div
+            style={{
+              width: "48px",
+              height: "48px",
+              borderRadius: "12px",
+              backgroundColor: "rgba(22, 155, 255, 0.08)",
+              color: "#169BFF",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 11l3 3L22 4" />
+              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+            </svg>
+          </div>
+          <div>
+            <div style={{ fontSize: "28px", fontWeight: "700", color: "#0B1F3A", lineHeight: "1.1" }}>
+              {summary.activeQuizzes}
+            </div>
+            <div style={{ fontSize: "13px", fontWeight: "500", color: "#5D78A3", marginTop: "4px" }}>
+              Active Quizzes
+            </div>
+          </div>
+        </div>
 
-              return (
-                <div key={alert.id || idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px", border: "1px solid var(--border)", borderRadius: "8px", cursor: "pointer" }} onClick={() => navigate("/teacher/risk-alerts")}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <div style={{ width: "32px", height: "32px", borderRadius: "50%", backgroundColor: bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      {color === "var(--danger)" ? "⚠️" : color === "var(--warning)" ? "🚨" : "ℹ️"}
+        {/* Card 3 */}
+        <div
+          style={{
+            backgroundColor: "#FFFFFF",
+            border: "1px solid #DCE6F3",
+            borderRadius: "14px",
+            padding: "20px",
+            boxShadow: "0 2px 8px rgba(6, 38, 83, 0.03)",
+            display: "flex",
+            alignItems: "center",
+            gap: "16px",
+          }}
+        >
+          <div
+            style={{
+              width: "48px",
+              height: "48px",
+              borderRadius: "12px",
+              backgroundColor: "rgba(101, 61, 245, 0.08)",
+              color: "#653DF5",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+              <polyline points="10 9 9 9 8 9" />
+            </svg>
+          </div>
+          <div>
+            <div style={{ fontSize: "28px", fontWeight: "700", color: "#0B1F3A", lineHeight: "1.1" }}>
+              {summary.learningMaterials}
+            </div>
+            <div style={{ fontSize: "13px", fontWeight: "500", color: "#5D78A3", marginTop: "4px" }}>
+              Learning Materials
+            </div>
+          </div>
+        </div>
+
+        {/* Card 4 */}
+        <div
+          style={{
+            backgroundColor: "#FFFFFF",
+            border: "1px solid #DCE6F3",
+            borderRadius: "14px",
+            padding: "20px",
+            boxShadow: "0 2px 8px rgba(6, 38, 83, 0.03)",
+            display: "flex",
+            alignItems: "center",
+            gap: "16px",
+          }}
+        >
+          <div
+            style={{
+              width: "48px",
+              height: "48px",
+              borderRadius: "12px",
+              backgroundColor: "rgba(22, 185, 120, 0.08)",
+              color: "#16B978",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+            </svg>
+          </div>
+          <div>
+            <div style={{ fontSize: "28px", fontWeight: "700", color: "#0B1F3A", lineHeight: "1.1" }}>
+              {summary.lessonsManaged}
+            </div>
+            <div style={{ fontSize: "13px", fontWeight: "500", color: "#5D78A3", marginTop: "4px" }}>
+              Lessons Managed
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. First Content Row: Class Performance (2fr) + Risk Alerts (1fr) */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)",
+          gap: "24px",
+        }}
+      >
+        {/* Left Section — Class Performance Overview */}
+        <div
+          style={{
+            backgroundColor: "#FFFFFF",
+            border: "1px solid #DCE6F3",
+            borderRadius: "14px",
+            padding: "24px",
+            boxShadow: "0 2px 8px rgba(6, 38, 83, 0.03)",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+          }}
+        >
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "20px" }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: "18px", fontWeight: "700", color: "#0B1F3A" }}>
+                  Class Performance Overview
+                </h2>
+                <p style={{ margin: "4px 0 0 0", fontSize: "13px", color: "#5D78A3" }}>
+                  Track how your classes are performing this term.
+                </p>
+              </div>
+              <span
+                style={{
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  color: "#126BFF",
+                  backgroundColor: "rgba(18, 107, 255, 0.08)",
+                  padding: "4px 12px",
+                  borderRadius: "20px",
+                }}
+              >
+                Average Score (%)
+              </span>
+            </div>
+
+            {/* Clean SVG Bar Chart */}
+            <div style={{ position: "relative", width: "100%", height: "220px", marginTop: "10px" }}>
+              {/* Grid Lines */}
+              <div
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: "35px",
+                  right: 0,
+                  bottom: "30px",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  pointerEvents: "none",
+                }}
+              >
+                {[100, 75, 50, 25, 0].map((val) => (
+                  <div key={val} style={{ borderBottom: "1px dashed #EBF1FA", width: "100%", position: "relative" }}>
+                    <span
+                      style={{
+                        position: "absolute",
+                        left: "-35px",
+                        top: "-8px",
+                        fontSize: "11px",
+                        color: "#94A3B8",
+                      }}
+                    >
+                      {val}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Bars Container */}
+              <div
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: "40px",
+                  right: 0,
+                  bottom: "30px",
+                  display: "flex",
+                  alignItems: "flex-end",
+                  justifyContent: "space-around",
+                  padding: "0 20px",
+                }}
+              >
+                {classPerformance.map((item) => (
+                  <div
+                    key={item.className}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      height: "100%",
+                      justifyContent: "flex-end",
+                      width: "48px",
+                    }}
+                  >
+                    {/* Score Label above Bar */}
+                    <span
+                      style={{
+                        fontSize: "12px",
+                        fontWeight: "700",
+                        color: "#0B1F3A",
+                        marginBottom: "6px",
+                      }}
+                    >
+                      {item.avgScore}%
+                    </span>
+
+                    {/* Bar */}
+                    <div
+                      style={{
+                        width: "36px",
+                        height: `${item.avgScore}%`,
+                        backgroundColor: "#126BFF",
+                        borderRadius: "6px 6px 0 0",
+                        transition: "all 0.3s ease",
+                        boxShadow: "0 2px 6px rgba(18, 107, 255, 0.15)",
+                      }}
+                    />
+
+                    {/* Class Label below Bar */}
+                    <span
+                      style={{
+                        position: "absolute",
+                        bottom: "-24px",
+                        fontSize: "13px",
+                        fontWeight: "600",
+                        color: "#5D78A3",
+                      }}
+                    >
+                      {item.className}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              marginTop: "28px",
+              paddingTop: "14px",
+              borderTop: "1px solid #F0F4F9",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              fontSize: "12px",
+              color: "#5D78A3",
+            }}
+          >
+            <span>Top performing class: <strong style={{ color: "#0B1F3A" }}>11A (89%)</strong></span>
+            <button
+              onClick={() => navigate("/teacher/analytics/class-performance")}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#126BFF",
+                fontWeight: "600",
+                cursor: "pointer",
+                padding: 0,
+                fontSize: "12px",
+              }}
+            >
+              Detailed Analytics &rarr;
+            </button>
+          </div>
+        </div>
+
+        {/* Right Section — Risk Alerts */}
+        <div
+          style={{
+            backgroundColor: "#FFFFFF",
+            border: "1px solid #DCE6F3",
+            borderRadius: "14px",
+            padding: "24px",
+            boxShadow: "0 2px 8px rgba(6, 38, 83, 0.03)",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+          }}
+        >
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: "18px", fontWeight: "700", color: "#0B1F3A" }}>
+                  Risk Alerts
+                </h2>
+                <p style={{ margin: "2px 0 0 0", fontSize: "13px", color: "#5D78A3" }}>
+                  Students who may need support.
+                </p>
+              </div>
+              <button
+                onClick={() => navigate("/teacher/analytics/risk-improvement")}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#126BFF",
+                  fontWeight: "600",
+                  fontSize: "13px",
+                  cursor: "pointer",
+                  padding: 0,
+                }}
+              >
+                View All
+              </button>
+            </div>
+
+            {/* At-Risk Students List */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {riskStudents.map((student) => {
+                let badgeBg = "rgba(22, 185, 120, 0.1)";
+                let badgeColor = "#16B978";
+
+                if (student.riskLevel === "High Risk") {
+                  badgeBg = "rgba(255, 64, 84, 0.1)";
+                  badgeColor = "#FF4054";
+                } else if (student.riskLevel === "Medium Risk") {
+                  badgeBg = "rgba(245, 166, 35, 0.1)";
+                  badgeColor = "#F5A623";
+                }
+
+                return (
+                  <div
+                    key={student.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "10px 12px",
+                      borderRadius: "10px",
+                      backgroundColor: "#F8FAFC",
+                      border: "1px solid #EDF2F7",
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: "14px", fontWeight: "600", color: "#0B1F3A" }}>
+                        {student.name}
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#5D78A3" }}>
+                        Class {student.className}
+                      </div>
                     </div>
-                    <div style={{ display: "flex", flexDirection: "column" }}>
-                      <span style={{ fontSize: "13px", fontWeight: "600", color: "var(--navy-950)" }}>{alert.student_name} identified as risk</span>
-                      <span style={{ fontSize: "11px", color: "var(--text-secondary)", maxWidth: "200px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{alert.trigger_reason}</span>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          fontWeight: "600",
+                          backgroundColor: badgeBg,
+                          color: badgeColor,
+                          padding: "4px 10px",
+                          borderRadius: "12px",
+                        }}
+                      >
+                        {student.riskLevel}
+                      </span>
+                      <button
+                        onClick={() => navigate("/teacher/analytics/risk-improvement")}
+                        title="View details"
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "#5D78A3",
+                          cursor: "pointer",
+                          padding: "2px",
+                          display: "flex",
+                          alignItems: "center",
+                        }}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="9 18 15 12 9 6" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
-                  <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>{alert.last_updated}</span>
-                </div>
-              );
-            })}
-            {alerts.length === 0 && (
-              <div style={{ textAlign: "center", padding: "24px", color: "var(--text-muted)" }}>No recent alerts.</div>
-            )}
+                );
+              })}
+            </div>
           </div>
-        </ChartCard>
+
+          <div
+            style={{
+              marginTop: "16px",
+              paddingTop: "12px",
+              borderTop: "1px solid #F0F4F9",
+              fontSize: "12px",
+              color: "#5D78A3",
+              textAlign: "center",
+            }}
+          >
+            2 high risk students require early intervention.
+          </div>
+        </div>
+      </div>
+
+      {/* 4. Second Content Row: Recent Quizzes (2fr) + Recent Materials (1fr) */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)",
+          gap: "24px",
+        }}
+      >
+        {/* Left Section — Recent Quizzes */}
+        <div
+          style={{
+            backgroundColor: "#FFFFFF",
+            border: "1px solid #DCE6F3",
+            borderRadius: "14px",
+            padding: "24px",
+            boxShadow: "0 2px 8px rgba(6, 38, 83, 0.03)",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+            <div>
+              <h2 style={{ margin: 0, fontSize: "18px", fontWeight: "700", color: "#0B1F3A" }}>
+                Recent Quizzes
+              </h2>
+              <p style={{ margin: "2px 0 0 0", fontSize: "13px", color: "#5D78A3" }}>
+                Your latest created or updated quizzes.
+              </p>
+            </div>
+            <button
+              onClick={() => navigate("/teacher/quizzes")}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#126BFF",
+                fontWeight: "600",
+                fontSize: "13px",
+                cursor: "pointer",
+                padding: 0,
+              }}
+            >
+              View All Quizzes
+            </button>
+          </div>
+
+          {/* Table */}
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid #EBF1FA" }}>
+                  <th style={{ padding: "10px 12px", fontSize: "12px", fontWeight: "600", color: "#5D78A3" }}>Quiz Title</th>
+                  <th style={{ padding: "10px 12px", fontSize: "12px", fontWeight: "600", color: "#5D78A3" }}>Lesson</th>
+                  <th style={{ padding: "10px 12px", fontSize: "12px", fontWeight: "600", color: "#5D78A3" }}>Class</th>
+                  <th style={{ padding: "10px 12px", fontSize: "12px", fontWeight: "600", color: "#5D78A3" }}>Attempts</th>
+                  <th style={{ padding: "10px 12px", fontSize: "12px", fontWeight: "600", color: "#5D78A3" }}>Status</th>
+                  <th style={{ padding: "10px 12px", fontSize: "12px", fontWeight: "600", color: "#5D78A3", textAlign: "right" }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentQuizzes.map((quiz) => {
+                  let statusBg = "rgba(22, 185, 120, 0.1)";
+                  let statusColor = "#16B978";
+
+                  if (quiz.status === "Draft") {
+                    statusBg = "rgba(18, 107, 255, 0.1)";
+                    statusColor = "#126BFF";
+                  } else if (quiz.status === "Closed") {
+                    statusBg = "rgba(93, 120, 163, 0.1)";
+                    statusColor = "#5D78A3";
+                  }
+
+                  return (
+                    <tr key={quiz.id} style={{ borderBottom: "1px solid #F5F8FC" }}>
+                      <td style={{ padding: "12px", fontSize: "14px", fontWeight: "600", color: "#0B1F3A" }}>
+                        {quiz.title}
+                      </td>
+                      <td style={{ padding: "12px", fontSize: "13px", color: "#5D78A3" }}>
+                        {quiz.lesson}
+                      </td>
+                      <td style={{ padding: "12px", fontSize: "13px", color: "#0B1F3A", fontWeight: "500" }}>
+                        {quiz.assignedClass}
+                      </td>
+                      <td style={{ padding: "12px", fontSize: "13px", color: "#5D78A3" }}>
+                        {quiz.attempts}
+                      </td>
+                      <td style={{ padding: "12px" }}>
+                        <span
+                          style={{
+                            fontSize: "11px",
+                            fontWeight: "600",
+                            backgroundColor: statusBg,
+                            color: statusColor,
+                            padding: "4px 10px",
+                            borderRadius: "12px",
+                          }}
+                        >
+                          {quiz.status}
+                        </span>
+                      </td>
+                      <td style={{ padding: "12px", textAlign: "right" }}>
+                        <button
+                          onClick={() => navigate(quiz.status === "Draft" ? `/teacher/quizzes/${quiz.id}/edit` : `/teacher/quizzes`)}
+                          style={{
+                            backgroundColor: "transparent",
+                            border: "1px solid #DCE6F3",
+                            borderRadius: "6px",
+                            padding: "4px 12px",
+                            fontSize: "12px",
+                            fontWeight: "600",
+                            color: "#126BFF",
+                            cursor: "pointer",
+                          }}
+                        >
+                          {quiz.status === "Draft" ? "Edit" : "View"}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Right Section — Recent Materials */}
+        <div
+          style={{
+            backgroundColor: "#FFFFFF",
+            border: "1px solid #DCE6F3",
+            borderRadius: "14px",
+            padding: "24px",
+            boxShadow: "0 2px 8px rgba(6, 38, 83, 0.03)",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+          }}
+        >
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: "18px", fontWeight: "700", color: "#0B1F3A" }}>
+                  Recent Materials
+                </h2>
+                <p style={{ margin: "2px 0 0 0", fontSize: "13px", color: "#5D78A3" }}>
+                  Latest uploaded notes and videos.
+                </p>
+              </div>
+              <button
+                onClick={() => navigate("/teacher/materials")}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#126BFF",
+                  fontWeight: "600",
+                  fontSize: "13px",
+                  cursor: "pointer",
+                  padding: 0,
+                }}
+              >
+                View All
+              </button>
+            </div>
+
+            {/* Materials List */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              {recentMaterials.map((item) => {
+                let typeBg = "rgba(18, 107, 255, 0.1)";
+                let typeColor = "#126BFF";
+
+                if (item.type === "Video") {
+                  typeBg = "rgba(101, 61, 245, 0.1)";
+                  typeColor = "#653DF5";
+                } else if (item.type === "Attachment") {
+                  typeBg = "rgba(93, 120, 163, 0.1)";
+                  typeColor = "#5D78A3";
+                }
+
+                return (
+                  <div
+                    key={item.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "10px 12px",
+                      borderRadius: "10px",
+                      backgroundColor: "#F8FAFC",
+                      border: "1px solid #EDF2F7",
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: "13px", fontWeight: "600", color: "#0B1F3A" }}>
+                        {item.title}
+                      </div>
+                      <div style={{ fontSize: "11px", color: "#5D78A3", marginTop: "2px" }}>
+                        Uploaded {item.uploadDate}
+                      </div>
+                    </div>
+
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: "600",
+                        backgroundColor: typeBg,
+                        color: typeColor,
+                        padding: "3px 8px",
+                        borderRadius: "8px",
+                      }}
+                    >
+                      {item.type}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{ marginTop: "16px" }}>
+            <button
+              onClick={() => navigate("/teacher/materials/note/create")}
+              style={{
+                width: "100%",
+                backgroundColor: "#F5F8FC",
+                border: "1px dashed #DCE6F3",
+                borderRadius: "10px",
+                padding: "10px",
+                fontSize: "13px",
+                fontWeight: "600",
+                color: "#126BFF",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+              }}
+            >
+              + Upload New Material
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 5. Quick Actions Section */}
+      <div
+        style={{
+          backgroundColor: "#FFFFFF",
+          border: "1px solid #DCE6F3",
+          borderRadius: "14px",
+          padding: "20px 24px",
+          boxShadow: "0 2px 8px rgba(6, 38, 83, 0.03)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: "16px",
+        }}
+      >
+        <div>
+          <h3 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: "#0B1F3A" }}>
+            Quick Actions
+          </h3>
+          <p style={{ margin: "2px 0 0 0", fontSize: "13px", color: "#5D78A3" }}>
+            Frequently used tasks and workflow shortcuts.
+          </p>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+          <button
+            onClick={() => navigate("/teacher/quizzes/create")}
+            style={{
+              backgroundColor: "#126BFF",
+              color: "#FFFFFF",
+              border: "none",
+              borderRadius: "10px",
+              padding: "10px 18px",
+              fontSize: "13px",
+              fontWeight: "600",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              boxShadow: "0 2px 6px rgba(18, 107, 255, 0.2)",
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Create Quiz
+          </button>
+
+          <button
+            onClick={() => navigate("/teacher/materials/note/create")}
+            style={{
+              backgroundColor: "#FFFFFF",
+              color: "#126BFF",
+              border: "1px solid #126BFF",
+              borderRadius: "10px",
+              padding: "10px 18px",
+              fontSize: "13px",
+              fontWeight: "600",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            Upload Material
+          </button>
+
+          <button
+            onClick={() => navigate("/teacher/lessons")}
+            style={{
+              backgroundColor: "#FFFFFF",
+              color: "#126BFF",
+              border: "1px solid #126BFF",
+              borderRadius: "10px",
+              padding: "10px 18px",
+              fontSize: "13px",
+              fontWeight: "600",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+            </svg>
+            Add Lesson
+          </button>
+
+          <button
+            onClick={() => navigate("/teacher/reports/class")}
+            style={{
+              backgroundColor: "#FFFFFF",
+              color: "#5D78A3",
+              border: "1px solid #DCE6F3",
+              borderRadius: "10px",
+              padding: "10px 18px",
+              fontSize: "13px",
+              fontWeight: "600",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="20" x2="18" y2="10" />
+              <line x1="12" y1="20" x2="12" y2="4" />
+              <line x1="6" y1="20" x2="6" y2="14" />
+            </svg>
+            View Reports
+          </button>
+        </div>
+      </div>
+
+      {/* 6. Subtle Footer */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          fontSize: "12px",
+          color: "#5D78A3",
+          padding: "8px 4px 0 4px",
+          borderTop: "1px solid #EBF1FA",
+        }}
+      >
+        <span>Teaching smarter with EduInsight</span>
+        <span>Last updated today at 10:45 AM</span>
       </div>
     </div>
   );

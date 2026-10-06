@@ -3,16 +3,22 @@ from django.conf import settings
 
 class AuditLog(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="audit_logs")
+    actor_name = models.CharField(max_length=255, blank=True, null=True)
     role = models.CharField(max_length=50, blank=True)
     action = models.CharField(max_length=255)
     entity_type = models.CharField(max_length=255)
     entity_id = models.CharField(max_length=255, null=True, blank=True)
+    description = models.TextField(null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True, null=True)
     previous_value = models.TextField(null=True, blank=True)
     new_value = models.TextField(null=True, blank=True)
     reason = models.TextField(null=True, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True)
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     classroom_context = models.CharField(max_length=255, null=True, blank=True)
+
+    class Meta:
+        ordering = ["-timestamp"]
 
     def __str__(self):
         return f"{self.action} on {self.entity_type} at {self.timestamp}"

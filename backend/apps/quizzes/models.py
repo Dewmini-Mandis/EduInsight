@@ -183,6 +183,11 @@ class Quiz(models.Model):
 		blank=True,
 		related_name="quizzes",
 	)
+	assigned_classes = models.ManyToManyField(
+		"classes.SchoolClass",
+		blank=True,
+		related_name="multi_assigned_quizzes",
+	)
 	school = models.ForeignKey(
 		"schools.School",
 		on_delete=models.SET_NULL,
@@ -193,6 +198,7 @@ class Quiz(models.Model):
 	skills = models.ManyToManyField(Skill, blank=True, related_name="multi_skill_quizzes")
 	created_at = models.DateTimeField(auto_now_add=True)
 	max_attempts = models.PositiveIntegerField(default=3)
+	is_deleted = models.BooleanField(default=False)
 
 	def get_covered_skills(self):
 		skills = set()
@@ -203,10 +209,6 @@ class Quiz(models.Model):
 		qs_skill_ids = set(self.questions.exclude(skill_id=None).values_list("skill_id", flat=True))
 		if qs_skill_ids:
 			skills.update(Skill.objects.filter(id__in=qs_skill_ids))
-		if not skills and self.topic_id:
-			skills.update(self.topic.skills.all())
-		if not skills and self.lesson_id:
-			skills.update(self.lesson.skills.all())
 		return list(skills)
 
 	def __str__(self) -> str:

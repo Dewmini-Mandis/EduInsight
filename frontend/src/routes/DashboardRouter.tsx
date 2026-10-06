@@ -58,7 +58,7 @@ const DashboardRouter = () => {
     case "TEACHER":
       return <Navigate to="/teacher/dashboard" replace />;
     case "STUDENT":
-      return <Navigate to="/student/dashboard" replace />;
+      return <Navigate to="/student/my-learning" replace />;
     default:
       return <Navigate to="/login" replace />;
   }

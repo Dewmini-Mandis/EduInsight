@@ -6,22 +6,6 @@ import LessonCard, { LessonData } from "../../components/student/LessonCard";
 import { getToken } from "../../auth/authUtils";
 import "../../styles/student.css";
 
-const fallbackLessonsMap: Record<string, LessonData[]> = {
-  "Term 1": [
-    { id: "perimeter", title: "Perimeter", status: "Pending", progress: 0, quizzesCount: 2, estimatedMinutes: 30 },
-    { id: "square-root", title: "Square Root", status: "Pending", progress: 0, quizzesCount: 2, estimatedMinutes: 30 },
-    { id: "fractions", title: "Fractions", status: "Pending", progress: 0, quizzesCount: 0, estimatedMinutes: 0 },
-  ],
-  "Term 2": [
-    { id: "algebra", title: "Basic Algebra", status: "Pending", progress: 0, quizzesCount: 3, estimatedMinutes: 45 },
-    { id: "geometry", title: "Geometry Fundamentals", status: "Pending", progress: 0, quizzesCount: 2, estimatedMinutes: 30 },
-  ],
-  "Term 3": [
-    { id: "trigonometry", title: "Trigonometry Intro", status: "Pending", progress: 0, quizzesCount: 4, estimatedMinutes: 60 },
-    { id: "calculus-prep", title: "Pre-Calculus", status: "Pending", progress: 0, quizzesCount: 2, estimatedMinutes: 30 },
-  ],
-};
-
 const TermLessonsPage: React.FC = () => {
   const { termName: paramTerm } = useParams<{ termName: string }>();
   const termName = paramTerm ? decodeURIComponent(paramTerm) : "Term 1";
@@ -63,7 +47,11 @@ const TermLessonsPage: React.FC = () => {
 
           if (filtered.length > 0) {
             const mapped: LessonData[] = filtered.map((l) => {
-              const lQuizzes = quizzesList.filter((q) => q.lesson === l.id);
+              const lQuizzes = quizzesList.filter((q) => {
+                const qLessonId = typeof q.lesson === "object" ? q.lesson?.id : q.lesson;
+                return String(qLessonId) === String(l.id);
+              });
+
               const completedQuizzes = lQuizzes.filter((q) =>
                 attemptsList.some((att) => att.quiz === q.id && att.score >= (q.pass_mark || 75))
               ).length;
@@ -97,8 +85,7 @@ const TermLessonsPage: React.FC = () => {
         console.error("Error fetching term lessons:", err);
       }
 
-      // Fallback matching screenshot 1
-      setLessons(fallbackLessonsMap[termName] || fallbackLessonsMap["Term 1"]);
+      setLessons([]);
       setLoading(false);
     };
 
@@ -106,9 +93,9 @@ const TermLessonsPage: React.FC = () => {
   }, [termName]);
 
   const breadcrumbsList = [
-    { label: "Home", path: "/student/learning-path" },
-    { label: "Learning Path", path: "/student/learning-path" },
-    { label: termName, path: `/student/learning-path/term/${encodeURIComponent(termName)}/lessons` },
+    { label: "Home", path: "/student/my-learning" },
+    { label: "My Learning", path: "/student/my-learning" },
+    { label: termName, path: `/student/my-learning/term/${encodeURIComponent(termName)}/lessons` },
     { label: "Lessons" },
   ];
 

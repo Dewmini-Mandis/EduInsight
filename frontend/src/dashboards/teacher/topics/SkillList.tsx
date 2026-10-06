@@ -25,6 +25,7 @@ interface SkillListProps {
   newSkillName: string;
   setNewSkillName: (val: string) => void;
   skillSubmitting: boolean;
+  isReadOnly?: boolean;
 }
 
 const SkillList: React.FC<SkillListProps> = ({
@@ -37,7 +38,8 @@ const SkillList: React.FC<SkillListProps> = ({
   onSubmitSkill,
   newSkillName,
   setNewSkillName,
-  skillSubmitting
+  skillSubmitting,
+  isReadOnly = false
 }) => {
   const isMobile = useMediaQuery("(max-width: 768px)");
 
@@ -65,18 +67,21 @@ const SkillList: React.FC<SkillListProps> = ({
             key={skill.id} 
             skill={skill} 
             onRemove={(skillId) => onRemoveSkill(skillId, topicId)} 
+            isReadOnly={isReadOnly}
           />
         ))}
 
-        <AddSkillButton
-          isAdding={isAdding}
-          onStartAdding={onStartAdding}
-          onCancel={onCancelAdding}
-          onSubmit={(e) => onSubmitSkill(e, topicId)}
-          newSkillName={newSkillName}
-          setNewSkillName={setNewSkillName}
-          isSubmitting={skillSubmitting}
-        />
+        {!isReadOnly && (
+          <AddSkillButton
+            isAdding={isAdding}
+            onStartAdding={onStartAdding}
+            onCancel={onCancelAdding}
+            onSubmit={(e) => onSubmitSkill(e, topicId)}
+            newSkillName={newSkillName}
+            setNewSkillName={setNewSkillName}
+            isSubmitting={skillSubmitting}
+          />
+        )}
       </div>
     </div>
   );

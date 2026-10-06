@@ -1,1715 +1,560 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import { getToken, getUser } from "../../auth/authUtils";
-import "../../styles/admin.css";
-import AdminTeachers from "./AdminTeachers";
-import AdminStudents from "./AdminStudents";
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  Users,
+  BookOpen,
+  School as SchoolIcon,
+  PlusCircle,
+  Activity,
+  ArrowRight,
+  UserCheck,
+  Award,
+  Trash2,
+  Clock,
+} from "lucide-react";
+import { getToken } from "../../auth/authUtils";
 
-import AdminSchools from './AdminSchools';
-type SystemUser = {
+interface ActivityItem {
   id: number;
-  username: string;
-  email: string;
-  first_name: string;
-  last_name: string;
-  full_name?: string;
-  role?: string | null;
-  is_active: boolean;
-  school_id?: number | null;
-  student_profile?: {
-    index_no?: string;
-    grade?: string;
-    class_name?: string;
-  } | null;
-  teacher_profile?: {
-    subjects?: string[];
-  } | null;
+  actor_name?: string;
+  role?: string;
+  action: string;
+  entity_type: string;
+  entity_id?: string;
+  description?: string;
+  timestamp: string;
+}
+
+const formatRelativeTime = (timestampString: string): string => {
+  if (!timestampString) return "";
+  const date = new Date(timestampString);
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  if (diffInSeconds < 60) return "Just now";
+  const diffInMinutes = Math.floor(diffInSeconds / 60);
+  if (diffInMinutes < 60) return `${diffInMinutes} min ago`;
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  if (diffInHours < 24) return `${diffInHours} ${diffInHours === 1 ? "hour" : "hours"} ago`;
+  const diffInDays = Math.floor(diffInHours / 24);
+  if (diffInDays === 1) return "Yesterday";
+  if (diffInDays < 7) return `${diffInDays} days ago`;
+  return date.toLocaleDateString();
 };
 
-type School = {
-  id: number;
-  name: string;
-  location: string;
-  address: string;
-  province: string;
-  district: string;
-  zone: string;
-  educational_zone: string;
-  created_by?: number | null;
-  created_at?: string;
+const getCleanActivityDescription = (act: ActivityItem): string => {
+  let desc = (act.description || "").trim();
+  
+  // If description is missing or is identical to raw code string like "UPDATED_USER User"
+  if (
+    !desc ||
+    desc.toUpperCase().includes("UPDATED_USER") ||
+    desc.toUpperCase().includes("CREATED_USER") ||
+    desc.toUpperCase().includes("DELETED_USER") ||
+    desc === `${act.action} ${act.entity_type}`
+  ) {
+    const rawAction = (act.action || "").toUpperCase();
+    const rawEntity = (act.entity_type || "").toUpperCase();
+
+    if (rawAction.includes("UPDATE") || rawAction.includes("EDIT")) {
+      if (rawEntity.includes("TEACHER")) return "Updated teacher account details";
+      if (rawEntity.includes("STUDENT")) return "Updated student account details";
+      if (rawEntity.includes("USER")) return "Updated user account details";
+      if (rawEntity.includes("LESSON")) return "Updated lesson content";
+      if (rawEntity.includes("SKILL")) return "Updated skill information";
+      return `Updated ${act.entity_type ? act.entity_type.toLowerCase() : "record"}`;
+    }
+    if (rawAction.includes("CREATE") || rawAction.includes("ADD")) {
+      if (rawEntity.includes("TEACHER")) return "Created new teacher account";
+      if (rawEntity.includes("STUDENT")) return "Created new student account";
+      if (rawEntity.includes("USER")) return "Created new user account";
+      if (rawEntity.includes("LESSON")) return "Created new lesson";
+      if (rawEntity.includes("SKILL")) return "Created new skill";
+      return `Created new ${act.entity_type ? act.entity_type.toLowerCase() : "record"}`;
+    }
+    if (rawAction.includes("DELETE") || rawAction.includes("REMOVE")) {
+      if (rawEntity.includes("TEACHER")) return "Deleted teacher account";
+      if (rawEntity.includes("STUDENT")) return "Deleted student account";
+      if (rawEntity.includes("USER")) return "Deleted user account";
+      if (rawEntity.includes("LESSON")) return "Deleted lesson";
+      if (rawEntity.includes("SKILL")) return "Deleted skill";
+      return `Deleted ${act.entity_type ? act.entity_type.toLowerCase() : "record"}`;
+    }
+    if (rawAction.includes("LOGIN")) return "User logged into system";
+    if (rawAction.includes("LOGOUT")) return "User logged out of system";
+
+    const cleaned = rawAction.replace(/_/g, " ").toLowerCase();
+    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+  }
+
+  return desc;
 };
 
-type CurrentUser = {
-  username?: string;
-  email?: string;
-  first_name?: string;
-  last_name?: string;
+const getCleanActorName = (act: ActivityItem): string => {
+  if (act.actor_name && act.actor_name.trim()) {
+    return act.actor_name.trim();
+  }
+  return "System Administrator";
+};
+
+// Compact SVG Doughnut Chart for User Overview (Teachers + Students ONLY)
+const RenderUserOverviewDoughnut: React.FC<{
+  teachers: number;
+  students: number;
+}> = ({ teachers, students }) => {
+  const total = teachers + students || 1;
+  const radius = 50;
+  const circumference = 2 * Math.PI * radius;
+
+  const segs = [
+    { label: "Students", count: students, color: "#126BFF" },
+    { label: "Teachers", count: teachers, color: "#10B981" },
+  ];
+
+  let accumulatedAngle = 0;
+
+  return (
+    <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center" }}>
+      <div style={{ display: "flex", justifyContent: "center", gap: "16px", marginBottom: "16px", flexWrap: "wrap" }}>
+        {segs.map((s) => (
+          <div key={s.label} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", fontWeight: 600, color: "#5D78A3" }}>
+            <span style={{ width: "10px", height: "10px", borderRadius: "50%", backgroundColor: s.color }} />
+            {s.label} ({s.count})
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", position: "relative", height: "140px" }}>
+        <svg width="140" height="140" viewBox="0 0 140 140">
+          <g transform="rotate(-90 70 70)">
+            {segs.map((seg) => {
+              const dashOffset = circumference - (seg.count / total) * circumference;
+              const rotation = accumulatedAngle;
+              accumulatedAngle += (seg.count / total) * 360;
+
+              return (
+                <circle
+                  key={seg.label}
+                  cx="70"
+                  cy="70"
+                  r={radius}
+                  fill="transparent"
+                  stroke={seg.color}
+                  strokeWidth="14"
+                  strokeDasharray={`${circumference} ${circumference}`}
+                  strokeDashoffset={dashOffset}
+                  transform={`rotate(${rotation} 70 70)`}
+                />
+              );
+            })}
+          </g>
+        </svg>
+        <div style={{ position: "absolute", textAlign: "center", pointerEvents: "none" }}>
+          <div style={{ fontSize: "20px", fontWeight: 700, color: "#0B1F3A" }}>{teachers + students}</div>
+          <div style={{ fontSize: "11px", color: "#5D78A3" }}>Total Users</div>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 const SystemAdminDashboard = () => {
   const navigate = useNavigate();
-  const currentUser = getUser() as CurrentUser | null;
-  
-  const [users, setUsers] = useState<SystemUser[]>([]);
-  const [schools, setSchools] = useState<School[]>([]);
-  const [schoolsCount, setSchoolsCount] = useState(0);
-  const [logs, setLogs] = useState<any[]>([]);
-  const [logsLoading, setLogsLoading] = useState(true);
 
-  useEffect(() => {
-    fetchLogs();
-  }, []);
+  const [teacherCount, setTeacherCount] = useState<number>(0);
+  const [studentCount, setStudentCount] = useState<number>(0);
+  const [classCount, setClassCount] = useState<number>(0);
+  const [lessonCount, setLessonCount] = useState<number>(0);
+  const [termCount, setTermCount] = useState<number>(0);
 
-  const fetchLogs = async () => {
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [activitiesError, setActivitiesError] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const fetchDashboardData = async () => {
     const token = getToken();
     if (!token) return;
-    try {
-      const res = await fetch("/api/accounts/access-logs/", {
-        headers: { Authorization: `Token ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setLogs(data.results || data);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLogsLoading(false);
-    }
-  };
-
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
-  
-  // Tabs & Navigation
-  const location = useLocation();
-  const activeTab = useMemo(() => {
-    const path = location.pathname;
-    if (path.includes("/classrooms")) return "classrooms";
-    if (path.includes("/teachers")) return "teachers";
-    if (path.includes("/students")) return "students";
-    if (path.includes("/schools")) return "schools";
-    if (path.includes("/logs")) return "logs";
-    if (path.includes("/users")) return "users";
-    return "dashboard";
-  }, [location.pathname]);
-  const [actionLoading, setActionLoading] = useState(false);
-
-  // User filter states
-  const [filterQuery, setFilterQuery] = useState("");
-  const [filterRole, setFilterRole] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
-
-  // School filter states
-  const [schoolsQuery, setSchoolsQuery] = useState("");
-  const [schoolsProvince, setSchoolsProvince] = useState("all");
-  const [schoolsDistrict, setSchoolsDistrict] = useState("all");
-  const [schoolsZone, setSchoolsZone] = useState("all");
-  const [schoolsEducationalZone, setSchoolsEducationalZone] = useState("all");
-  const [schoolsSortKey, setSchoolsSortKey] = useState("name_asc");
-
-  // User modal states
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<SystemUser | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<SystemUser | null>(null);
-
-  // School modal states
-  const [showSchoolCreateModal, setShowSchoolCreateModal] = useState(false);
-  const [showSchoolEditModal, setShowSchoolEditModal] = useState(false);
-  const [showSchoolDeleteModal, setShowSchoolDeleteModal] = useState(false);
-  const [selectedSchool, setSelectedSchool] = useState<School | null>(null);
-  const [schoolDeleteTarget, setSchoolDeleteTarget] = useState<School | null>(null);
-
-  // Form states
-  const [createForm, setCreateForm] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    password: "",
-    role: "NATIONAL_ADMIN",
-    schoolId: "",
-    indexNo: "",
-    grade: "",
-    className: "",
-    subjects: "",
-  });
-  const [createErrors, setCreateErrors] = useState<Record<string, string>>({});
-  
-  const [editForm, setEditForm] = useState({
-    firstName: "",
-    lastName: "",
-    role: "",
-    schoolId: "",
-    indexNo: "",
-    grade: "",
-    className: "",
-    subjects: "",
-  });
-  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
-  const [showCreatePassword, setShowCreatePassword] = useState(false);
-
-  const [schoolCreateForm, setSchoolCreateForm] = useState({
-    name: "",
-    address: "",
-    province: "",
-    district: "",
-    zone: "",
-    educationalZone: "",
-  });
-  const [schoolCreateErrors, setSchoolCreateErrors] = useState<Record<string, string>>({});
-
-  const [schoolEditForm, setSchoolEditForm] = useState({
-    name: "",
-    address: "",
-    province: "",
-    district: "",
-    zone: "",
-    educationalZone: "",
-  });
-  const [schoolEditErrors, setSchoolEditErrors] = useState<Record<string, string>>({});
-
-  // Auto-dismiss notifications after 4 seconds
-  useEffect(() => {
-    if (successMessage) {
-      const timer = setTimeout(() => {
-        setSuccessMessage("");
-      }, 4000);
-      return () => clearTimeout(timer);
-    }
-  }, [successMessage]);
-
-  const mapFieldKey = (key: string) => {
-    if (key === "first_name") return "firstName";
-    if (key === "last_name") return "lastName";
-    if (key === "school_id") return "schoolId";
-    if (key === "educational_zone") return "educationalZone";
-    return key;
-  };
-
-  const extractFieldErrors = (payload: unknown) => {
-    if (!payload || typeof payload !== "object") return {} as Record<string, string>;
-    const nextErrors: Record<string, string> = {};
-    Object.entries(payload as Record<string, unknown>).forEach(([key, value]) => {
-      if (key === "detail" || key === "non_field_errors") return;
-      const mappedKey = mapFieldKey(key);
-      if (Array.isArray(value)) {
-        nextErrors[mappedKey] = value.join(" ");
-      } else if (typeof value === "string") {
-        nextErrors[mappedKey] = value;
-      }
-    });
-    return nextErrors;
-  };
-
-  const extractDetailMessage = (payload: unknown) => {
-    if (!payload || typeof payload !== "object") return "";
-    const record = payload as Record<string, unknown>;
-    if (typeof record.detail === "string") return record.detail;
-    if (Array.isArray(record.non_field_errors)) {
-      return record.non_field_errors.join(" ");
-    }
-    return "";
-  };
-
-  const loadData = async (token: string) => {
     setLoading(true);
-    setError("");
+    setActivitiesError(false);
     try {
-      const [usersResult, schoolsResult] = await Promise.allSettled([
-        fetch("/api/accounts/users/", {
-          headers: { Authorization: `Token ${token}` },
-        }),
-        fetch("/api/schools/", {
-          headers: { Authorization: `Token ${token}` },
-        }),
+      const [statsRes, usersRes, classesRes, lessonsRes, termsRes, activitiesRes] = await Promise.all([
+        fetch("/api/accounts/users/stats/", { headers: { Authorization: `Token ${token}` } }),
+        fetch("/api/accounts/users/?page_size=1000", { headers: { Authorization: `Token ${token}` } }),
+        fetch("/api/classes/classrooms/?page_size=1000", { headers: { Authorization: `Token ${token}` } }),
+        fetch("/api/quizzes/lessons/?page_size=1000", { headers: { Authorization: `Token ${token}` } }),
+        fetch("/api/quizzes/terms/?page_size=1000", { headers: { Authorization: `Token ${token}` } }),
+        fetch("/api/accounts/activities/?limit=8", { headers: { Authorization: `Token ${token}` } }),
       ]);
 
-      let nextError = "";
+      if (statsRes.ok) {
+        const stats = await statsRes.json();
+        setTeacherCount(typeof stats.teachers === "number" ? stats.teachers : 0);
+        setStudentCount(typeof stats.students === "number" ? stats.students : 0);
+      } else if (usersRes.ok) {
+        const users = await usersRes.json();
+        const userList: any[] = Array.isArray(users) ? users : users.results || [];
+        const teachers = userList.filter((u) => {
+          const r = typeof u.role === "string" ? u.role : u.role?.role_name || "";
+          return r.toUpperCase() === "TEACHER" || r.toUpperCase() === "ROLE_TEACHER";
+        });
+        const students = userList.filter((u) => {
+          const r = typeof u.role === "string" ? u.role : u.role?.role_name || "";
+          return r.toUpperCase() === "STUDENT" || r.toUpperCase() === "ROLE_STUDENT";
+        });
 
-      if (usersResult.status === "fulfilled") {
-        if (!usersResult.value.ok) {
-          nextError = "Failed to load users";
-        } else {
-          const usersData = (await usersResult.value.json()) as SystemUser[];
-          setUsers(usersData);
-        }
-      } else {
-        nextError = "Failed to load users";
+        setTeacherCount(teachers.length);
+        setStudentCount(students.length);
       }
 
-      if (schoolsResult.status === "fulfilled") {
-        if (schoolsResult.value.ok) {
-          const schoolsData = (await schoolsResult.value.json()) as School[];
-          setSchools(schoolsData);
-          setSchoolsCount(Array.isArray(schoolsData) ? schoolsData.length : 0);
-        } else {
-          setSchools([]);
-          setSchoolsCount(0);
-          if (!nextError) nextError = "Failed to load schools";
-        }
-      } else {
-        setSchools([]);
-        setSchoolsCount(0);
-        if (!nextError) nextError = "Failed to load schools";
+      if (classesRes.ok) {
+        const classes = await classesRes.json();
+        const count = typeof classes.count === "number" ? classes.count : Array.isArray(classes) ? classes.length : (classes.results || []).length;
+        setClassCount(count);
       }
 
-      if (nextError) setError(nextError);
-    } catch (err: any) {
-      setError(err?.message || "Unable to load data.");
+      if (lessonsRes.ok) {
+        const lessons = await lessonsRes.json();
+        const count = typeof lessons.count === "number" ? lessons.count : Array.isArray(lessons) ? lessons.length : (lessons.results || []).length;
+        setLessonCount(count);
+      }
+
+      if (termsRes.ok) {
+        const terms = await termsRes.json();
+        const count = typeof terms.count === "number" ? terms.count : Array.isArray(terms) ? terms.length : (terms.results || []).length;
+        setTermCount(count);
+      }
+
+      if (activitiesRes.ok) {
+        const actData = await activitiesRes.json();
+        const actList = Array.isArray(actData) ? actData : actData.results || [];
+        setActivities(actList);
+      } else {
+        const fallbackRes = await fetch("/api/audit/activities/?limit=8", { headers: { Authorization: `Token ${token}` } });
+        if (fallbackRes.ok) {
+          const actData = await fallbackRes.json();
+          setActivities(Array.isArray(actData) ? actData : actData.results || []);
+        } else {
+          setActivitiesError(true);
+        }
+      }
+    } catch (err) {
+      console.error("Error loading admin dashboard data", err);
+      setActivitiesError(true);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    const token = getToken();
-    if (!token) {
-      setError("Missing authentication token.");
-      setLoading(false);
-      return;
-    }
-
-    loadData(token);
+    fetchDashboardData();
   }, []);
 
-  // Sorted users & schools
-  const sortedUsers = useMemo(() => {
-    return [...users].sort((a, b) => a.id - b.id);
-  }, [users]);
+  const renderActivityIcon = (entityType: string, action: string) => {
+    const et = (entityType || "").toUpperCase();
+    const act = (action || "").toUpperCase();
 
-  const sortedSchools = useMemo(() => {
-    return [...schools].sort((a, b) => a.id - b.id);
-  }, [schools]);
-
-  const formatRole = (role?: string | null) => {
-    if (!role) return "Unknown";
-    return role
-      .toLowerCase()
-      .split("_")
-      .map((chunk) => chunk.charAt(0).toUpperCase() + chunk.slice(1))
-      .join(" ");
-  };
-
-  const getInitials = (user: SystemUser) => {
-    const source = user.full_name || `${user.first_name} ${user.last_name}`.trim();
-    if (source) {
-      return source
-        .split(" ")
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((part) => part.charAt(0).toUpperCase())
-        .join("");
-    }
-    return (user.username || user.email || "U").slice(0, 2).toUpperCase();
-  };
-
-  const currentInitials = useMemo(() => {
-    if (!currentUser) return "NA";
-    const source = `${currentUser.first_name || ""} ${currentUser.last_name || ""}`.trim();
-    if (source) {
-      return source
-        .split(" ")
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((part) => part.charAt(0).toUpperCase())
-        .join("");
-    }
-    return (currentUser.username || currentUser.email || "U").slice(0, 2).toUpperCase();
-  }, [currentUser]);
-
-  const currentDisplayName = useMemo(() => {
-    if (!currentUser) return "System Admin";
-    const fullName = `${currentUser.first_name || ""} ${currentUser.last_name || ""}`.trim();
-    return fullName || "System Admin";
-  }, [currentUser]);
-
-  // Form Changes
-  const handleCreateChange = (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = event.target;
-    setCreateErrors((prev) => ({ ...prev, [name]: "" }));
-    setCreateForm((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleEditChange = (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = event.target;
-    setEditErrors((prev) => ({ ...prev, [name]: "" }));
-    setEditForm((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleSchoolCreateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = event.target;
-    setSchoolCreateErrors((prev) => ({ ...prev, [name]: "" }));
-    setSchoolCreateForm((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleSchoolEditChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = event.target;
-    setSchoolEditErrors((prev) => ({ ...prev, [name]: "" }));
-    setSchoolEditForm((prev) => ({ ...prev, [name]: value }));
-  };
-
-  // Validations
-  const validateCreateForm = () => {
-    const nextErrors: Record<string, string> = {};
-    if (!createForm.firstName.trim()) nextErrors.firstName = "First name is required.";
-    if (!createForm.lastName.trim()) nextErrors.lastName = "Last name is required.";
-    if (!createForm.email.trim()) {
-      nextErrors.email = "Email address is required.";
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(createForm.email)) {
-      nextErrors.email = "Enter a valid email address.";
-    }
-    if (!createForm.password.trim()) {
-      nextErrors.password = "Password is required.";
-    } else if (createForm.password.length < 8) {
-      nextErrors.password = "Password must be at least 8 characters.";
-    }
-    if (["SCHOOL_ADMIN", "TEACHER", "STUDENT"].includes(createForm.role) && !createForm.schoolId) {
-      nextErrors.schoolId = "School assignment is required.";
-    }
-    if (createForm.role === "STUDENT") {
-      if (!createForm.indexNo.trim()) nextErrors.indexNo = "Index number is required.";
-      if (!createForm.grade.trim()) nextErrors.grade = "Grade is required.";
-      if (!createForm.className.trim()) nextErrors.className = "Class name is required.";
-    }
-    if (createForm.role === "TEACHER") {
-      if (!createForm.subjects.trim()) nextErrors.subjects = "Subjects are required.";
-    }
-    setCreateErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
-  };
-
-  const validateEditForm = () => {
-    const nextErrors: Record<string, string> = {};
-    if (!editForm.firstName.trim()) nextErrors.firstName = "First name is required.";
-    if (!editForm.lastName.trim()) nextErrors.lastName = "Last name is required.";
-    if (["SCHOOL_ADMIN", "TEACHER", "STUDENT"].includes(editForm.role) && !editForm.schoolId) {
-      nextErrors.schoolId = "School assignment is required.";
-    }
-    if (editForm.role === "STUDENT") {
-      if (!editForm.indexNo.trim()) nextErrors.indexNo = "Index number is required.";
-      if (!editForm.grade.trim()) nextErrors.grade = "Grade is required.";
-      if (!editForm.className.trim()) nextErrors.className = "Class name is required.";
-    }
-    if (editForm.role === "TEACHER") {
-      if (!editForm.subjects.trim()) nextErrors.subjects = "Subjects are required.";
-    }
-    setEditErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
-  };
-
-  const validateSchoolCreateForm = () => {
-    const nextErrors: Record<string, string> = {};
-    if (!schoolCreateForm.name.trim()) nextErrors.name = "School name is required.";
-    if (!schoolCreateForm.address.trim()) nextErrors.address = "Address is required.";
-    if (!schoolCreateForm.province.trim()) nextErrors.province = "Province is required.";
-    if (!schoolCreateForm.district.trim()) nextErrors.district = "District is required.";
-    if (!schoolCreateForm.zone.trim()) nextErrors.zone = "Zone is required.";
-    if (!schoolCreateForm.educationalZone.trim()) nextErrors.educationalZone = "Educational zone is required.";
-    setSchoolCreateErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
-  };
-
-  const validateSchoolEditForm = () => {
-    const nextErrors: Record<string, string> = {};
-    if (!schoolEditForm.name.trim()) nextErrors.name = "School name is required.";
-    if (!schoolEditForm.address.trim()) nextErrors.address = "Address is required.";
-    if (!schoolEditForm.province.trim()) nextErrors.province = "Province is required.";
-    if (!schoolEditForm.district.trim()) nextErrors.district = "District is required.";
-    if (!schoolEditForm.zone.trim()) nextErrors.zone = "Zone is required.";
-    if (!schoolEditForm.educationalZone.trim()) nextErrors.educationalZone = "Educational zone is required.";
-    setSchoolEditErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
-  };
-
-  // User Actions
-  const handleCreateUser = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setError("");
-    setSuccessMessage("");
-    if (!validateCreateForm()) return;
-    const token = getToken();
-    if (!token) {
-      setError("Missing authentication token.");
-      return;
-    }
-    setActionLoading(true);
-    
-    const payload: any = {
-      first_name: createForm.firstName.trim(),
-      last_name: createForm.lastName.trim(),
-      email: createForm.email.trim(),
-      username: createForm.email.trim(),
-      password: createForm.password,
-      role: createForm.role,
-    };
-    if (["SCHOOL_ADMIN", "TEACHER", "STUDENT"].includes(createForm.role)) {
-      payload.school_id = createForm.schoolId ? Number(createForm.schoolId) : null;
-    }
-    if (createForm.role === "STUDENT") {
-      payload.index_no = createForm.indexNo.trim();
-      payload.grade = createForm.grade.trim();
-      payload.class_name = createForm.className.trim();
-    }
-    if (createForm.role === "TEACHER") {
-      payload.subjects = createForm.subjects.split(",").map(s => s.trim()).filter(Boolean);
-    }
-
-    try {
-      const res = await fetch("/api/accounts/users/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Token ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const payloadErr = await res.json().catch(() => ({}));
-        const nextErrors = extractFieldErrors(payloadErr);
-        if (Object.keys(nextErrors).length > 0) {
-          setCreateErrors(nextErrors);
-        }
-        throw new Error(extractDetailMessage(payloadErr) || "Unable to create user");
-      }
-
-      const createdUser = (await res.json()) as SystemUser;
-      // Update local state immediately
-      setUsers((prev) => [...prev, createdUser]);
-      
-      setShowCreateModal(false);
-      setCreateForm({
-        firstName: "",
-        lastName: "",
-        email: "",
-        password: "",
-        role: "NATIONAL_ADMIN",
-        schoolId: "",
-        indexNo: "",
-        grade: "",
-        className: "",
-        subjects: "",
-      });
-      setActionLoading(false);
-      setSuccessMessage("User created successfully.");
-      
-      // Sync list
-      await loadData(token);
-    } catch (err: any) {
-      setError(err.message || "Unable to create user");
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleOpenEditModal = (user: SystemUser) => {
-    setSelectedUser(user);
-    setEditForm({
-      firstName: user.first_name || "",
-      lastName: user.last_name || "",
-      role: user.role || "SYSTEM_ADMIN",
-      schoolId: user.school_id ? String(user.school_id) : "",
-      indexNo: user.student_profile?.index_no || "",
-      grade: user.student_profile?.grade || "",
-      className: user.student_profile?.class_name || "",
-      subjects: user.teacher_profile?.subjects?.join(", ") || "",
-    });
-    setEditErrors({});
-    setShowEditModal(true);
-  };
-
-  const handleEditUser = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!selectedUser) return;
-    setError("");
-    setSuccessMessage("");
-    if (!validateEditForm()) return;
-    const token = getToken();
-    if (!token) {
-      setError("Missing authentication token.");
-      return;
-    }
-    setActionLoading(true);
-
-    const payload: any = {
-      first_name: editForm.firstName.trim(),
-      last_name: editForm.lastName.trim(),
-      role: editForm.role,
-    };
-    if (["SCHOOL_ADMIN", "TEACHER", "STUDENT"].includes(editForm.role)) {
-      payload.school_id = editForm.schoolId ? Number(editForm.schoolId) : null;
-    } else {
-      payload.school_id = null;
-    }
-    if (editForm.role === "STUDENT") {
-      payload.index_no = editForm.indexNo.trim();
-      payload.grade = editForm.grade.trim();
-      payload.class_name = editForm.className.trim();
-    }
-    if (editForm.role === "TEACHER") {
-      payload.subjects = editForm.subjects.split(",").map(s => s.trim()).filter(Boolean);
-    }
-
-    try {
-      const res = await fetch(`/api/accounts/users/${selectedUser.id}/`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Token ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const payloadErr = await res.json().catch(() => ({}));
-        const nextErrors = extractFieldErrors(payloadErr);
-        if (Object.keys(nextErrors).length > 0) {
-          setEditErrors(nextErrors);
-        }
-        throw new Error(extractDetailMessage(payloadErr) || "Unable to update user");
-      }
-
-      const updatedUser = (await res.json().catch(() => null)) as SystemUser | null;
-      if (updatedUser) {
-        setUsers((prev) =>
-          prev.map((item) => (item.id === updatedUser.id ? { ...item, ...updatedUser } : item))
-        );
-      }
-      setShowEditModal(false);
-      setSelectedUser(null);
-      setActionLoading(false);
-      setSuccessMessage("User updated successfully.");
-      
-      // Sync list
-      await loadData(token);
-    } catch (err: any) {
-      setError(err.message || "Unable to update user");
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleToggleUser = async (user: SystemUser) => {
-    setError("");
-    setSuccessMessage("");
-    const token = getToken();
-    if (!token) {
-      setError("Missing authentication token.");
-      return;
-    }
-    setActionLoading(true);
-    
-    // Update local state instantly
-    setUsers((prev) =>
-      prev.map((item) =>
-        item.id === user.id ? { ...item, is_active: !item.is_active } : item
-      )
-    );
-
-    try {
-      const res = await fetch(`/api/accounts/users/${user.id}/`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Token ${token}`,
-        },
-        body: JSON.stringify({ is_active: !user.is_active }),
-      });
-      if (!res.ok) {
-        const payload = await res.json().catch(() => ({}));
-        // Revert local state on error
-        setUsers((prev) =>
-          prev.map((item) =>
-            item.id === user.id ? { ...item, is_active: user.is_active } : item
-          )
-        );
-        throw new Error(extractDetailMessage(payload) || "Unable to update status");
-      }
-      setActionLoading(false);
-      setSuccessMessage("User status updated successfully.");
-      await loadData(token);
-    } catch (err: any) {
-      setError(err.message || "Unable to update status");
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleOpenDeleteModal = (user: SystemUser) => {
-    setDeleteTarget(user);
-    setShowDeleteModal(true);
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!deleteTarget) return;
-    const targetId = deleteTarget.id;
-    setError("");
-    setSuccessMessage("");
-    const token = getToken();
-    if (!token) {
-      setError("Missing authentication token.");
-      return;
-    }
-    setActionLoading(true);
-    
-    // Update local state instantly
-    setUsers((prev) => prev.filter((item) => item.id !== targetId));
-    setShowDeleteModal(false);
-    setDeleteTarget(null);
-
-    try {
-      const res = await fetch(`/api/accounts/users/${targetId}/`, {
-        method: "DELETE",
-        headers: { Authorization: `Token ${token}` },
-      });
-      if (!res.ok) {
-        const payload = await res.json().catch(() => ({}));
-        // Revert on failure by reloading
-        await loadData(token);
-        throw new Error(extractDetailMessage(payload) || "Unable to delete user");
-      }
-      setActionLoading(false);
-      setSuccessMessage("User deleted successfully.");
-      await loadData(token);
-    } catch (err: any) {
-      setError(err.message || "Unable to delete user");
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  // School Actions
-  const handleOpenSchoolCreateModal = () => {
-    setSchoolCreateForm({
-      name: "",
-      address: "",
-      province: "",
-      district: "",
-      zone: "",
-      educationalZone: "",
-    });
-    setSchoolCreateErrors({});
-    setShowSchoolCreateModal(true);
-  };
-
-  const handleCreateSchool = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setError("");
-    setSuccessMessage("");
-    if (!validateSchoolCreateForm()) return;
-    const token = getToken();
-    if (!token) {
-      setError("Missing authentication token.");
-      return;
-    }
-    setActionLoading(true);
-
-    const payload = {
-      name: schoolCreateForm.name.trim(),
-      location: schoolCreateForm.address.trim() || schoolCreateForm.name.trim(),
-      address: schoolCreateForm.address.trim(),
-      province: schoolCreateForm.province.trim(),
-      district: schoolCreateForm.district.trim(),
-      zone: schoolCreateForm.zone.trim(),
-      educational_zone: schoolCreateForm.educationalZone.trim(),
-    };
-
-    try {
-      const res = await fetch("/api/schools/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Token ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const payloadErr = await res.json().catch(() => ({}));
-        const nextErrors = extractFieldErrors(payloadErr);
-        if (Object.keys(nextErrors).length > 0) {
-          setSchoolCreateErrors(nextErrors);
-        }
-        throw new Error(extractDetailMessage(payloadErr) || "Unable to create school");
-      }
-
-      const createdSchool = (await res.json()) as School;
-      // Update local state instantly
-      setSchools((prev) => [...prev, createdSchool]);
-      setSchoolsCount((c) => c + 1);
-
-      setShowSchoolCreateModal(false);
-      setActionLoading(false);
-      setSuccessMessage("School created successfully.");
-      await loadData(token);
-    } catch (err: any) {
-      setError(err.message || "Unable to create school");
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const handleOpenSchoolEditModal = (school: School) => {
-    setSelectedSchool(school);
-    setSchoolEditForm({
-      name: school.name || "",
-      address: school.address || "",
-      province: school.province || "",
-      district: school.district || "",
-      zone: school.zone || "",
-      educationalZone: school.educational_zone || "",
-    });
-    setSchoolEditErrors({});
-    setShowSchoolEditModal(true);
-  };
-
-  const handleEditSchool = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!selectedSchool) return;
-    setError("");
-    setSuccessMessage("");
-    if (!validateSchoolEditForm()) return;
-    const token = getToken();
-    if (!token) {
-      setError("Missing authentication token.");
-      return;
-    }
-    setActionLoading(true);
-
-    const payload = {
-      name: schoolEditForm.name.trim(),
-      location: schoolEditForm.address.trim() || schoolEditForm.name.trim(),
-      address: schoolEditForm.address.trim(),
-      province: schoolEditForm.province.trim(),
-      district: schoolEditForm.district.trim(),
-      zone: schoolEditForm.zone.trim(),
-      educational_zone: schoolEditForm.educationalZone.trim(),
-    };
-
-    try {
-      const res = await fetch(`/api/schools/${selectedSchool.id}/`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Token ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const payloadErr = await res.json().catch(() => ({}));
-        const nextErrors = extractFieldErrors(payloadErr);
-        if (Object.keys(nextErrors).length > 0) {
-          setSchoolEditErrors(nextErrors);
-        }
-        throw new Error(extractDetailMessage(payloadErr) || "Unable to update school");
-      }
-
-      const updatedSchool = (await res.json()) as School;
-      // Update local state instantly
-      setSchools((prev) =>
-        prev.map((item) => (item.id === updatedSchool.id ? { ...item, ...updatedSchool } : item))
+    if (act === "DELETE") {
+      return (
+        <div style={{ width: "36px", height: "36px", borderRadius: "8px", backgroundColor: "#FEF2F2", color: "#EF4444", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Trash2 size={18} />
+        </div>
       );
-
-      setShowSchoolEditModal(false);
-      setSelectedSchool(null);
-      setActionLoading(false);
-      setSuccessMessage("School updated successfully.");
-      await loadData(token);
-    } catch (err: any) {
-      setError(err.message || "Unable to update school");
-    } finally {
-      setActionLoading(false);
     }
+    if (et === "TEACHER") {
+      return (
+        <div style={{ width: "36px", height: "36px", borderRadius: "8px", backgroundColor: "#ECFDF5", color: "#10B981", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <UserCheck size={18} />
+        </div>
+      );
+    }
+    if (et === "STUDENT") {
+      return (
+        <div style={{ width: "36px", height: "36px", borderRadius: "8px", backgroundColor: "#EBF5FF", color: "#126BFF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Users size={18} />
+        </div>
+      );
+    }
+    if (et === "LESSON") {
+      return (
+        <div style={{ width: "36px", height: "36px", borderRadius: "8px", backgroundColor: "#F3E8FF", color: "#8B5CF6", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <BookOpen size={18} />
+        </div>
+      );
+    }
+    if (et === "SKILL") {
+      return (
+        <div style={{ width: "36px", height: "36px", borderRadius: "8px", backgroundColor: "#FFFBEB", color: "#D97706", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Award size={18} />
+        </div>
+      );
+    }
+    return (
+      <div style={{ width: "36px", height: "36px", borderRadius: "8px", backgroundColor: "#F1F5F9", color: "#64748B", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <Activity size={18} />
+      </div>
+    );
   };
 
-  const handleOpenSchoolDeleteModal = (school: School) => {
-    setSchoolDeleteTarget(school);
-    setShowSchoolDeleteModal(true);
-  };
-
-  const handleConfirmSchoolDelete = async () => {
-    if (!schoolDeleteTarget) return;
-    const targetId = schoolDeleteTarget.id;
-    setError("");
-    setSuccessMessage("");
-    const token = getToken();
-    if (!token) {
-      setError("Missing authentication token.");
-      return;
-    }
-    setActionLoading(true);
-
-    // Update local state instantly
-    setSchools((prev) => prev.filter((item) => item.id !== targetId));
-    setSchoolsCount((c) => Math.max(0, c - 1));
-    setShowSchoolDeleteModal(false);
-    setSchoolDeleteTarget(null);
-
-    try {
-      const res = await fetch(`/api/schools/${targetId}/`, {
-        method: "DELETE",
-        headers: { Authorization: `Token ${token}` },
-      });
-
-      if (!res.ok) {
-        const payload = await res.json().catch(() => ({}));
-        await loadData(token);
-        throw new Error(extractDetailMessage(payload) || "Unable to delete school");
-      }
-
-      setActionLoading(false);
-      setSuccessMessage("School deleted successfully.");
-      await loadData(token);
-    } catch (err: any) {
-      setError(err.message || "Unable to delete school");
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  // Memoized Filtered Computations
-  const filteredUsers = useMemo(() => {
-    const query = filterQuery.trim().toLowerCase();
-    return sortedUsers.filter((user) => {
-      const roleValue = (user.role || "unknown").toLowerCase();
-      const statusValue = user.is_active ? "active" : "inactive";
-      const fullName = user.full_name || `${user.first_name} ${user.last_name}`.trim();
-      const matchesQuery =
-        !query ||
-        [user.username, user.email, fullName]
-          .filter(Boolean)
-          .some((value) => value.toLowerCase().includes(query));
-      const matchesRole = filterRole === "all" || roleValue === filterRole.toLowerCase();
-      const matchesStatus = filterStatus === "all" || statusValue === filterStatus;
-      return matchesQuery && matchesRole && matchesStatus;
-    });
-  }, [filterQuery, filterRole, filterStatus, sortedUsers]);
-
-  const districtOptions = useMemo(() => {
-    const districts = new Set<string>();
-    schools.forEach((school) => {
-      if (school.district?.trim()) {
-        districts.add(school.district.trim());
-      }
-    });
-    return Array.from(districts).sort();
-  }, [schools]);
-
-  const zoneOptions = useMemo(() => {
-    const zones = new Set<string>();
-    schools.forEach((school) => {
-      if (school.zone?.trim()) {
-        zones.add(school.zone.trim());
-      }
-    });
-    return Array.from(zones).sort();
-  }, [schools]);
-
-  const educationalZoneOptions = useMemo(() => {
-    const ezones = new Set<string>();
-    schools.forEach((school) => {
-      if (school.educational_zone?.trim()) {
-        ezones.add(school.educational_zone.trim());
-      }
-    });
-    return Array.from(ezones).sort();
-  }, [schools]);
-
-  const provinceOptions = useMemo(() => {
-    const provinces = new Set<string>();
-    schools.forEach((school) => {
-      if (school.province?.trim()) {
-        provinces.add(school.province.trim());
-      }
-    });
-    return Array.from(provinces).sort();
-  }, [schools]);
-
-  const filteredSchools = useMemo(() => {
-    const query = schoolsQuery.trim().toLowerCase();
-    let result = sortedSchools.filter((school) => {
-      const matchesQuery =
-        !query ||
-        [school.name, school.address, school.province, school.district, school.zone, school.educational_zone]
-          .filter(Boolean)
-          .some((val) => val.toLowerCase().includes(query));
-      const matchesProvince =
-        schoolsProvince === "all" ||
-        (school.province || "").toLowerCase() === schoolsProvince.toLowerCase();
-      const matchesDistrict =
-        schoolsDistrict === "all" ||
-        (school.district || "").toLowerCase() === schoolsDistrict.toLowerCase();
-      const matchesZone =
-        schoolsZone === "all" ||
-        (school.zone || "").toLowerCase() === schoolsZone.toLowerCase();
-      const matchesEducationalZone =
-        schoolsEducationalZone === "all" ||
-        (school.educational_zone || "").toLowerCase() === schoolsEducationalZone.toLowerCase();
-      return matchesQuery && matchesProvince && matchesDistrict && matchesZone && matchesEducationalZone;
-    });
-
-    result.sort((a, b) => {
-      let comparison = 0;
-      if (schoolsSortKey.startsWith("name")) {
-        comparison = (a.name || "").localeCompare(b.name || "");
-      } else if (schoolsSortKey.startsWith("province")) {
-        comparison = (a.province || "").localeCompare(b.province || "");
-      } else if (schoolsSortKey.startsWith("district")) {
-        comparison = (a.district || "").localeCompare(b.district || "");
-      } else if (schoolsSortKey.startsWith("zone")) {
-        comparison = (a.zone || "").localeCompare(b.zone || "");
-      } else if (schoolsSortKey.startsWith("educational_zone")) {
-        comparison = (a.educational_zone || "").localeCompare(b.educational_zone || "");
-      }
-      return schoolsSortKey.endsWith("_desc") ? -comparison : comparison;
-    });
-
-    return result;
-  }, [
-    schoolsQuery,
-    schoolsProvince,
-    schoolsDistrict,
-    schoolsZone,
-    schoolsEducationalZone,
-    schoolsSortKey,
-    sortedSchools,
-  ]);
-
-  const userRoleOptions = ["SYSTEM_ADMIN", "NATIONAL_ADMIN", "SCHOOL_ADMIN", "TEACHER", "STUDENT"];
-
-  const teachersCount = users.filter((user) => user.role === "TEACHER").length;
-  const studentsCount = users.filter((user) => user.role === "STUDENT").length;
+  if (loading) {
+    return (
+      <div style={{ padding: "40px", textAlign: "center", color: "#5D78A3" }}>
+        Loading System Admin dashboard...
+      </div>
+    );
+  }
 
   return (
-    <>
-        {activeTab === "dashboard" && (
-          <>
-            <section className="admin-metrics-grid admin-metrics-grid--three">
-              <div className="metric-card">
-                <div className="metric-title">TOTAL TEACHERS</div>
-                <div className="metric-value">{teachersCount}</div>
-                <div className="metric-badge">Registered teachers</div>
-              </div>
-              <div className="metric-card">
-                <div className="metric-title">TOTAL STUDENTS</div>
-                <div className="metric-value">{studentsCount}</div>
-                <div className="metric-badge">Registered students</div>
-              </div>
-              <div className="metric-card">
-                <div className="metric-title">SCHOOLS</div>
-                <div className="metric-value">{schoolsCount}</div>
-                <div className="metric-badge">Registered schools</div>
-              </div>
-            </section>
-
-
-            <section className="admin-card admin-logs">
-              <div className="admin-card-header">
-                <div>
-                  <div className="admin-card-title">System Access Logs</div>
-                  <div className="admin-card-subtitle">Real-time monitoring of administrative activity</div>
-                </div>
-                <button className="admin-secondary-btn" type="button">DOWNLOAD FULL AUDIT LOG (CSV)</button>
-              </div>
-              <div className="admin-log-item">
-                <div>
-                  <div className="user-name">Admin Panel logged in from 192.168.1.45</div>
-                  <div className="admin-log-meta">October 14, 2023 - 09:42:12</div>
-                </div>
-                <div className="admin-log-status success">SUCCESS</div>
-              </div>
-              <div className="admin-log-item">
-                <div>
-                  <div className="user-name">Unauthorized Access Attempt on API Endpoint /v1/students</div>
-                  <div className="admin-log-meta">October 14, 2023 - 09:38:05</div>
-                </div>
-                <div className="admin-log-status blocked">BLOCKED</div>
-              </div>
-              <div className="admin-log-item">
-                <div>
-                  <div className="user-name">System configuration updated by Amila Samarakoon</div>
-                  <div className="admin-log-meta">October 14, 2023 - 08:15:33</div>
-                </div>
-                <div className="admin-log-status">COMPLETED</div>
-              </div>
-            </section>
-          </>
-        )}
-        {activeTab === "teachers" && <AdminTeachers />}
-        {activeTab === "students" && <AdminStudents />}
-        {activeTab === "schools" && <AdminSchools />}
-
-        {/* User Creation Modal */}
-        {showCreateModal && (
-          <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
-            <div className="admin-modal">
-              <div className="admin-modal-header">
-                <div>
-                  <div className="admin-card-title">Create New User</div>
-                  <div className="admin-card-subtitle">
-                    Add a new user account to the system.
-                  </div>
-                </div>
-              </div>
-              <form className="admin-form" onSubmit={handleCreateUser}>
-                <div className="admin-form-row">
-                  <div className="admin-field">
-                    <label>First Name *</label>
-                    <input
-                      name="firstName"
-                      value={createForm.firstName}
-                      onChange={handleCreateChange}
-                    />
-                    {createErrors.firstName && (
-                      <div className="admin-error">{createErrors.firstName}</div>
-                    )}
-                  </div>
-                  <div className="admin-field">
-                    <label>Last Name *</label>
-                    <input
-                      name="lastName"
-                      value={createForm.lastName}
-                      onChange={handleCreateChange}
-                    />
-                    {createErrors.lastName && (
-                      <div className="admin-error">{createErrors.lastName}</div>
-                    )}
-                  </div>
-                </div>
-                
-                <div className="admin-form-row">
-                  <div className="admin-field">
-                    <label>Email *</label>
-                    <input
-                      name="email"
-                      type="email"
-                      value={createForm.email}
-                      onChange={handleCreateChange}
-                    />
-                    {createErrors.email && (
-                      <div className="admin-error">{createErrors.email}</div>
-                    )}
-                  </div>
-                  <div className="admin-field">
-                    <label>Password *</label>
-                    <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-                      <input
-                        name="password"
-                        type={showCreatePassword ? "text" : "password"}
-                        value={createForm.password}
-                        onChange={handleCreateChange}
-                        style={{ paddingRight: "40px", width: "100%" }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowCreatePassword(!showCreatePassword)}
-                        style={{
-                          position: "absolute",
-                          right: "10px",
-                          background: "none",
-                          border: "none",
-                          cursor: "pointer",
-                          color: "#9ca3af",
-                          padding: "4px",
-                          display: "flex",
-                          alignItems: "center",
-                          zIndex: 10
-                        }}
-                        aria-label={showCreatePassword ? "Hide password" : "Show password"}
-                      >
-                        {showCreatePassword ? (
-                          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.52 13.52 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>
-                        ) : (
-                          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0z"/><circle cx="12" cy="12" r="3"/></svg>
-                        )}
-                      </button>
-                    </div>
-                    {createErrors.password && (
-                      <div className="admin-error">{createErrors.password}</div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="admin-form-row">
-                  <div className="admin-field">
-                    <label>Role *</label>
-                    <select
-                      name="role"
-                      className="admin-filter-select"
-                      style={{ width: "100%", height: "42px", padding: "8px 12px" }}
-                      value={createForm.role}
-                      onChange={handleCreateChange}
-                    >
-                      {userRoleOptions.map((role) => (
-                        <option key={role} value={role}>
-                          {formatRole(role)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  
-                  {["SCHOOL_ADMIN", "TEACHER", "STUDENT"].includes(createForm.role) && (
-                    <div className="admin-field">
-                      <label>School Assignment *</label>
-                      <select
-                        name="schoolId"
-                        className="admin-filter-select"
-                        style={{ width: "100%", height: "42px", padding: "8px 12px" }}
-                        value={createForm.schoolId}
-                        onChange={handleCreateChange}
-                      >
-                        <option value="">Select a School...</option>
-                        {sortedSchools.map((school) => (
-                          <option key={school.id} value={school.id}>
-                            {school.name}
-                          </option>
-                        ))}
-                      </select>
-                      {createErrors.schoolId && (
-                        <div className="admin-error">{createErrors.schoolId}</div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {createForm.role === "STUDENT" && (
-                  <div className="admin-form-row">
-                    <div className="admin-field">
-                      <label>Index No *</label>
-                      <input
-                        name="indexNo"
-                        value={createForm.indexNo}
-                        onChange={handleCreateChange}
-                      />
-                      {createErrors.indexNo && (
-                        <div className="admin-error">{createErrors.indexNo}</div>
-                      )}
-                    </div>
-                    <div className="admin-field">
-                      <label>Grade *</label>
-                      <input
-                        name="grade"
-                        value={createForm.grade}
-                        onChange={handleCreateChange}
-                      />
-                      {createErrors.grade && (
-                        <div className="admin-error">{createErrors.grade}</div>
-                      )}
-                    </div>
-                    <div className="admin-field">
-                      <label>Class *</label>
-                      <input
-                        name="className"
-                        value={createForm.className}
-                        onChange={handleCreateChange}
-                      />
-                      {createErrors.className && (
-                        <div className="admin-error">{createErrors.className}</div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {createForm.role === "TEACHER" && (
-                  <div className="admin-field">
-                    <label>Subjects (comma separated) *</label>
-                    <input
-                      name="subjects"
-                      placeholder="e.g. Mathematics, Science"
-                      value={createForm.subjects}
-                      onChange={handleCreateChange}
-                    />
-                    {createErrors.subjects && (
-                      <div className="admin-error">{createErrors.subjects}</div>
-                    )}
-                  </div>
-                )}
-
-                {error && <div className="admin-error">{error}</div>}
-                <div className="admin-modal-actions">
-                  <button
-                    className="admin-secondary-btn"
-                    type="button"
-                    onClick={() => setShowCreateModal(false)}
-                    disabled={actionLoading}
-                  >
-                    Close
-                  </button>
-                  <button className="admin-primary-btn" type="submit" disabled={actionLoading}>
-                    Create User
-                  </button>
-                </div>
-              </form>
-            </div>
+    <div style={{ width: "100%", paddingBottom: "40px" }}>
+      {/* SUMMARY CARDS SECTION */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "24px", marginBottom: "24px" }}>
+        {/* 1. Total Teachers */}
+        <div className="teacher-card" style={{ padding: "22px 26px", marginBottom: 0, borderLeft: "4px solid #10B981", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: "14px", fontWeight: 600, color: "#5D78A3", marginBottom: "4px" }}>Total Teachers</div>
+            <div style={{ fontSize: "28px", fontWeight: 700, color: "#0B1F3A" }}>{teacherCount}</div>
+            <div style={{ fontSize: "12px", color: "#10B981", marginTop: "4px", fontWeight: 500 }}>Active teaching staff</div>
           </div>
-        )}
-
-        {/* User Edit Modal */}
-        {showEditModal && selectedUser && (
-          <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
-            <div className="admin-modal">
-              <div className="admin-modal-header">
-                <div>
-                  <div className="admin-card-title">Edit User</div>
-                  <div className="admin-card-subtitle">
-                    Update user details.
-                  </div>
-                </div>
-              </div>
-              <form className="admin-form" onSubmit={handleEditUser}>
-                <div className="admin-form-row">
-                  <div className="admin-field">
-                    <label>First Name *</label>
-                    <input
-                      name="firstName"
-                      value={editForm.firstName}
-                      onChange={handleEditChange}
-                    />
-                    {editErrors.firstName && (
-                      <div className="admin-error">{editErrors.firstName}</div>
-                    )}
-                  </div>
-                  <div className="admin-field">
-                    <label>Last Name *</label>
-                    <input
-                      name="lastName"
-                      value={editForm.lastName}
-                      onChange={handleEditChange}
-                    />
-                    {editErrors.lastName && (
-                      <div className="admin-error">{editErrors.lastName}</div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="admin-form-row">
-                  <div className="admin-field">
-                    <label>Role *</label>
-                    <select
-                      name="role"
-                      className="admin-filter-select"
-                      style={{ width: "100%", height: "42px", padding: "8px 12px" }}
-                      value={editForm.role}
-                      onChange={handleEditChange}
-                    >
-                      {userRoleOptions.map((role) => (
-                        <option key={role} value={role}>
-                          {formatRole(role)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {["SCHOOL_ADMIN", "TEACHER", "STUDENT"].includes(editForm.role) && (
-                    <div className="admin-field">
-                      <label>School Assignment *</label>
-                      <select
-                        name="schoolId"
-                        className="admin-filter-select"
-                        style={{ width: "100%", height: "42px", padding: "8px 12px" }}
-                        value={editForm.schoolId}
-                        onChange={handleEditChange}
-                      >
-                        <option value="">Select a School...</option>
-                        {sortedSchools.map((school) => (
-                          <option key={school.id} value={school.id}>
-                            {school.name}
-                          </option>
-                        ))}
-                      </select>
-                      {editErrors.schoolId && (
-                        <div className="admin-error">{editErrors.schoolId}</div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {editForm.role === "STUDENT" && (
-                  <div className="admin-form-row">
-                    <div className="admin-field">
-                      <label>Index No *</label>
-                      <input
-                        name="indexNo"
-                        value={editForm.indexNo}
-                        onChange={handleEditChange}
-                      />
-                      {editErrors.indexNo && (
-                        <div className="admin-error">{editErrors.indexNo}</div>
-                      )}
-                    </div>
-                    <div className="admin-field">
-                      <label>Grade *</label>
-                      <input
-                        name="grade"
-                        value={editForm.grade}
-                        onChange={handleEditChange}
-                      />
-                      {editErrors.grade && (
-                        <div className="admin-error">{editErrors.grade}</div>
-                      )}
-                    </div>
-                    <div className="admin-field">
-                      <label>Class *</label>
-                      <input
-                        name="className"
-                        value={editForm.className}
-                        onChange={handleEditChange}
-                      />
-                      {editErrors.className && (
-                        <div className="admin-error">{editErrors.className}</div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {editForm.role === "TEACHER" && (
-                  <div className="admin-field">
-                    <label>Subjects (comma separated) *</label>
-                    <input
-                      name="subjects"
-                      placeholder="e.g. Mathematics, Science"
-                      value={editForm.subjects}
-                      onChange={handleEditChange}
-                    />
-                    {editErrors.subjects && (
-                      <div className="admin-error">{editErrors.subjects}</div>
-                    )}
-                  </div>
-                )}
-
-                {error && <div className="admin-error">{error}</div>}
-                <div className="admin-modal-actions">
-                  <button
-                    className="admin-secondary-btn"
-                    type="button"
-                    onClick={() => setShowEditModal(false)}
-                    disabled={actionLoading}
-                  >
-                    Cancel
-                  </button>
-                  <button className="admin-primary-btn" type="submit" disabled={actionLoading}>
-                    Save Changes
-                  </button>
-                </div>
-              </form>
-            </div>
+          <div style={{ width: "48px", height: "48px", borderRadius: "12px", backgroundColor: "#ECFDF5", color: "#10B981", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <UserCheck size={24} />
           </div>
-        )}
+        </div>
 
-        {/* User Delete Modal */}
-        {showDeleteModal && deleteTarget && (
-          <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
-            <div className="admin-modal">
-              <div className="admin-modal-header">
+        {/* 2. Total Students */}
+        <div className="teacher-card" style={{ padding: "22px 26px", marginBottom: 0, borderLeft: "4px solid #126BFF", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: "14px", fontWeight: 600, color: "#5D78A3", marginBottom: "4px" }}>Total Students</div>
+            <div style={{ fontSize: "28px", fontWeight: 700, color: "#0B1F3A" }}>{studentCount}</div>
+            <div style={{ fontSize: "12px", color: "#126BFF", marginTop: "4px", fontWeight: 500 }}>Registered learners</div>
+          </div>
+          <div style={{ width: "48px", height: "48px", borderRadius: "12px", backgroundColor: "#EBF5FF", color: "#126BFF", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Users size={24} />
+          </div>
+        </div>
+
+        {/* 3. Total Classes */}
+        <div className="teacher-card" style={{ padding: "22px 26px", marginBottom: 0, borderLeft: "4px solid #F59E0B", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: "14px", fontWeight: 600, color: "#5D78A3", marginBottom: "4px" }}>Total Classes</div>
+            <div style={{ fontSize: "28px", fontWeight: 700, color: "#0B1F3A" }}>{classCount}</div>
+            <div style={{ fontSize: "12px", color: "#D97706", marginTop: "4px", fontWeight: 500 }}>Configured classrooms</div>
+          </div>
+          <div style={{ width: "48px", height: "48px", borderRadius: "12px", backgroundColor: "#FFFBEB", color: "#D97706", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <SchoolIcon size={24} />
+          </div>
+        </div>
+
+        {/* 4. Total Lessons */}
+        <div className="teacher-card" style={{ padding: "22px 26px", marginBottom: 0, borderLeft: "4px solid #8B5CF6", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: "14px", fontWeight: 600, color: "#5D78A3", marginBottom: "4px" }}>Total Lessons</div>
+            <div style={{ fontSize: "28px", fontWeight: 700, color: "#0B1F3A" }}>{lessonCount}</div>
+            <div style={{ fontSize: "12px", color: "#8B5CF6", marginTop: "4px", fontWeight: 500 }}>Syllabus lessons & skills</div>
+          </div>
+          <div style={{ width: "48px", height: "48px", borderRadius: "12px", backgroundColor: "#F3E8FF", color: "#8B5CF6", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <BookOpen size={24} />
+          </div>
+        </div>
+      </div>
+
+      {/* QUICK ACTIONS SECTION */}
+      <div className="teacher-card" style={{ padding: "18px 26px", marginBottom: "24px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "16px" }}>
+        <div>
+          <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#0B1F3A", margin: 0 }}>Quick Management Actions</h3>
+          <p style={{ fontSize: "13px", color: "#5D78A3", margin: "2px 0 0 0" }}>Shortcuts for frequent system administrative tasks.</p>
+        </div>
+
+        <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            onClick={() => navigate("/system-admin/teachers")}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: "#EBF5FF",
+              color: "#126BFF",
+              border: "1px solid #C8D8EB",
+              borderRadius: "8px",
+              fontSize: "13.5px",
+              fontWeight: 600,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
+            <PlusCircle size={16} /> Manage Teachers
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate("/system-admin/students")}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: "#ECFDF5",
+              color: "#059669",
+              border: "1px solid #A7F3D0",
+              borderRadius: "8px",
+              fontSize: "13.5px",
+              fontWeight: 600,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
+            <PlusCircle size={16} /> Manage Students
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate("/system-admin/lessons")}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: "#F3E8FF",
+              color: "#8B5CF6",
+              border: "1px solid #DDD6FE",
+              borderRadius: "8px",
+              fontSize: "13.5px",
+              fontWeight: 600,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
+            <PlusCircle size={16} /> Create Lesson
+          </button>
+        </div>
+      </div>
+
+      {/* TWO-COLUMN ANALYTICS SECTION */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: "24px", marginBottom: "24px" }}>
+        {/* LEFT: USER OVERVIEW */}
+        <div className="teacher-card" style={{ padding: "24px 28px", marginBottom: 0 }}>
+          <h2 style={{ fontSize: "20px", fontWeight: 700, color: "#0B1F3A", margin: "0 0 4px 0" }}>User Overview</h2>
+          <p style={{ fontSize: "14px", color: "#5D78A3", margin: "0 0 16px 0" }}>Active teacher and student distribution.</p>
+          <RenderUserOverviewDoughnut teachers={teacherCount} students={studentCount} />
+        </div>
+
+        {/* RIGHT: ACADEMIC STRUCTURE OVERVIEW */}
+        <div className="teacher-card" style={{ padding: "24px 28px", marginBottom: 0 }}>
+          <h2 style={{ fontSize: "20px", fontWeight: 700, color: "#0B1F3A", margin: "0 0 4px 0" }}>Academic Structure Overview</h2>
+          <p style={{ fontSize: "14px", color: "#5D78A3", margin: "0 0 16px 0" }}>Curriculum and administrative totals.</p>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginTop: "12px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #E7EEF7", paddingBottom: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div style={{ width: "36px", height: "36px", borderRadius: "8px", backgroundColor: "#FFFBEB", color: "#D97706", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <SchoolIcon size={18} />
+                </div>
                 <div>
-                  <div className="admin-card-title">Delete User</div>
-                  <div className="admin-card-subtitle">
-                    This action cannot be undone.
-                  </div>
+                  <div style={{ fontSize: "14px", fontWeight: 600, color: "#0B1F3A" }}>Active Classrooms</div>
+                  <div style={{ fontSize: "12px", color: "#5D78A3" }}>Configured student groups</div>
                 </div>
               </div>
-              <div className="admin-delete-message">
-                Are you sure you want to delete
-                <strong>
-                  {` ${deleteTarget.first_name || ""} ${deleteTarget.last_name || ""}`.trim() ||
-                    deleteTarget.username}
-                </strong>
-                ?
+              <div style={{ fontSize: "20px", fontWeight: 700, color: "#0B1F3A" }}>{classCount}</div>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid #E7EEF7", paddingBottom: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div style={{ width: "36px", height: "36px", borderRadius: "8px", backgroundColor: "#F3E8FF", color: "#8B5CF6", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <BookOpen size={18} />
+                </div>
+                <div>
+                  <div style={{ fontSize: "14px", fontWeight: 600, color: "#0B1F3A" }}>Configured Terms</div>
+                  <div style={{ fontSize: "12px", color: "#5D78A3" }}>Academic terms with lessons</div>
+                </div>
               </div>
-              <div className="admin-modal-actions">
-                <button
-                  className="admin-secondary-btn"
-                  type="button"
-                  onClick={() => setShowDeleteModal(false)}
-                  disabled={actionLoading}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="admin-danger-btn"
-                  type="button"
-                  onClick={handleConfirmDelete}
-                  disabled={actionLoading}
-                >
-                  Delete User
-                </button>
+              <div style={{ fontSize: "20px", fontWeight: 700, color: "#0B1F3A" }}>{termCount}</div>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: "4px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div style={{ width: "36px", height: "36px", borderRadius: "8px", backgroundColor: "#EBF5FF", color: "#126BFF", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Users size={18} />
+                </div>
+                <div>
+                  <div style={{ fontSize: "14px", fontWeight: 600, color: "#0B1F3A" }}>Students per Class Ratio</div>
+                  <div style={{ fontSize: "12px", color: "#5D78A3" }}>Average class occupancy</div>
+                </div>
+              </div>
+              <div style={{ fontSize: "20px", fontWeight: 700, color: "#126BFF" }}>
+                {classCount > 0 ? Math.round(studentCount / classCount) : 0}
               </div>
             </div>
           </div>
-        )}
+        </div>
+      </div>
 
-        {/* School Create Modal */}
-        {showSchoolCreateModal && (
-          <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
-            <div className="admin-modal">
-              <div className="admin-modal-header">
-                <div>
-                  <div className="admin-card-title">Create New School</div>
-                  <div className="admin-card-subtitle">
-                    Add a new school/educational institution to the system.
+      {/* RECENT ACTIVITIES SECTION */}
+      <div className="teacher-card" style={{ padding: "24px 28px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "12px" }}>
+          <div>
+            <h2 style={{ fontSize: "20px", fontWeight: 700, color: "#0B1F3A", margin: 0 }}>Recent Activities</h2>
+            <p style={{ fontSize: "14px", color: "#5D78A3", margin: "2px 0 0 0" }}>Latest administrative actions across EduInsight.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate("/system-admin/reports")}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              background: "none",
+              border: "none",
+              color: "#126BFF",
+              fontSize: "14px",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            View System Reports <ArrowRight size={16} />
+          </button>
+        </div>
+
+        {activitiesError ? (
+          <div style={{ padding: "24px", textAlign: "center", color: "#FF4054", fontSize: "14px" }}>
+            Unable to load recent activities.
+          </div>
+        ) : activities.length === 0 ? (
+          <div style={{ padding: "36px 20px", textAlign: "center", backgroundColor: "#F7FAFE", borderRadius: "12px", border: "1px dashed #DCE6F3" }}>
+            <Clock size={36} color="#A0B4D0" style={{ marginBottom: "8px" }} />
+            <h4 style={{ color: "#0B1F3A", margin: "0 0 4px 0", fontSize: "16px" }}>No recent activities yet</h4>
+            <p style={{ color: "#5D78A3", fontSize: "14px", margin: 0 }}>Administrative actions will appear here as they occur.</p>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            {activities.map((act) => (
+              <div
+                key={act.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "14px 16px",
+                  backgroundColor: "#F8FAFC",
+                  border: "1px solid #E2E8F0",
+                  borderRadius: "10px",
+                  gap: "16px"
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                  {renderActivityIcon(act.entity_type, act.action)}
+                  <div>
+                    <div style={{ fontSize: "14px", fontWeight: 600, color: "#0B1F3A" }}>
+                      {getCleanActivityDescription(act)}
+                    </div>
+                    <div style={{ fontSize: "12px", color: "#5D78A3", marginTop: "2px" }}>
+                      Performed by {getCleanActorName(act)}
+                    </div>
                   </div>
+                </div>
+                <div style={{ fontSize: "12.5px", color: "#8B9EBA", fontWeight: 500, whiteSpace: "nowrap" }}>
+                  {formatRelativeTime(act.timestamp)}
                 </div>
               </div>
-              <form className="admin-form" onSubmit={handleCreateSchool}>
-                <div className="admin-form-row">
-                  <div className="admin-field">
-                    <label>School Name *</label>
-                    <input
-                      name="name"
-                      value={schoolCreateForm.name}
-                      onChange={handleSchoolCreateChange}
-                    />
-                    {schoolCreateErrors.name && (
-                      <div className="admin-error">{schoolCreateErrors.name}</div>
-                    )}
-                  </div>
-                  <div className="admin-field">
-                    <label>Address *</label>
-                    <input
-                      name="address"
-                      value={schoolCreateForm.address}
-                      onChange={handleSchoolCreateChange}
-                    />
-                    {schoolCreateErrors.address && (
-                      <div className="admin-error">{schoolCreateErrors.address}</div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="admin-form-row">
-                  <div className="admin-field">
-                    <label>Province *</label>
-                    <input
-                      name="province"
-                      value={schoolCreateForm.province}
-                      onChange={handleSchoolCreateChange}
-                    />
-                    {schoolCreateErrors.province && (
-                      <div className="admin-error">{schoolCreateErrors.province}</div>
-                    )}
-                  </div>
-                  <div className="admin-field">
-                    <label>District *</label>
-                    <input
-                      name="district"
-                      value={schoolCreateForm.district}
-                      onChange={handleSchoolCreateChange}
-                    />
-                    {schoolCreateErrors.district && (
-                      <div className="admin-error">{schoolCreateErrors.district}</div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="admin-form-row">
-                  <div className="admin-field">
-                    <label>Zone *</label>
-                    <input
-                      name="zone"
-                      value={schoolCreateForm.zone}
-                      onChange={handleSchoolCreateChange}
-                    />
-                    {schoolCreateErrors.zone && (
-                      <div className="admin-error">{schoolCreateErrors.zone}</div>
-                    )}
-                  </div>
-                  <div className="admin-field">
-                    <label>Educational Zone *</label>
-                    <input
-                      name="educationalZone"
-                      value={schoolCreateForm.educationalZone}
-                      onChange={handleSchoolCreateChange}
-                    />
-                    {schoolCreateErrors.educationalZone && (
-                      <div className="admin-error">{schoolCreateErrors.educationalZone}</div>
-                    )}
-                  </div>
-                </div>
-
-                {error && <div className="admin-error">{error}</div>}
-                <div className="admin-modal-actions">
-                  <button
-                    className="admin-secondary-btn"
-                    type="button"
-                    onClick={() => setShowSchoolCreateModal(false)}
-                    disabled={actionLoading}
-                  >
-                    Close
-                  </button>
-                  <button className="admin-primary-btn" type="submit" disabled={actionLoading}>
-                    Create School
-                  </button>
-                </div>
-              </form>
-            </div>
+            ))}
           </div>
         )}
-
-        {/* School Edit Modal */}
-        {showSchoolEditModal && selectedSchool && (
-          <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
-            <div className="admin-modal">
-              <div className="admin-modal-header">
-                <div>
-                  <div className="admin-card-title">Edit School</div>
-                  <div className="admin-card-subtitle">
-                    Update school details.
-                  </div>
-                </div>
-              </div>
-              <form className="admin-form" onSubmit={handleEditSchool}>
-                <div className="admin-form-row">
-                  <div className="admin-field">
-                    <label>School Name *</label>
-                    <input
-                      name="name"
-                      value={schoolEditForm.name}
-                      onChange={handleSchoolEditChange}
-                    />
-                    {schoolEditErrors.name && (
-                      <div className="admin-error">{schoolEditErrors.name}</div>
-                    )}
-                  </div>
-                  <div className="admin-field">
-                    <label>Address *</label>
-                    <input
-                      name="address"
-                      value={schoolEditForm.address}
-                      onChange={handleSchoolEditChange}
-                    />
-                    {schoolEditErrors.address && (
-                      <div className="admin-error">{schoolEditErrors.address}</div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="admin-form-row">
-                  <div className="admin-field">
-                    <label>Province *</label>
-                    <input
-                      name="province"
-                      value={schoolEditForm.province}
-                      onChange={handleSchoolEditChange}
-                    />
-                    {schoolEditErrors.province && (
-                      <div className="admin-error">{schoolEditErrors.province}</div>
-                    )}
-                  </div>
-                  <div className="admin-field">
-                    <label>District *</label>
-                    <input
-                      name="district"
-                      value={schoolEditForm.district}
-                      onChange={handleSchoolEditChange}
-                    />
-                    {schoolEditErrors.district && (
-                      <div className="admin-error">{schoolEditErrors.district}</div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="admin-form-row">
-                  <div className="admin-field">
-                    <label>Zone *</label>
-                    <input
-                      name="zone"
-                      value={schoolEditForm.zone}
-                      onChange={handleSchoolEditChange}
-                    />
-                    {schoolEditErrors.zone && (
-                      <div className="admin-error">{schoolEditErrors.zone}</div>
-                    )}
-                  </div>
-                  <div className="admin-field">
-                    <label>Educational Zone *</label>
-                    <input
-                      name="educationalZone"
-                      value={schoolEditForm.educationalZone}
-                      onChange={handleSchoolEditChange}
-                    />
-                    {schoolEditErrors.educationalZone && (
-                      <div className="admin-error">{schoolEditErrors.educationalZone}</div>
-                    )}
-                  </div>
-                </div>
-
-                {error && <div className="admin-error">{error}</div>}
-                <div className="admin-modal-actions">
-                  <button
-                    className="admin-secondary-btn"
-                    type="button"
-                    onClick={() => setShowSchoolEditModal(false)}
-                    disabled={actionLoading}
-                  >
-                    Cancel
-                  </button>
-                  <button className="admin-primary-btn" type="submit" disabled={actionLoading}>
-                    Save Changes
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* School Delete Modal */}
-        {showSchoolDeleteModal && schoolDeleteTarget && (
-          <div className="admin-modal-backdrop" role="dialog" aria-modal="true">
-            <div className="admin-modal">
-              <div className="admin-modal-header">
-                <div>
-                  <div className="admin-card-title">Delete School</div>
-                  <div className="admin-card-subtitle">
-                    This action cannot be undone and will affect associated users.
-                  </div>
-                </div>
-              </div>
-              <div className="admin-delete-message">
-                Are you sure you want to delete school
-                <strong> {schoolDeleteTarget.name}</strong>?
-              </div>
-              <div className="admin-modal-actions">
-                <button
-                  className="admin-secondary-btn"
-                  type="button"
-                  onClick={() => setShowSchoolDeleteModal(false)}
-                  disabled={actionLoading}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="admin-danger-btn"
-                  type="button"
-                  onClick={handleConfirmSchoolDelete}
-                  disabled={actionLoading}
-                >
-                  Delete School
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Fullscreen processing loader */}
-        {actionLoading && (
-          <div className="admin-loading-overlay">
-            <div className="admin-spinner-container">
-              <div className="admin-spinner"></div>
-              <div className="admin-loading-text">processing</div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === "logs" && (
-          <section className="admin-card admin-logs" style={{ padding: "1.5rem" }}>
-             <p>Access logs are now displayed on the main dashboard.</p>
-          </section>
-        )}
-    </>
+      </div>
+    </div>
   );
 };
 

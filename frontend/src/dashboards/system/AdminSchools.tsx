@@ -102,10 +102,24 @@ const AdminSchools = () => {
     }
   };
 
+  // Validation states for School & Classroom forms
+  const [schoolTouched, setSchoolTouched] = useState<Record<string, boolean>>({});
+  const [schoolErrors, setSchoolErrors] = useState<Record<string, string>>({});
+  const schoolNameRef = React.useRef<HTMLInputElement>(null);
+  const schoolProvinceRef = React.useRef<HTMLInputElement>(null);
+  const schoolDistrictRef = React.useRef<HTMLInputElement>(null);
+
+  const [classTouched, setClassTouched] = useState<Record<string, boolean>>({});
+  const [classErrors, setClassErrors] = useState<Record<string, string>>({});
+  const classNameRef = React.useRef<HTMLInputElement>(null);
+  const classGradeRef = React.useRef<HTMLInputElement>(null);
+
   // --- SCHOOL HANDLERS ---
   const handleOpenCreate = () => {
     setModalMode("create");
     setFormData({ name: "", address: "", province: "", district: "", zone: "", educational_zone: "" });
+    setSchoolTouched({});
+    setSchoolErrors({});
     setShowModal(true);
   };
 
@@ -120,7 +134,22 @@ const AdminSchools = () => {
       zone: school.zone || "", 
       educational_zone: school.educational_zone || "" 
     });
+    setSchoolTouched({});
+    setSchoolErrors({});
     setShowModal(true);
+  };
+
+  const validateSchoolField = (name: string, val: string) => {
+    if (name === "name" && !val.trim()) return "School name is required.";
+    if (name === "province" && !val.trim()) return "Province is required.";
+    if (name === "district" && !val.trim()) return "District is required.";
+    return "";
+  };
+
+  const handleSchoolBlur = (name: string) => {
+    setSchoolTouched((prev) => ({ ...prev, [name]: true }));
+    const val = (formData as any)[name] || "";
+    setSchoolErrors((prev) => ({ ...prev, [name]: validateSchoolField(name, val) }));
   };
 
   const handleOpenDelete = (school: School) => {
@@ -130,9 +159,31 @@ const AdminSchools = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (actionLoading) return;
     setError("");
     setSuccess("");
+
+    const errors = {
+      name: validateSchoolField("name", formData.name),
+      province: validateSchoolField("province", formData.province),
+      district: validateSchoolField("district", formData.district),
+    };
+    setSchoolErrors(errors);
+    setSchoolTouched({ name: true, province: true, district: true });
+
+    if (errors.name) {
+      schoolNameRef.current?.focus();
+      return;
+    }
+    if (errors.province) {
+      schoolProvinceRef.current?.focus();
+      return;
+    }
+    if (errors.district) {
+      schoolDistrictRef.current?.focus();
+      return;
+    }
+
+    if (actionLoading) return;
     const token = getToken();
     if (!token) return;
     
@@ -140,7 +191,7 @@ const AdminSchools = () => {
 
     const payload = {
       name: formData.name.trim(),
-      location: formData.address.trim() || formData.name.trim(), // Required field
+      location: formData.address.trim() || formData.name.trim(),
       address: formData.address.trim(),
       province: formData.province.trim(),
       district: formData.district.trim(),
@@ -159,6 +210,9 @@ const AdminSchools = () => {
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
+        if (errData.name) setSchoolErrors(prev => ({ ...prev, name: Array.isArray(errData.name) ? errData.name.join(" ") : errData.name }));
+        if (errData.province) setSchoolErrors(prev => ({ ...prev, province: Array.isArray(errData.province) ? errData.province.join(" ") : errData.province }));
+        if (errData.district) setSchoolErrors(prev => ({ ...prev, district: Array.isArray(errData.district) ? errData.district.join(" ") : errData.district }));
         throw new Error(errData.detail || "Failed to save school.");
       }
       setSuccess(modalMode === "create" ? "School created successfully." : "School updated successfully.");
@@ -201,6 +255,8 @@ const AdminSchools = () => {
     setActiveSchoolId(schoolId);
     setClassModalMode("create");
     setClassFormData({ name: "", grade: "" });
+    setClassTouched({});
+    setClassErrors({});
     setShowClassModal(true);
   };
 
@@ -209,7 +265,21 @@ const AdminSchools = () => {
     setClassModalMode("edit");
     setSelectedClass(cls);
     setClassFormData({ name: cls.name, grade: cls.grade });
+    setClassTouched({});
+    setClassErrors({});
     setShowClassModal(true);
+  };
+
+  const validateClassField = (name: string, val: string) => {
+    if (name === "name" && !val.trim()) return "Class name is required.";
+    if (name === "grade" && !val.trim()) return "Grade is required.";
+    return "";
+  };
+
+  const handleClassBlur = (name: string) => {
+    setClassTouched((prev) => ({ ...prev, [name]: true }));
+    const val = (classFormData as any)[name] || "";
+    setClassErrors((prev) => ({ ...prev, [name]: validateClassField(name, val) }));
   };
 
   const handleOpenDeleteClass = (cls: Classroom) => {
@@ -219,9 +289,26 @@ const AdminSchools = () => {
 
   const handleClassSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (actionLoading || !activeSchoolId) return;
     setError("");
     setSuccess("");
+
+    const errors = {
+      name: validateClassField("name", classFormData.name),
+      grade: validateClassField("grade", classFormData.grade),
+    };
+    setClassErrors(errors);
+    setClassTouched({ name: true, grade: true });
+
+    if (errors.name) {
+      classNameRef.current?.focus();
+      return;
+    }
+    if (errors.grade) {
+      classGradeRef.current?.focus();
+      return;
+    }
+
+    if (actionLoading || !activeSchoolId) return;
     const token = getToken();
     if (!token) return;
     
@@ -244,6 +331,8 @@ const AdminSchools = () => {
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
+        if (errData.name) setClassErrors(prev => ({ ...prev, name: Array.isArray(errData.name) ? errData.name.join(" ") : errData.name }));
+        if (errData.grade) setClassErrors(prev => ({ ...prev, grade: Array.isArray(errData.grade) ? errData.grade.join(" ") : errData.grade }));
         throw new Error(errData.detail || "Failed to save classroom.");
       }
       setSuccess(classModalMode === "create" ? "Classroom created successfully." : "Classroom updated successfully.");
@@ -394,24 +483,87 @@ const AdminSchools = () => {
       {showModal && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
           <div style={{ backgroundColor: "white", padding: "32px", borderRadius: "12px", width: "500px", maxWidth: "90%", maxHeight: "90vh", overflowY: "auto" }}>
-            <h3 style={{ margin: "0 0 24px 0" }}>{modalMode === "create" ? "Register School" : "Edit School"}</h3>
-            <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            <h3 style={{ margin: "0 0 24px 0", color: "#0f172a" }}>{modalMode === "create" ? "Register School" : "Edit School"}</h3>
+            <form onSubmit={handleSubmit} noValidate style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               <div>
-                <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: "500" }}>School Name *</label>
-                <input required type="text" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid var(--border)", outline: "none" }} />
+                <label style={{ display: "block", marginBottom: "8px", fontSize: "13px", fontWeight: "600", color: "#234A7A" }}>
+                  School Name <span style={{ color: "#FF4054" }}>*</span>
+                </label>
+                <input
+                  ref={schoolNameRef}
+                  type="text"
+                  aria-required="true"
+                  aria-invalid={Boolean(schoolTouched.name && schoolErrors.name)}
+                  aria-describedby={schoolTouched.name && schoolErrors.name ? "school-name-error" : undefined}
+                  className={`admin-form-input ${schoolTouched.name && schoolErrors.name ? "is-invalid" : ""}`}
+                  value={formData.name}
+                  onChange={e => {
+                    setFormData({ ...formData, name: e.target.value });
+                    if (schoolTouched.name) setSchoolErrors(prev => ({ ...prev, name: validateSchoolField("name", e.target.value) }));
+                  }}
+                  onBlur={() => handleSchoolBlur("name")}
+                  style={{ width: "100%", padding: "10px", borderRadius: "8px", outline: "none" }}
+                />
+                {schoolTouched.name && schoolErrors.name && (
+                  <div id="school-name-error" style={{ color: "#FF4054", fontSize: "12px", fontWeight: "500", marginTop: "5px" }}>
+                    {schoolErrors.name}
+                  </div>
+                )}
               </div>
               <div>
-                <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: "500" }}>Address</label>
+                <label style={{ display: "block", marginBottom: "8px", fontSize: "13px", fontWeight: "600", color: "#234A7A" }}>Address</label>
                 <input type="text" value={formData.address} onChange={e => setFormData({ ...formData, address: e.target.value })} style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid var(--border)", outline: "none" }} />
               </div>
               <div style={{ display: "flex", gap: "16px" }}>
                 <div style={{ flex: 1 }}>
-                  <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: "500" }}>Province *</label>
-                  <input required type="text" value={formData.province} onChange={e => setFormData({ ...formData, province: e.target.value })} style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid var(--border)", outline: "none" }} />
+                  <label style={{ display: "block", marginBottom: "8px", fontSize: "13px", fontWeight: "600", color: "#234A7A" }}>
+                    Province <span style={{ color: "#FF4054" }}>*</span>
+                  </label>
+                  <input
+                    ref={schoolProvinceRef}
+                    type="text"
+                    aria-required="true"
+                    aria-invalid={Boolean(schoolTouched.province && schoolErrors.province)}
+                    aria-describedby={schoolTouched.province && schoolErrors.province ? "school-province-error" : undefined}
+                    className={`admin-form-input ${schoolTouched.province && schoolErrors.province ? "is-invalid" : ""}`}
+                    value={formData.province}
+                    onChange={e => {
+                      setFormData({ ...formData, province: e.target.value });
+                      if (schoolTouched.province) setSchoolErrors(prev => ({ ...prev, province: validateSchoolField("province", e.target.value) }));
+                    }}
+                    onBlur={() => handleSchoolBlur("province")}
+                    style={{ width: "100%", padding: "10px", borderRadius: "8px", outline: "none" }}
+                  />
+                  {schoolTouched.province && schoolErrors.province && (
+                    <div id="school-province-error" style={{ color: "#FF4054", fontSize: "12px", fontWeight: "500", marginTop: "5px" }}>
+                      {schoolErrors.province}
+                    </div>
+                  )}
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: "500" }}>District *</label>
-                  <input required type="text" value={formData.district} onChange={e => setFormData({ ...formData, district: e.target.value })} style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid var(--border)", outline: "none" }} />
+                  <label style={{ display: "block", marginBottom: "8px", fontSize: "13px", fontWeight: "600", color: "#234A7A" }}>
+                    District <span style={{ color: "#FF4054" }}>*</span>
+                  </label>
+                  <input
+                    ref={schoolDistrictRef}
+                    type="text"
+                    aria-required="true"
+                    aria-invalid={Boolean(schoolTouched.district && schoolErrors.district)}
+                    aria-describedby={schoolTouched.district && schoolErrors.district ? "school-district-error" : undefined}
+                    className={`admin-form-input ${schoolTouched.district && schoolErrors.district ? "is-invalid" : ""}`}
+                    value={formData.district}
+                    onChange={e => {
+                      setFormData({ ...formData, district: e.target.value });
+                      if (schoolTouched.district) setSchoolErrors(prev => ({ ...prev, district: validateSchoolField("district", e.target.value) }));
+                    }}
+                    onBlur={() => handleSchoolBlur("district")}
+                    style={{ width: "100%", padding: "10px", borderRadius: "8px", outline: "none" }}
+                  />
+                  {schoolTouched.district && schoolErrors.district && (
+                    <div id="school-district-error" style={{ color: "#FF4054", fontSize: "12px", fontWeight: "500", marginTop: "5px" }}>
+                      {schoolErrors.district}
+                    </div>
+                  )}
                 </div>
               </div>
               <div style={{ display: "flex", gap: "16px" }}>
@@ -455,16 +607,58 @@ const AdminSchools = () => {
       {/* Modals for Classroom... */}
       {showClassModal && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}>
-          <div style={{ backgroundColor: "white", padding: "32px", borderRadius: "12px", width: "400px", maxWidth: "90%" }}>
-            <h3 style={{ margin: "0 0 24px 0" }}>{classModalMode === "create" ? "Add Classroom" : "Edit Classroom"}</h3>
-            <form onSubmit={handleClassSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          <div style={{ backgroundColor: "white", padding: "32px", borderRadius: "12px", width: "400px", maxWidth: "90%", maxHeight: "90vh", overflowY: "auto" }}>
+            <h3 style={{ margin: "0 0 24px 0", color: "#0f172a" }}>{classModalMode === "create" ? "Add Classroom" : "Edit Classroom"}</h3>
+            <form onSubmit={handleClassSubmit} noValidate style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               <div>
-                <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: "500" }}>Class Name *</label>
-                <input required type="text" value={classFormData.name} onChange={e => setClassFormData({ ...classFormData, name: e.target.value })} style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid var(--border)", outline: "none" }} />
+                <label style={{ display: "block", marginBottom: "8px", fontSize: "13px", fontWeight: "600", color: "#234A7A" }}>
+                  Class Name <span style={{ color: "#FF4054" }}>*</span>
+                </label>
+                <input
+                  ref={classNameRef}
+                  type="text"
+                  aria-required="true"
+                  aria-invalid={Boolean(classTouched.name && classErrors.name)}
+                  aria-describedby={classTouched.name && classErrors.name ? "class-name-error" : undefined}
+                  className={`admin-form-input ${classTouched.name && classErrors.name ? "is-invalid" : ""}`}
+                  value={classFormData.name}
+                  onChange={e => {
+                    setClassFormData({ ...classFormData, name: e.target.value });
+                    if (classTouched.name) setClassErrors(prev => ({ ...prev, name: validateClassField("name", e.target.value) }));
+                  }}
+                  onBlur={() => handleClassBlur("name")}
+                  style={{ width: "100%", padding: "10px", borderRadius: "8px", outline: "none" }}
+                />
+                {classTouched.name && classErrors.name && (
+                  <div id="class-name-error" style={{ color: "#FF4054", fontSize: "12px", fontWeight: "500", marginTop: "5px" }}>
+                    {classErrors.name}
+                  </div>
+                )}
               </div>
               <div>
-                <label style={{ display: "block", marginBottom: "8px", fontSize: "14px", fontWeight: "500" }}>Grade *</label>
-                <input required type="text" value={classFormData.grade} onChange={e => setClassFormData({ ...classFormData, grade: e.target.value })} style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid var(--border)", outline: "none" }} />
+                <label style={{ display: "block", marginBottom: "8px", fontSize: "13px", fontWeight: "600", color: "#234A7A" }}>
+                  Grade <span style={{ color: "#FF4054" }}>*</span>
+                </label>
+                <input
+                  ref={classGradeRef}
+                  type="text"
+                  aria-required="true"
+                  aria-invalid={Boolean(classTouched.grade && classErrors.grade)}
+                  aria-describedby={classTouched.grade && classErrors.grade ? "class-grade-error" : undefined}
+                  className={`admin-form-input ${classTouched.grade && classErrors.grade ? "is-invalid" : ""}`}
+                  value={classFormData.grade}
+                  onChange={e => {
+                    setClassFormData({ ...classFormData, grade: e.target.value });
+                    if (classTouched.grade) setClassErrors(prev => ({ ...prev, grade: validateClassField("grade", e.target.value) }));
+                  }}
+                  onBlur={() => handleClassBlur("grade")}
+                  style={{ width: "100%", padding: "10px", borderRadius: "8px", outline: "none" }}
+                />
+                {classTouched.grade && classErrors.grade && (
+                  <div id="class-grade-error" style={{ color: "#FF4054", fontSize: "12px", fontWeight: "500", marginTop: "5px" }}>
+                    {classErrors.grade}
+                  </div>
+                )}
               </div>
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "16px" }}>
                 <button type="button" onClick={() => setShowClassModal(false)} disabled={actionLoading} style={{ padding: "10px 16px", background: "none", border: "1px solid var(--border)", borderRadius: "8px", cursor: "pointer" }}>Cancel</button>

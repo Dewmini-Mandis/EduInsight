@@ -609,7 +609,7 @@ const StudentDashboard = () => {
         currentUser={currentUser}
       />
 
-      <main className="teacher-main-content" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: "100vh", marginLeft: collapsed ? "80px" : "260px", transition: "margin-left 0.3s ease", padding: "32px", backgroundColor: "var(--background)", boxSizing: "border-box", overflowY: "auto" }}>
+      <main className="teacher-main-content" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: "100vh", marginLeft: collapsed ? "80px" : "280px", transition: "margin-left 0.3s ease", padding: "32px", backgroundColor: "var(--background)", boxSizing: "border-box", overflowY: "auto" }}>
         <header className="admin-header" style={{ marginBottom: "1.5rem" }}>
           <div>
             <div className="admin-title">
@@ -681,11 +681,18 @@ const StudentDashboard = () => {
                     </div>
                   </div>
 
-                  <div style={{ background: "white", padding: "40px", borderRadius: "16px", border: "1px solid #e2e8f0", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)", textAlign: "center" }}>
-                    <h3 style={{ margin: "0 0 8px", fontSize: "20px", fontWeight: "700", color: "var(--navy-900)" }}>Select an Academic Term</h3>
-                    <p style={{ margin: "0 0 32px", color: "#64748b", fontSize: "14px" }}>Choose a term to explore lessons and continue your learning journey.</p>
+                  <div style={{ background: "white", padding: "24px 28px", borderRadius: "16px", border: "1px solid #e2e8f0", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)", textAlign: "left" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
+                      <div style={{ background: "#EAF3FF", padding: "10px", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", color: "#126BFF" }}>
+                        <Calendar size={20} />
+                      </div>
+                      <div>
+                        <h3 style={{ margin: 0, fontSize: "20px", fontWeight: "700", color: "var(--navy-900)" }}>Select an Academic Term</h3>
+                        <p style={{ margin: "2px 0 0", color: "#64748b", fontSize: "14px", fontWeight: "400" }}>Choose a term to explore lessons and continue your learning journey.</p>
+                      </div>
+                    </div>
                     
-                    <div style={{ display: "flex", gap: "24px", justifyContent: "center", flexWrap: "wrap" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px", marginTop: "12px" }}>
                       {[
                         { title: "Term 1", subtitle: "Start Learning" },
                         { title: "Term 2", subtitle: "Continue Your Journey" },
@@ -707,25 +714,40 @@ const StudentDashboard = () => {
                               flexDirection: "column",
                               alignItems: "center",
                               justifyContent: "center",
-                              width: "240px",
-                              padding: "32px 24px",
-                              borderRadius: "16px",
-                              background: isActive ? "#3b82f6" : "white",
+                              width: "100%",
+                              minHeight: "120px",
+                              padding: "16px 18px",
+                              borderRadius: "14px",
+                              background: isActive ? "#126BFF" : "white",
                               color: isActive ? "white" : "var(--navy-900)",
-                              border: `1px solid ${isActive ? "#3b82f6" : "#e2e8f0"}`,
-                              boxShadow: isActive ? "0 10px 15px -3px rgba(59, 130, 246, 0.4)" : "0 4px 6px -1px rgba(0, 0, 0, 0.05)",
+                              border: `1px solid ${isActive ? "#126BFF" : "#e2e8f0"}`,
+                              boxShadow: isActive ? "0 8px 20px rgba(18, 107, 255, 0.2)" : "0 2px 4px rgba(0, 0, 0, 0.03)",
                               cursor: "pointer",
-                              transition: "all 0.3s ease"
+                              transition: "all 0.25s ease"
                             }}
                           >
                             {isActive && (
-                              <div style={{ position: "absolute", top: "16px", right: "16px", background: "white", borderRadius: "50%", padding: "2px", display: "flex" }}>
-                                <CheckCircle size={16} color="#3b82f6" />
+                              <div style={{ position: "absolute", top: "10px", right: "10px", background: "white", borderRadius: "50%", padding: "2px", display: "flex" }}>
+                                <CheckCircle size={14} color="#126BFF" />
                               </div>
                             )}
-                            <Calendar size={32} color={isActive ? "white" : "#64748b"} style={{ marginBottom: "16px" }} />
-                            <div style={{ fontSize: "20px", fontWeight: "700", marginBottom: "8px" }}>{t.title}</div>
-                            <div style={{ fontSize: "13px", color: isActive ? "rgba(255,255,255,0.8)" : "#64748b" }}>{t.subtitle}</div>
+                            <div
+                              style={{
+                                width: "38px",
+                                height: "38px",
+                                borderRadius: "10px",
+                                background: isActive ? "rgba(255, 255, 255, 0.2)" : "rgba(18, 107, 255, 0.08)",
+                                color: isActive ? "white" : "#126BFF",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                marginBottom: "8px"
+                              }}
+                            >
+                              <Calendar size={20} />
+                            </div>
+                            <div style={{ fontSize: "18px", fontWeight: "700", marginBottom: "2px" }}>{t.title}</div>
+                            <div style={{ fontSize: "14px", color: isActive ? "rgba(255,255,255,0.85)" : "#64748b" }}>{t.subtitle}</div>
                           </button>
                         );
                       })}

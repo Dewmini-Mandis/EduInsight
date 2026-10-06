@@ -37,6 +37,9 @@ const UserProfilePage = () => {
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [showPassword, setShowPassword] = useState(false);
+  const [newClassName, setNewClassName] = useState("");
+  const [addingClass, setAddingClass] = useState(false);
+  const [classError, setClassError] = useState("");
   
   const isTeacher = user?.role === "TEACHER";
   const displayName = `${user?.first_name || ""} ${user?.last_name || ""}`.trim();
@@ -156,6 +159,72 @@ const UserProfilePage = () => {
     }
   };
 
+  const handleRemoveClass = async (classId: number, className: string) => {
+    setClassError("");
+    const token = getToken();
+    try {
+      const res = await fetch("/api/classes/teacher-assignments/remove-classroom/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Token ${token}`
+        },
+        body: JSON.stringify({ classroom_id: classId })
+      });
+      if (res.ok) {
+        const userRes = await fetch("/api/accounts/me/", {
+          headers: { Authorization: `Token ${token}` }
+        });
+        if (userRes.ok) {
+          const data = await userRes.json();
+          setUser(data);
+          setAuthUser(data);
+        }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setClassError(errData.detail || `Failed to remove ${className}.`);
+      }
+    } catch (err) {
+      setClassError("Error connecting to server.");
+    }
+  };
+
+  const handleAddClass = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newClassName.trim()) return;
+    setAddingClass(true);
+    setClassError("");
+    const token = getToken();
+    try {
+      const res = await fetch("/api/classes/classrooms/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Token ${token}`
+        },
+        body: JSON.stringify({ name: newClassName.trim() })
+      });
+      if (res.ok) {
+        setNewClassName("");
+        const userRes = await fetch("/api/accounts/me/", {
+          headers: { Authorization: `Token ${token}` }
+        });
+        if (userRes.ok) {
+          const data = await userRes.json();
+          setUser(data);
+          setAuthUser(data);
+        }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setClassError(errData.detail || errData.name?.[0] || "Failed to add class.");
+      }
+    } catch (err) {
+      setClassError("Error connecting to server.");
+    } finally {
+      setAddingClass(false);
+    }
+  };
+
   if (loading) return <div style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted)" }}>Loading...</div>;
 
   if (isTeacher) {
@@ -223,15 +292,51 @@ const UserProfilePage = () => {
                   
                   <h4 style={{ fontSize: "14px", fontWeight: "600", color: "var(--navy-950)", margin: 0 }}>Classrooms</h4>
                   <div>
-                    <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "8px" }}>These are the classrooms assigned to you by the System Administrator.</p>
+                    <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "8px" }}>These are your assigned classrooms. You can also add new classes below.</p>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "12px" }}>
                       {(user?.teacher_profile?.classrooms || []).map((cls) => (
-                        <div key={cls.id} style={{ display: "flex", alignItems: "center", backgroundColor: "var(--blue-50)", color: "var(--blue-600)", padding: "6px 14px", borderRadius: "16px", fontSize: "13px", fontWeight: "500" }}>
-                          {cls.name}
+                        <div key={cls.id} style={{ display: "flex", alignItems: "center", gap: "6px", backgroundColor: "var(--blue-50)", color: "var(--blue-600)", padding: "6px 12px", borderRadius: "16px", fontSize: "13px", fontWeight: "500" }}>
+                          <span>{cls.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveClass(cls.id, cls.name)}
+                            title={`Remove ${cls.name}`}
+                            style={{ background: "none", border: "none", color: "var(--blue-600)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 2px", fontSize: "14px", fontWeight: "700", lineHeight: 1 }}
+                          >
+                            ×
+                          </button>
                         </div>
                       ))}
                       {(user?.teacher_profile?.classrooms || []).length === 0 && <span style={{ fontSize: "13px", color: "var(--text-muted)", fontStyle: "italic" }}>No classrooms assigned yet.</span>}
                     </div>
+
+                    <div style={{ display: "flex", gap: "8px", alignItems: "center", marginTop: "8px" }}>
+                      <input
+                        type="text"
+                        placeholder="Enter new class name (e.g. Grade 10-A)"
+                        value={newClassName}
+                        onChange={(e) => { setNewClassName(e.target.value); setClassError(""); }}
+                        style={{ flex: 1, padding: "10px 14px", borderRadius: "8px", border: "1px solid var(--border)", fontSize: "13px", outline: "none", backgroundColor: "var(--surface)" }}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddClass}
+                        disabled={addingClass || !newClassName.trim()}
+                        style={{
+                          padding: "10px 18px",
+                          borderRadius: "8px",
+                          border: "none",
+                          backgroundColor: newClassName.trim() ? "#126BFF" : "#94A3B8",
+                          color: "white",
+                          fontSize: "13px",
+                          fontWeight: "600",
+                          cursor: newClassName.trim() ? "pointer" : "not-allowed"
+                        }}
+                      >
+                        {addingClass ? "Adding..." : "+ Add Class"}
+                      </button>
+                    </div>
+                    {classError && <span style={{ color: "var(--danger)", fontSize: "12px", marginTop: "4px", display: "block" }}>{classError}</span>}
                   </div>
                 </>
               )}

@@ -2,18 +2,19 @@ import React, { useState } from "react";
 import { BookOpen, Trash2 } from "lucide-react";
 
 interface LessonActionsProps {
-  onManageTopics: () => void;
+  isReadOnly?: boolean;
+  onManageSkills: () => void;
   onDelete: () => void;
 }
 
-const LessonActions: React.FC<LessonActionsProps> = ({ onManageTopics, onDelete }) => {
+const LessonActions: React.FC<LessonActionsProps> = ({ isReadOnly, onManageSkills, onDelete }) => {
   const [hoverManage, setHoverManage] = useState(false);
   const [hoverDelete, setHoverDelete] = useState(false);
 
   return (
     <div style={{ display: "flex", gap: "10px" }}>
       <button
-        onClick={onManageTopics}
+        onClick={onManageSkills}
         onMouseEnter={() => setHoverManage(true)}
         onMouseLeave={() => setHoverManage(false)}
         style={{
@@ -33,32 +34,34 @@ const LessonActions: React.FC<LessonActionsProps> = ({ onManageTopics, onDelete 
         }}
       >
         <BookOpen size={14} strokeWidth={2.5} />
-        Manage Topics
+        {isReadOnly ? "View Skills" : "Manage Skills"}
       </button>
 
-      <button
-        onClick={onDelete}
-        onMouseEnter={() => setHoverDelete(true)}
-        onMouseLeave={() => setHoverDelete(false)}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "6px",
-          height: "36px",
-          padding: "0 12px",
-          borderRadius: "7px",
-          backgroundColor: hoverDelete ? "#FFECEE" : "#FFF5F5",
-          border: "1px solid #FFB8BE",
-          color: "#FF3347",
-          fontSize: "13px",
-          fontWeight: "600",
-          cursor: "pointer",
-          transition: "background-color 150ms ease"
-        }}
-      >
-        <Trash2 size={14} strokeWidth={2.5} />
-        Delete
-      </button>
+      {!isReadOnly && (
+        <button
+          onClick={onDelete}
+          onMouseEnter={() => setHoverDelete(true)}
+          onMouseLeave={() => setHoverDelete(false)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            height: "36px",
+            padding: "0 12px",
+            borderRadius: "7px",
+            backgroundColor: hoverDelete ? "#FFECEE" : "#FFF5F5",
+            border: "1px solid #FFB8BE",
+            color: "#FF3347",
+            fontSize: "13px",
+            fontWeight: "600",
+            cursor: "pointer",
+            transition: "background-color 150ms ease"
+          }}
+        >
+          <Trash2 size={14} strokeWidth={2.5} />
+          Delete
+        </button>
+      )}
     </div>
   );
 };

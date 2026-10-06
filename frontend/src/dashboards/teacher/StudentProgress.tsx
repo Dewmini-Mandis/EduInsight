@@ -29,6 +29,11 @@ const StudentProgress = () => {
 
   useEffect(() => {
     const fetchProgress = async () => {
+      setLoading(true);
+      setError("");
+      setStudent(null);
+      setAttempts([]);
+
       const token = getToken();
       try {
         const [studentRes, attemptsRes] = await Promise.all([
@@ -40,8 +45,12 @@ const StudentProgress = () => {
           }),
         ]);
 
-        if (!studentRes.ok || !attemptsRes.ok) {
-          throw new Error("Unable to fetch progress metrics.");
+        if (studentRes.status === 403 || studentRes.status === 404) {
+          throw new Error("Student not found or access denied.");
+        }
+
+        if (!studentRes.ok) {
+          throw new Error("Unable to fetch student profile.");
         }
 
         const studentData = await studentRes.json();
@@ -49,20 +58,34 @@ const StudentProgress = () => {
         const ln = studentData.last_name || "";
         studentData.full_name = `${fn} ${ln}`.trim() || studentData.username;
 
-        const attemptsData = await attemptsRes.json();
-        const rawAttempts = Array.isArray(attemptsData) ? attemptsData : (attemptsData.results || []);
+        let studentAttempts: ProgressAttempt[] = [];
+        if (attemptsRes.ok) {
+          const attemptsData = await attemptsRes.json();
+          const rawAttempts = Array.isArray(attemptsData) ? attemptsData : (attemptsData.results || []);
+          const targetUserId = parseInt(studentId || "0", 10);
+          const targetProfileId = studentData.student_profile?.id || targetUserId;
 
-        const studentAttempts = rawAttempts
-          .filter((att: any) => att.student === parseInt(studentId || "0", 10))
-          .map((att: any) => ({
-            id: att.id,
-            quiz_title: att.quiz_title,
-            attempt_number: att.attempt_number,
-            score: att.score,
-            start_time: att.start_time,
-            end_time: att.end_time
-          }))
-          .sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()); // sort ascending for chart
+          studentAttempts = rawAttempts
+            .filter((att: any) => {
+              const attStudentId = typeof att.student === "object" ? att.student?.id : att.student;
+              const attUserId = typeof att.student === "object" ? att.student?.user : att.student_user_id;
+              return (
+                attStudentId === targetProfileId ||
+                attStudentId === targetUserId ||
+                attUserId === targetUserId ||
+                att.student_id === targetProfileId
+              );
+            })
+            .map((att: any) => ({
+              id: att.id,
+              quiz_title: att.quiz_title,
+              attempt_number: att.attempt_number,
+              score: att.score,
+              start_time: att.start_time,
+              end_time: att.end_time
+            }))
+            .sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()); // sort ascending for chart
+        }
 
         setStudent(studentData);
         setAttempts(studentAttempts);

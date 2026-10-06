@@ -27,6 +27,7 @@ interface TopicCardProps {
   newSkillName: string;
   setNewSkillName: (val: string) => void;
   skillSubmitting: boolean;
+  isReadOnly?: boolean;
 }
 
 const THEMES = [
@@ -47,7 +48,8 @@ const TopicCard: React.FC<TopicCardProps> = ({
   onSubmitSkill,
   newSkillName,
   setNewSkillName,
-  skillSubmitting
+  skillSubmitting,
+  isReadOnly = false
 }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [hoverDelete, setHoverDelete] = useState(false);
@@ -119,29 +121,31 @@ const TopicCard: React.FC<TopicCardProps> = ({
             {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
           </button>
           
-          <button
-            onClick={() => onDeleteTopic(topic.id)}
-            onMouseEnter={() => setHoverDelete(true)}
-            onMouseLeave={() => setHoverDelete(false)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              height: "38px",
-              padding: "0 14px",
-              borderRadius: "8px",
-              backgroundColor: hoverDelete ? "#FFE7EA" : "#FFF1F3",
-              border: "1px solid #FFC4CB",
-              color: "#E9283A",
-              fontSize: "13px",
-              fontWeight: "600",
-              cursor: "pointer",
-              transition: "background-color 150ms ease"
-            }}
-          >
-            <Trash2 size={14} strokeWidth={2.5} />
-            Delete Topic
-          </button>
+          {!isReadOnly && (
+            <button
+              onClick={() => onDeleteTopic(topic.id)}
+              onMouseEnter={() => setHoverDelete(true)}
+              onMouseLeave={() => setHoverDelete(false)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                height: "38px",
+                padding: "0 14px",
+                borderRadius: "8px",
+                backgroundColor: hoverDelete ? "#FFE7EA" : "#FFF1F3",
+                border: "1px solid #FFC4CB",
+                color: "#E9283A",
+                fontSize: "13px",
+                fontWeight: "600",
+                cursor: "pointer",
+                transition: "background-color 150ms ease"
+              }}
+            >
+              <Trash2 size={14} strokeWidth={2.5} />
+              Delete Topic
+            </button>
+          )}
         </div>
       </div>
 
@@ -163,6 +167,7 @@ const TopicCard: React.FC<TopicCardProps> = ({
           newSkillName={newSkillName}
           setNewSkillName={setNewSkillName}
           skillSubmitting={skillSubmitting}
+          isReadOnly={isReadOnly}
         />
       </div>
     </div>

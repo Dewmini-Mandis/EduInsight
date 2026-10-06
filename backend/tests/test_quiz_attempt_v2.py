@@ -30,7 +30,12 @@ class QuizAttemptV2Tests(TestCase):
             role=role_student,
             school=self.school
         )
-        self.student = Student.objects.create(user=self.student_user)
+        self.classroom = SchoolClass.objects.create(name="Class 1A", school=self.school)
+        self.student = Student.objects.create(
+            user=self.student_user,
+            registered_by=self.teacher_user,
+            class_room=self.classroom
+        )
         self.client.force_authenticate(user=self.student_user)
 
         self.skill_a = Skill.objects.create(name="Algebra")
@@ -41,7 +46,9 @@ class QuizAttemptV2Tests(TestCase):
             max_attempts=2,
             estimated_time_minutes=10,
             school=self.school,
-            created_by=self.teacher_user
+            created_by=self.teacher_user,
+            assigned_class=self.classroom,
+            status="PUBLISHED"
         )
         self.quiz.skills.add(self.skill_a, self.skill_b)
 
@@ -49,7 +56,7 @@ class QuizAttemptV2Tests(TestCase):
         questions = []
         for i in range(count):
             q = Question.objects.create(
-                quiz=self.quiz,
+                quiz=None,
                 skill=skill,
                 question_text=f"Question {i+1} for {skill.name}",
                 question_type=Question.TYPE_MCQ,
@@ -67,13 +74,13 @@ class QuizAttemptV2Tests(TestCase):
 
         res = self.client.post("/api/attempts/attempts/start/", {"quiz": self.quiz.id}, format="json")
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("Skill 'Algebra' has only 5 questions available", res.data["detail"])
+        self.assertIn("Insufficient un-attempted questions for skill 'Algebra'", res.data["detail"])
         self.assertIn("5 more needed", res.data["detail"])
 
     def test_attempt_start_snapshot_and_limit_enforcement(self):
-        # Add 10 questions for skill A and 10 for skill B
-        self._create_questions_for_skill(self.skill_a, 10)
-        self._create_questions_for_skill(self.skill_b, 10)
+        # Add 20 questions for skill A and 20 for skill B so 2 distinct attempts can be created
+        self._create_questions_for_skill(self.skill_a, 20)
+        self._create_questions_for_skill(self.skill_b, 20)
 
         # Attempt 1 Start
         res1 = self.client.post("/api/attempts/attempts/start/", {"quiz": self.quiz.id}, format="json")
@@ -89,7 +96,11 @@ class QuizAttemptV2Tests(TestCase):
         self.assertEqual(res_active.data["attempt"]["id"], res1.data["id"])
 
         # Submit Attempt 1
-        sub1 = self.client.post(f"/api/attempts/attempts/{res1.data['id']}/submit/", {"answers": []}, format="json")
+        answers1 = [
+            {"question": aq["question_detail"]["id"], "selected_answer": aq["question_detail"]["answers"][0]["id"], "hint_count": 0}
+            for aq in res1.data["attempt_questions"]
+        ]
+        sub1 = self.client.post(f"/api/attempts/attempts/{res1.data['id']}/submit/", {"answers": answers1}, format="json")
         self.assertEqual(sub1.status_code, status.HTTP_200_OK)
         self.assertEqual(sub1.data["status"], "SUBMITTED")
 
@@ -99,7 +110,11 @@ class QuizAttemptV2Tests(TestCase):
         self.assertEqual(res2.data["attempt_number"], 2)
 
         # Submit Attempt 2
-        sub2 = self.client.post(f"/api/attempts/attempts/{res2.data['id']}/submit/", {"answers": []}, format="json")
+        answers2 = [
+            {"question": aq["question_detail"]["id"], "selected_answer": aq["question_detail"]["answers"][0]["id"], "hint_count": 0}
+            for aq in res2.data["attempt_questions"]
+        ]
+        sub2 = self.client.post(f"/api/attempts/attempts/{res2.data['id']}/submit/", {"answers": answers2}, format="json")
         self.assertEqual(sub2.status_code, status.HTTP_200_OK)
 
         # Attempt 3 Start -> Exceeds max_attempts=2
@@ -149,12 +164,16 @@ class QuizAttemptV2Tests(TestCase):
 
         start_res = self.client.post("/api/attempts/attempts/start/", {"quiz": self.quiz.id}, format="json")
         attempt_id = start_res.data["id"]
+        answers = [
+            {"question": aq["question_detail"]["id"], "selected_answer": aq["question_detail"]["answers"][0]["id"], "hint_count": 0}
+            for aq in start_res.data["attempt_questions"]
+        ]
 
-        sub1 = self.client.post(f"/api/attempts/attempts/{attempt_id}/submit/", {"answers": []}, format="json")
+        sub1 = self.client.post(f"/api/attempts/attempts/{attempt_id}/submit/", {"answers": answers}, format="json")
         self.assertEqual(sub1.status_code, status.HTTP_200_OK)
         self.assertEqual(sub1.data["status"], "SUBMITTED")
 
         # Second submit call
-        sub2 = self.client.post(f"/api/attempts/attempts/{attempt_id}/submit/", {"answers": []}, format="json")
+        sub2 = self.client.post(f"/api/attempts/attempts/{attempt_id}/submit/", {"answers": answers}, format="json")
         self.assertEqual(sub2.status_code, status.HTTP_200_OK)
         self.assertEqual(sub2.data["id"], attempt_id)

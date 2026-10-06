@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { getToken } from "../../auth/authUtils";
+import { Trash2, AlertCircle } from "lucide-react";
 import "../../styles/teacher.css";
 
 type QuizDetailsType = {
@@ -19,6 +20,9 @@ const QuizDetails = () => {
   const [quiz, setQuiz] = useState<QuizDetailsType | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -40,6 +44,29 @@ const QuizDetails = () => {
 
     fetchDetails();
   }, [quizId]);
+
+  const handleDelete = async () => {
+    if (!quiz) return;
+    setDeleting(true);
+    setDeleteError("");
+    const token = getToken();
+    try {
+      const res = await fetch(`/api/quizzes/${quiz.id}/`, {
+        method: "DELETE",
+        headers: { Authorization: `Token ${token}` }
+      });
+      if (res.ok) {
+        navigate("/teacher/quizzes");
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setDeleteError(data.detail || "Failed to delete quiz.");
+      }
+    } catch (err) {
+      setDeleteError("Error connecting to server.");
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   if (loading) {
     return <div style={{ padding: "2rem", textAlign: "center", color: "#64748b" }}>Retrieving quiz details...</div>;
@@ -79,6 +106,25 @@ const QuizDetails = () => {
           <div style={{ display: "flex", gap: "8px" }}>
             <button className="teacher-btn-secondary" onClick={() => navigate("/teacher/quizzes")}>Back to Quizzes</button>
             <button className="teacher-btn-primary" onClick={() => navigate(`/teacher/quizzes/${quiz.id}/edit`)}>Edit Quiz</button>
+            <button 
+              onClick={() => { setShowDeleteModal(true); setDeleteError(""); }}
+              style={{ 
+                padding: "8px 16px", 
+                borderRadius: "8px", 
+                border: "1px solid #FFB8BE", 
+                backgroundColor: "#FFF5F5", 
+                color: "#FF3347", 
+                fontSize: "14px", 
+                fontWeight: "600", 
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px"
+              }}
+            >
+              <Trash2 size={16} />
+              Delete Quiz
+            </button>
           </div>
         </div>
         <p style={{ color: "#475569", fontSize: "14px", lineHeight: "1.6", whiteSpace: "pre-line" }}>{quiz.description}</p>
@@ -101,7 +147,6 @@ const QuizDetails = () => {
                 <span style={{ fontWeight: 700, fontSize: "14px" }}>Question {idx + 1}</span>
                 <div style={{ display: "flex", gap: "8px" }}>
                   <span className="teacher-badge" style={{ backgroundColor: "#e2e8f0", fontSize: "11px" }}>{q.question_type}</span>
-                  <span className="teacher-badge" style={{ backgroundColor: "#e2e8f0", fontSize: "11px" }}>{q.difficulty_level}</span>
                 </div>
               </div>
               
@@ -154,6 +199,104 @@ const QuizDetails = () => {
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: "rgba(11, 31, 58, 0.4)",
+          backdropFilter: "blur(4px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 9999,
+          padding: "20px"
+        }}>
+          <div style={{
+            backgroundColor: "#FFFFFF",
+            borderRadius: "16px",
+            boxShadow: "0 20px 40px rgba(11, 31, 58, 0.2)",
+            width: "100%",
+            maxWidth: "440px",
+            padding: "24px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "16px"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <div style={{
+                width: "44px",
+                height: "44px",
+                borderRadius: "12px",
+                backgroundColor: "#FFE5E8",
+                color: "#FF3347",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0
+              }}>
+                <AlertCircle size={24} />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "18px", fontWeight: "700", color: "#0B1F3A" }}>Delete Quiz</h3>
+                <p style={{ margin: "4px 0 0 0", fontSize: "13px", color: "#5D78A3" }}>This action cannot be undone.</p>
+              </div>
+            </div>
+
+            <p style={{ fontSize: "14px", color: "#334155", margin: 0, lineHeight: 1.5 }}>
+              Are you sure you want to delete <strong>"{quiz.title}"</strong>? All associated questions and attempt records will be permanently removed.
+            </p>
+
+            {deleteError && (
+              <div style={{ padding: "10px 14px", borderRadius: "8px", backgroundColor: "#FFF5F5", border: "1px solid #FFB8BE", color: "#FF3347", fontSize: "13px" }}>
+                {deleteError}
+              </div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "8px" }}>
+              <button
+                onClick={() => { setShowDeleteModal(false); setDeleteError(""); }}
+                disabled={deleting}
+                style={{
+                  padding: "10px 18px",
+                  borderRadius: "8px",
+                  border: "1px solid #DCE6F3",
+                  backgroundColor: "#FFFFFF",
+                  color: "#3D5E8A",
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  cursor: "pointer"
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                style={{
+                  padding: "10px 18px",
+                  borderRadius: "8px",
+                  border: "none",
+                  backgroundColor: "#FF3347",
+                  color: "#FFFFFF",
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px"
+                }}
+              >
+                {deleting ? "Deleting..." : "Delete Quiz"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

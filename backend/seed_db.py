@@ -150,12 +150,16 @@ def seed():
     class_room.teacher = teacher_user
     class_room.save()
     
-    # 5. Create Lessons (Mathematics)
+    # 5. Create Academic Terms & Lessons (Mathematics)
+    from apps.quizzes.models import AcademicTerm
+    term_1, _ = AcademicTerm.objects.get_or_create(name="Term 1", defaults={"order": 1})
+    term_2, _ = AcademicTerm.objects.get_or_create(name="Term 2", defaults={"order": 2})
+
     lesson_sets, created = Lesson.objects.get_or_create(
         title="Sets",
         defaults={
             "description": "Concepts of sets, Venn diagrams, subset relations, and operations on sets.",
-            "term": "1st Term",
+            "term": term_1,
             "created_by": admin_user,
         }
     )
@@ -165,17 +169,19 @@ def seed():
         title="Real Numbers",
         defaults={
             "description": "Rational and irrational numbers, decimal representations, and number line mapping.",
-            "term": "2nd Term",
+            "term": term_2,
             "created_by": admin_user,
         }
     )
     print(f"Lesson {lesson_real_nums.title}: {'Created' if created else 'Already exists'}")
 
+    term_3, _ = AcademicTerm.objects.get_or_create(name="Term 3", defaults={"order": 3})
+
     lesson_linear_eq, created = Lesson.objects.get_or_create(
         title="Linear Equations",
         defaults={
             "description": "Solving linear equations, inequalities, and plotting system graphs.",
-            "term": "3rd Term",
+            "term": term_3,
             "created_by": admin_user,
         }
     )
@@ -208,15 +214,16 @@ def seed():
     ]
     
     all_seeded_quizzes = []
-    
+    from apps.quizzes.models import QuizLevel
     for level_name, quiz_list in levels_data:
+        q_level, _ = QuizLevel.objects.get_or_create(name=level_name)
         for title, desc, lesson_obj, q_text, ans_correct, ans_wrong1, ans_wrong2, ans_wrong3 in quiz_list:
             quiz, created = Quiz.objects.get_or_create(
                 title=title,
                 defaults={
                     "description": desc,
                     "lesson": lesson_obj,
-                    "learning_level": level_name,
+                    "quiz_level": q_level,
                     "created_by": admin_user,
                     "max_attempts": 3,
                 }

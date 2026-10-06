@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getToken } from "../../auth/authUtils";
+import SuccessBanner from "../../components/SuccessBanner";
 
 const Card = ({ children, style }: any) => (
   <div style={{ backgroundColor: "#ffffff", borderRadius: "12px", border: "1px solid #f0f0f0", padding: "20px", display: "flex", flexDirection: "column", gap: "16px", ...style }}>
@@ -26,6 +27,7 @@ const CreateMaterial = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
   const [fieldErrors, setFieldErrors] = useState<any>({});
 
   // Form State
@@ -142,7 +144,10 @@ const CreateMaterial = () => {
       if (!res.ok) {
         throw new Error("Failed to create material");
       }
-      navigate("/teacher/quizzes"); // Replace with materials list later
+      setSuccessMsg("Material created successfully.");
+      setTimeout(() => {
+        navigate("/teacher/quizzes");
+      }, 1000);
     } catch (err: any) {
       setError(err.message || "Failed to create material");
     } finally {
@@ -163,17 +168,23 @@ const CreateMaterial = () => {
       </div>
 
       <h2 style={{ margin: 0, color: "#1e293b" }}>Upload Learning Material</h2>
+      {successMsg && (
+        <SuccessBanner 
+          message={successMsg} 
+          onClose={() => setSuccessMsg("")} 
+        />
+      )}
       {error && <div style={{ color: "red" }}>{error}</div>}
 
       <Card>
         <div>
-          <Label>Title <span style={{ color: "red" }}>*</span></Label>
+          <Label>Title <span className="required-marker">*</span></Label>
           <Input value={title} onChange={(e: any) => setTitle(e.target.value)} placeholder="E.g., Intro to Algebra Video" />
           {fieldErrors.title && <span style={{ color: "red", fontSize: "12px" }}>{fieldErrors.title}</span>}
         </div>
 
         <div>
-          <Label>Material Type <span style={{ color: "red" }}>*</span></Label>
+          <Label>Material Type <span className="required-marker">*</span></Label>
           <Select value={materialType} onChange={(e: any) => setMaterialType(e.target.value)}>
             <option value="VIDEO">Video Link (YouTube, Vimeo, etc.)</option>
             <option value="PDF">PDF URL</option>
@@ -182,7 +193,7 @@ const CreateMaterial = () => {
         </div>
 
         <div>
-          <Label>Content (Text or URL) <span style={{ color: "red" }}>*</span></Label>
+          <Label>Content (Text or URL) <span className="required-marker">*</span></Label>
           {materialType === "TEXT" ? (
              <textarea 
                value={content} 
@@ -197,7 +208,7 @@ const CreateMaterial = () => {
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
           <div>
-            <Label>Academic Term <span style={{ color: "red" }}>*</span></Label>
+            <Label>Academic Term <span className="required-marker">*</span></Label>
             <Select value={termId} onChange={(e: any) => { setTermId(e.target.value); setFieldErrors({...fieldErrors, termId: null}); }}>
               <option value="">Select Term</option>
               {termsList.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -205,7 +216,7 @@ const CreateMaterial = () => {
             {fieldErrors.termId && <span style={{ color: "red", fontSize: "12px" }}>{fieldErrors.termId}</span>}
           </div>
           <div>
-            <Label>Lesson <span style={{ color: "red" }}>*</span></Label>
+            <Label>Lesson <span className="required-marker">*</span></Label>
             <Select value={lessonId} onChange={(e: any) => { setLessonId(e.target.value); setFieldErrors({...fieldErrors, lessonId: null}); }} disabled={!termId}>
               <option value="">Select Lesson</option>
               {lessonsList.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
@@ -216,7 +227,7 @@ const CreateMaterial = () => {
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
           <div>
-            <Label>Topic <span style={{ color: "red" }}>*</span></Label>
+            <Label>Topic <span className="required-marker">*</span></Label>
             <Select value={topicId} onChange={(e: any) => { setTopicId(e.target.value); setFieldErrors({...fieldErrors, topicId: null}); }} disabled={!lessonId}>
               <option value="">Select Topic</option>
               {topicsList.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -224,7 +235,7 @@ const CreateMaterial = () => {
             {fieldErrors.topicId && <span style={{ color: "red", fontSize: "12px" }}>{fieldErrors.topicId}</span>}
           </div>
           <div>
-            <Label>Skill <span style={{ color: "red" }}>*</span></Label>
+            <Label>Skill <span className="required-marker">*</span></Label>
             <Select value={skillId} onChange={(e: any) => { setSkillId(e.target.value); setFieldErrors({...fieldErrors, skillId: null}); }} disabled={!topicId}>
               <option value="">Select Skill</option>
               {skillsList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}

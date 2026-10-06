@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { BookOpen, ArrowLeft, Plus } from "lucide-react";
+import { BookOpen, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const useMediaQuery = (query: string) => {
@@ -16,15 +16,19 @@ const useMediaQuery = (query: string) => {
 
 interface LessonTopicHeaderProps {
   lessonTitle: string;
-  onAddTopic: () => void;
+  isReadOnly?: boolean;
+  basePath?: string;
 }
 
-const LessonTopicHeader: React.FC<LessonTopicHeaderProps> = ({ lessonTitle, onAddTopic }) => {
+const LessonTopicHeader: React.FC<LessonTopicHeaderProps> = ({ 
+  lessonTitle, 
+  isReadOnly = false, 
+  basePath = "/teacher/lessons" 
+}) => {
   const navigate = useNavigate();
   const isMobile = useMediaQuery("(max-width: 768px)");
 
   const [hoverBack, setHoverBack] = useState(false);
-  const [hoverAdd, setHoverAdd] = useState(false);
 
   return (
     <div style={{
@@ -57,7 +61,7 @@ const LessonTopicHeader: React.FC<LessonTopicHeaderProps> = ({ lessonTitle, onAd
         </div>
         <div>
           <h2 style={{ margin: 0, fontSize: "20px", fontWeight: "700", color: "#0B1F3A" }}>
-            Manage Topics & Skills
+            {isReadOnly ? "View Skills" : "Manage Skills"}
           </h2>
           <p style={{ margin: "4px 0 0 0", fontSize: "14px", color: "#5D78A3" }}>
             Lesson: <span style={{ fontWeight: "600", color: "#3D5E8A" }}>{lessonTitle || "Loading..."}</span>
@@ -73,7 +77,7 @@ const LessonTopicHeader: React.FC<LessonTopicHeaderProps> = ({ lessonTitle, onAd
         flexDirection: isMobile ? "column" : "row"
       }}>
         <button
-          onClick={() => navigate("/teacher/lessons")}
+          onClick={() => navigate(basePath)}
           onMouseEnter={() => setHoverBack(true)}
           onMouseLeave={() => setHoverBack(false)}
           style={{
@@ -96,35 +100,6 @@ const LessonTopicHeader: React.FC<LessonTopicHeaderProps> = ({ lessonTitle, onAd
         >
           <ArrowLeft size={16} strokeWidth={2.5} />
           Back to Lessons
-        </button>
-
-        <button
-          onClick={onAddTopic}
-          onMouseEnter={() => setHoverAdd(true)}
-          onMouseLeave={() => setHoverAdd(false)}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "8px",
-            height: "42px",
-            padding: "0 20px",
-            background: "linear-gradient(135deg, #126BFF 0%, #169BFF 100%)",
-            border: "none",
-            borderRadius: "9px",
-            color: "white",
-            fontSize: "14px",
-            fontWeight: "600",
-            cursor: "pointer",
-            boxShadow: "0 5px 14px rgba(18, 107, 255, 0.20)",
-            transform: hoverAdd ? "translateY(-1px)" : "none",
-            filter: hoverAdd ? "brightness(0.95)" : "none",
-            transition: "all 150ms ease",
-            width: isMobile ? "100%" : "auto"
-          }}
-        >
-          <Plus size={16} strokeWidth={2.5} />
-          Add New Topic
         </button>
       </div>
     </div>

@@ -7,9 +7,10 @@ interface SkillRowProps {
     name: string;
   };
   onRemove: (id: number) => void;
+  isReadOnly?: boolean;
 }
 
-const SkillRow: React.FC<SkillRowProps> = ({ skill, onRemove }) => {
+const SkillRow: React.FC<SkillRowProps> = ({ skill, onRemove, isReadOnly = false }) => {
   const [hoverRemove, setHoverRemove] = useState(false);
 
   return (
@@ -26,7 +27,7 @@ const SkillRow: React.FC<SkillRowProps> = ({ skill, onRemove }) => {
       gap: "12px"
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1, overflow: "hidden" }}>
-        <GripVertical size={18} style={{ color: "#6F8DB8", cursor: "grab", flexShrink: 0 }} />
+        {!isReadOnly && <GripVertical size={18} style={{ color: "#6F8DB8", cursor: "grab", flexShrink: 0 }} />}
         <span style={{ 
           fontSize: "14px", 
           fontWeight: "600", 
@@ -38,26 +39,28 @@ const SkillRow: React.FC<SkillRowProps> = ({ skill, onRemove }) => {
         </span>
       </div>
       
-      <button
-        onClick={() => onRemove(skill.id)}
-        onMouseEnter={() => setHoverRemove(true)}
-        onMouseLeave={() => setHoverRemove(false)}
-        style={{
-          background: "none",
-          border: "none",
-          padding: "4px",
-          cursor: "pointer",
-          color: hoverRemove ? "#E9283A" : "#7D96B8",
-          transition: "color 150ms ease",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0
-        }}
-        title="Remove skill"
-      >
-        <X size={18} strokeWidth={2.5} />
-      </button>
+      {!isReadOnly && (
+        <button
+          onClick={() => onRemove(skill.id)}
+          onMouseEnter={() => setHoverRemove(true)}
+          onMouseLeave={() => setHoverRemove(false)}
+          style={{
+            background: "none",
+            border: "none",
+            padding: "4px",
+            cursor: "pointer",
+            color: hoverRemove ? "#E9283A" : "#7D96B8",
+            transition: "color 150ms ease",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0
+          }}
+          title="Remove skill"
+        >
+          <X size={18} strokeWidth={2.5} />
+        </button>
+      )}
     </div>
   );
 };

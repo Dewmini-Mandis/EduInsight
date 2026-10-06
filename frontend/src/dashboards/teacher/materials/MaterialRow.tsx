@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Eye, Edit3, Trash2, FileText, Play } from "lucide-react";
+import { Eye, Edit3, Trash2, FileText, Play, ArrowUp, ArrowDown } from "lucide-react";
 
 const useMediaQuery = (query: string) => {
   const [matches, setMatches] = useState(false);
@@ -15,12 +15,27 @@ const useMediaQuery = (query: string) => {
 
 interface MaterialRowProps {
   material: any;
+  index?: number;
   onPreview: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
 }
 
-const MaterialRow: React.FC<MaterialRowProps> = ({ material, onPreview, onEdit, onDelete }) => {
+const MaterialRow: React.FC<MaterialRowProps> = ({
+  material,
+  index,
+  onPreview,
+  onEdit,
+  onDelete,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp = false,
+  canMoveDown = false,
+}) => {
   const isMobile = useMediaQuery("(max-width: 768px)");
 
   const [hoverPreview, setHoverPreview] = useState(false);
@@ -54,6 +69,24 @@ const MaterialRow: React.FC<MaterialRowProps> = ({ material, onPreview, onEdit, 
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: "16px", flex: 1, overflow: "hidden" }}>
         
+        {index !== undefined && (
+          <div style={{
+            fontSize: "14px",
+            fontWeight: "700",
+            color: "#126BFF",
+            backgroundColor: "#EFF6FF",
+            width: "32px",
+            height: "32px",
+            borderRadius: "50%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0
+          }}>
+            {index + 1}
+          </div>
+        )}
+
         {/* Large Icon Box */}
         <div style={{
           width: "52px",
@@ -100,7 +133,7 @@ const MaterialRow: React.FC<MaterialRowProps> = ({ material, onPreview, onEdit, 
               fontSize: "13px", 
               color: "#5D78A3"
             }}>
-              Uploaded on {new Date(material.created_at).toLocaleDateString()}
+              {material.created_at ? `Uploaded on ${new Date(material.created_at).toLocaleDateString()}` : ''}
             </span>
           </div>
         </div>
@@ -110,8 +143,54 @@ const MaterialRow: React.FC<MaterialRowProps> = ({ material, onPreview, onEdit, 
         display: "flex", 
         justifyContent: isMobile ? "flex-end" : "flex-end",
         width: isMobile ? "100%" : "auto",
-        gap: "6px"
+        gap: "6px",
+        alignItems: "center"
       }}>
+        {onMoveUp && onMoveDown && (
+          <div style={{ display: "flex", gap: "4px", marginRight: "8px" }}>
+            <button
+              onClick={onMoveUp}
+              disabled={!canMoveUp}
+              style={{
+                background: canMoveUp ? "#F0F6FF" : "#F3F4F6",
+                border: "1px solid #DCE6F3",
+                color: canMoveUp ? "#126BFF" : "#9CA3AF",
+                cursor: canMoveUp ? "pointer" : "default",
+                width: "36px",
+                height: "36px",
+                borderRadius: "6px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                transition: "all 150ms ease"
+              }}
+              title="Move Up"
+            >
+              <ArrowUp size={16} strokeWidth={2} />
+            </button>
+            <button
+              onClick={onMoveDown}
+              disabled={!canMoveDown}
+              style={{
+                background: canMoveDown ? "#F0F6FF" : "#F3F4F6",
+                border: "1px solid #DCE6F3",
+                color: canMoveDown ? "#126BFF" : "#9CA3AF",
+                cursor: canMoveDown ? "pointer" : "default",
+                width: "36px",
+                height: "36px",
+                borderRadius: "6px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                transition: "all 150ms ease"
+              }}
+              title="Move Down"
+            >
+              <ArrowDown size={16} strokeWidth={2} />
+            </button>
+          </div>
+        )}
+
         <button
           onClick={onPreview}
           onMouseEnter={() => setHoverPreview(true)}
@@ -183,3 +262,4 @@ const MaterialRow: React.FC<MaterialRowProps> = ({ material, onPreview, onEdit, 
 };
 
 export default MaterialRow;
+

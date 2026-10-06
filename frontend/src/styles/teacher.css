@@ -60,13 +60,15 @@
 
 /* Sidebar Styling */
 .teacher-sidebar {
-  width: 260px;
+  width: 280px;
+  height: 100vh;
+  box-sizing: border-box;
   background-color: var(--teacher-sidebar);
   color: #ffffff;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 24px 16px;
+  padding: 24px 18px;
   position: fixed;
   left: 0;
   top: 0;
@@ -88,6 +90,7 @@
   gap: 8px;
   width: 100%;
   box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .teacher-sidebar.collapsed .teacher-sidebar-brand {
@@ -207,19 +210,39 @@
   flex-direction: column;
   gap: 6px;
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.teacher-sidebar-nav::-webkit-scrollbar {
+  width: 5px;
+}
+
+.teacher-sidebar-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.teacher-sidebar-nav::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.teacher-sidebar-nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
 }
 
 .teacher-nav-link {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 14px;
+  padding: 12px 16px;
   border-radius: 12px;
   color: #94a3b8;
   background: transparent;
   border: none;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 16px;
   cursor: pointer;
   text-decoration: none;
   text-align: left;
@@ -247,6 +270,7 @@
   gap: 16px;
   border-top: 1px solid #1e293b;
   padding-top: 16px;
+  flex-shrink: 0;
 }
 
 .teacher-user-info-card {
@@ -293,7 +317,7 @@
 }
 
 .teacher-user-name {
-  font-size: 14px;
+  font-size: 15.5px;
   font-weight: 600;
   color: white;
   white-space: nowrap;
@@ -302,7 +326,7 @@
 }
 
 .teacher-user-email {
-  font-size: 11px;
+  font-size: 13px;
   color: #64748b;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -320,7 +344,7 @@
   color: #f1f5f9;
   border: 1px solid #334155;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 15px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -338,7 +362,7 @@
 /* Main Content Area */
 .teacher-main-content {
   flex: 1;
-  margin-left: 260px;
+  margin-left: 280px;
   padding: 32px 40px;
   min-width: 0;
   transition: margin-left 0.3s ease;
@@ -973,3 +997,26 @@
   height: 2px;
   background-color: var(--teacher-primary-light);
 }
+
+.teacher-form-input.is-invalid,
+.teacher-dropdown-filter.is-invalid,
+.teacher-form-input[aria-invalid="true"],
+.teacher-dropdown-filter[aria-invalid="true"] {
+  border-color: #FF4054 !important;
+  background-color: #FFF8F9 !important;
+}
+
+.teacher-form-input.is-invalid:focus,
+.teacher-dropdown-filter.is-invalid:focus,
+.teacher-form-input[aria-invalid="true"]:focus,
+.teacher-dropdown-filter[aria-invalid="true"]:focus {
+  border-color: #FF4054 !important;
+  box-shadow: 0 0 0 3px rgba(255, 64, 84, 0.10) !important;
+}
+
+.teacher-signout-btn.active {
+  background-color: var(--blue-600) !important;
+  color: #ffffff !important;
+}
+
+

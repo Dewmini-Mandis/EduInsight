@@ -57,22 +57,29 @@ const ClassAnalytics = () => {
 
         const totalQuizzes = quizzesData.length || 1;
 
-        // Build stable map lookup by numeric student ID to eliminate O(N*M) nested filtering
+        // Build stable map lookup by numeric student ID and user ID to eliminate ID mismatch
         const attemptsByStudentMap = new Map<number, any[]>();
         attemptsData.forEach((att) => {
-          const studentId = Number(att.student);
-          if (!isNaN(studentId)) {
-            if (!attemptsByStudentMap.has(studentId)) {
-              attemptsByStudentMap.set(studentId, []);
-            }
-            attemptsByStudentMap.get(studentId)!.push(att);
+          const sId = Number(att.student || att.student_id);
+          const uId = Number(att.student_user_id);
+          if (!isNaN(sId)) {
+            if (!attemptsByStudentMap.has(sId)) attemptsByStudentMap.set(sId, []);
+            attemptsByStudentMap.get(sId)!.push(att);
+          }
+          if (!isNaN(uId) && uId !== sId) {
+            if (!attemptsByStudentMap.has(uId)) attemptsByStudentMap.set(uId, []);
+            attemptsByStudentMap.get(uId)!.push(att);
           }
         });
 
+        // Filter only student role users
+        const studentUsers = usersData.filter((u) => u.role === "STUDENT" || u.student_profile);
+
         // Group attempts by student using O(1) Map lookups
-        const performanceList = usersData.map((user) => {
+        const performanceList = studentUsers.map((user) => {
           const userId = Number(user.id);
-          const studentAttempts = attemptsByStudentMap.get(userId) || [];
+          const studentProfileId = Number(user.student_id || user.student_profile?.id);
+          const studentAttempts = attemptsByStudentMap.get(userId) || attemptsByStudentMap.get(studentProfileId) || [];
           
           let avgScore = 0;
           let completion = 0;
@@ -98,8 +105,8 @@ const ClassAnalytics = () => {
             else if (avgScore < 65) riskLevel = "Moderate Risk";
           }
 
-          const name = user.full_name || user.username;
-          const initials = name.split(" ").slice(0, 2).map((n: string) => n[0]).join("").toUpperCase();
+          const name = (user.full_name && user.full_name.trim()) ? user.full_name : user.username;
+          const initials = name.split(" ").slice(0, 2).map((n: string) => n[0]).join("").toUpperCase() || "ST";
 
           return {
             id: user.id,

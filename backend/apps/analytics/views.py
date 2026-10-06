@@ -16,10 +16,7 @@ class AnalyticsViewSet(viewsets.ReadOnlyModelViewSet):
         if user.is_role(Role.ROLE_SYSTEM_ADMIN):
             return Analytics.objects.all()
         if user.is_role(Role.ROLE_TEACHER):
-            school_id = user.school_id
-            if school_id:
-                return Analytics.objects.filter(student__user__school_id=school_id)
-            return Analytics.objects.all()
+            return Analytics.objects.filter(student__registered_by=user)
         if user.is_role(Role.ROLE_STUDENT):
             student, _ = Student.objects.get_or_create(user=user)
             return Analytics.objects.filter(student=student)
@@ -34,10 +31,7 @@ class RiskPredictionViewSet(viewsets.ModelViewSet):
         if user.is_role(Role.ROLE_SYSTEM_ADMIN):
             return RiskPrediction.objects.all().order_by("-prediction_date")
         if user.is_role(Role.ROLE_TEACHER):
-            school_id = user.school_id
-            if school_id:
-                return RiskPrediction.objects.filter(student__user__school_id=school_id).order_by("-prediction_date")
-            return RiskPrediction.objects.all().order_by("-prediction_date")
+            return RiskPrediction.objects.filter(student__registered_by=user).order_by("-prediction_date")
         if user.is_role(Role.ROLE_STUDENT):
             student, _ = Student.objects.get_or_create(user=user)
             return RiskPrediction.objects.filter(student=student).order_by("-prediction_date")
@@ -73,10 +67,7 @@ class ProficiencyPredictionViewSet(viewsets.ModelViewSet):
         if user.is_role(Role.ROLE_SYSTEM_ADMIN):
             return ProficiencyPrediction.objects.all().order_by("-prediction_date")
         if user.is_role(Role.ROLE_TEACHER):
-            school_id = user.school_id
-            if school_id:
-                return ProficiencyPrediction.objects.filter(student__user__school_id=school_id).order_by("-prediction_date")
-            return ProficiencyPrediction.objects.all().order_by("-prediction_date")
+            return ProficiencyPrediction.objects.filter(student__registered_by=user).order_by("-prediction_date")
         if user.is_role(Role.ROLE_STUDENT):
             student, _ = Student.objects.get_or_create(user=user)
             return ProficiencyPrediction.objects.filter(student=student).order_by("-prediction_date")
@@ -94,6 +85,7 @@ class ProficiencyPredictionViewSet(viewsets.ModelViewSet):
         return Response({"status": "Flagged successfully"})
 
 from rest_framework.views import APIView
+from rest_framework.exceptions import PermissionDenied
 from apps.quizzes.models import Skill
 from django.shortcuts import get_object_or_404
 from .services.student_feature_builder import build_student_skill_features
@@ -105,6 +97,8 @@ class StudentSkillRiskPredictionView(APIView):
     def get(self, request, student_id, skill_id):
         # 1. Validate student and skill exist
         student = get_object_or_404(Student, id=student_id)
+        if request.user.is_role(Role.ROLE_TEACHER) and student.registered_by_id != request.user.id:
+            raise PermissionDenied("You do not have permission to view analytics for this student.")
         skill = get_object_or_404(Skill, id=skill_id)
         
         # 2. Build features

@@ -16,13 +16,25 @@ class SchoolClassSerializer(serializers.ModelSerializer):
     class Meta:
         model = SchoolClass
         fields = ["id", "name", "school", "school_name", "is_active", "teachers"]
+        extra_kwargs = {
+            "school": {"required": False, "allow_null": True}
+        }
 
 class StudentSerializer(serializers.ModelSerializer):
-    user_name = serializers.CharField(source="user.get_full_name", read_only=True)
+    user_name = serializers.SerializerMethodField()
+    username = serializers.CharField(source="user.username", read_only=True)
+    email = serializers.CharField(source="user.email", read_only=True)
+    school_id = serializers.IntegerField(source="school_id", read_only=True)
+    school_name = serializers.CharField(source="school.name", read_only=True)
+    registered_by_id = serializers.IntegerField(source="registered_by_id", read_only=True)
     
     class Meta:
         model = Student
-        fields = ["id", "user", "user_name", "index_no", "grade", "class_name", "class_room"]
+        fields = ["id", "user", "username", "email", "user_name", "index_no", "grade", "class_name", "class_room", "school_id", "school_name", "registered_by_id"]
+
+    def get_user_name(self, obj):
+        name = obj.user.get_full_name()
+        return name if name else obj.user.username
 
 class TeacherProfileSerializer(serializers.ModelSerializer):
     class Meta:

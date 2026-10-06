@@ -40,6 +40,11 @@ const StudentDetails = () => {
 
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
+      setError("");
+      setProfile(null);
+      setAttempts([]);
+
       const token = getToken();
       try {
         const [profileRes, attemptsRes] = await Promise.all([
@@ -51,6 +56,9 @@ const StudentDetails = () => {
           })
         ]);
 
+        if (profileRes.status === 403 || profileRes.status === 404) {
+          throw new Error("Student not found or access denied.");
+        }
         if (!profileRes.ok) throw new Error("Could not load student profile.");
         
         const data = await profileRes.json();
@@ -58,7 +66,7 @@ const StudentDetails = () => {
         const ln = data.last_name || "";
         setProfile({
           ...data,
-          full_name: `${fn} ${ln}`.trim(),
+          full_name: `${fn} ${ln}`.trim() || data.username,
           initials: `${fn.charAt(0) || ""}${ln.charAt(0) || ""}`.toUpperCase() || "ST",
           is_active: data.is_active !== undefined ? data.is_active : true
         });
@@ -66,8 +74,20 @@ const StudentDetails = () => {
         if (attemptsRes.ok) {
           const attemptsData = await attemptsRes.json();
           const rawAttempts = Array.isArray(attemptsData) ? attemptsData : (attemptsData.results || []);
+          const targetUserId = parseInt(studentId || "0", 10);
+          const targetProfileId = data.student_profile?.id || targetUserId;
+
           const studentAttempts = rawAttempts
-            .filter((att: any) => att.student === parseInt(studentId || "0", 10))
+            .filter((att: any) => {
+              const attStudentId = typeof att.student === "object" ? att.student?.id : att.student;
+              const attUserId = typeof att.student === "object" ? att.student?.user : att.student_user_id;
+              return (
+                attStudentId === targetProfileId ||
+                attStudentId === targetUserId ||
+                attUserId === targetUserId ||
+                att.student_id === targetProfileId
+              );
+            })
             .map((att: any) => ({
               id: att.id,
               quiz_title: att.quiz_title,

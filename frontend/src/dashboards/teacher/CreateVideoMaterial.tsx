@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useRef } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { getToken } from "../../auth/authUtils";
 import { UploadCloud, Trash2, Calendar, BookOpen, Layers, Target, Save, FileText, Video, HelpCircle, ArrowUp, ArrowDown } from "lucide-react";
 
 import LearningNoteHeader from "../../components/materials/LearningNoteHeader";
 import FileUploader from "../../components/materials/FileUploader";
+import SuccessBanner from "../../components/SuccessBanner";
 
 const MainCard = ({ children, style }: any) => (
   <div style={{ backgroundColor: "#FFFFFF", borderRadius: "16px", border: "1px solid #E4ECF6", boxShadow: "0 6px 20px rgba(18, 63, 110, 0.05)", padding: "22px", display: "flex", flexDirection: "column", gap: "20px", ...style }}>
@@ -44,22 +45,24 @@ const CreateVideoMaterial = () => {
   const { materialId } = useParams();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
   const [title, setTitle] = useState("");
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState("");
 
-  const [termsList, setTermsList] = useState<any[]>([]);
-  const [lessonsList, setLessonsList] = useState<any[]>([]);
-  const [topicsList, setTopicsList] = useState<any[]>([]);
-  const [skillsList, setSkillsList] = useState<any[]>([]);
-  const [quizzesList, setQuizzesList] = useState<any[]>([]);
+  const [searchParams] = useSearchParams();
+  const queryLessonId = searchParams.get("lessonId") || "";
+  const querySkillId = searchParams.get("skillId") || "";
 
-  const [termId, setTermId] = useState("");
-  const [lessonId, setLessonId] = useState("");
-  const [topicId, setTopicId] = useState("");
-  const [skillId, setSkillId] = useState("");
-  const [quizId, setQuizId] = useState("");
+  const [lessonsList, setLessonsList] = useState<any[]>([]);
+  const [skillsList, setSkillsList] = useState<any[]>([]);
+
+  const [lessonId, setLessonId] = useState(queryLessonId);
+  const [skillId, setSkillId] = useState(querySkillId);
+
+  const [selectedLessonObj, setSelectedLessonObj] = useState<any>(null);
+  const [selectedSkillObj, setSelectedSkillObj] = useState<any>(null);
 
   const [sectionOrder, setSectionOrder] = useState<string[]>(["NOTE", "ATTACHMENTS", "VIDEO"]);
 
@@ -75,18 +78,19 @@ const CreateVideoMaterial = () => {
     {text: "", is_correct: true}, {text: "", is_correct: false}
   ]);
 
-  useEffect(() => { fetchTerms(); fetchQuizzes(); }, []);
+  useEffect(() => {
+    fetchLessons();
+  }, []);
 
-  const fetchTerms = async () => {
-    const res = await fetch("/api/quizzes/terms/", { headers: { Authorization: `Token ${getToken()}` } });
-    if (res.ok) setTermsList(await res.json());
-  };
-
-  const fetchQuizzes = async () => {
-    const res = await fetch("/api/quizzes/", { headers: { Authorization: `Token ${getToken()}` } });
-    if (res.ok) {
-      const data = await res.json();
-      setQuizzesList(Array.isArray(data) ? data : data.results || []);
+  const fetchLessons = async () => {
+    try {
+      const res = await fetch("/api/quizzes/lessons/", { headers: { Authorization: `Token ${getToken()}` } });
+      if (res.ok) {
+        const data = await res.json();
+        setLessonsList(Array.isArray(data) ? data : data.results || []);
+      }
+    } catch (e) {
+      console.error("Failed to load lessons:", e);
     }
   };
 
@@ -103,21 +107,15 @@ const CreateVideoMaterial = () => {
         const data = await res.json();
         setTitle(data.title || "");
         setVideoUrl(data.file || "");
-        if (data.quiz) setQuizId(data.quiz.toString());
         if (data.section_order && Array.isArray(data.section_order) && data.section_order.length > 0) {
           setSectionOrder(data.section_order);
         }
         if (data.lesson) {
           setLessonId(data.lesson.toString());
-          // Fetch the lesson to get the term
-          const lessonRes = await fetch(`/api/quizzes/lessons/${data.lesson}/`, { headers: { Authorization: `Token ${getToken()}` } });
-          if (lessonRes.ok) {
-            const lessonData = await lessonRes.json();
-            if (lessonData.term) setTermId(lessonData.term.toString());
-          }
         }
-        if (data.topic) setTopicId(data.topic.toString());
-        if (data.skill) setSkillId(data.skill.toString());
+        if (data.skill) {
+          setSkillId(data.skill.toString());
+        }
         if (data.video_questions) setQuestions(data.video_questions);
       }
     } catch (e) {
@@ -126,22 +124,34 @@ const CreateVideoMaterial = () => {
   };
 
   useEffect(() => {
-    if (!termId) { setLessonsList([]); return; }
-    fetch(`/api/quizzes/lessons/?term=${termId}`, { headers: { Authorization: `Token ${getToken()}` } })
-      .then(r => r.json()).then(data => setLessonsList(Array.isArray(data) ? data : data.results || []));
-  }, [termId]);
+    if (!lessonId) {
+      setSkillsList([]);
+      setSkillId("");
+      setSelectedLessonObj(null);
+      return;
+    }
+    const match = lessonsList.find((l) => String(l.id) === String(lessonId));
+    if (match) setSelectedLessonObj(match);
+
+    fetch(`/api/quizzes/skills/?lesson=${lessonId}&active_only=true`, { headers: { Authorization: `Token ${getToken()}` } })
+      .then((r) => r.json())
+      .then((data) => {
+        const skillsData = Array.isArray(data) ? data : data.results || [];
+        setSkillsList(skillsData);
+        if (skillId && !skillsData.some((s: any) => String(s.id) === String(skillId))) {
+          setSkillId("");
+        }
+      });
+  }, [lessonId, lessonsList]);
 
   useEffect(() => {
-    if (!lessonId) { setTopicsList([]); setTopicId(""); return; }
-    fetch(`/api/quizzes/topics/?lesson=${lessonId}`, { headers: { Authorization: `Token ${getToken()}` } })
-      .then(r => r.json()).then(data => setTopicsList(Array.isArray(data) ? data : data.results || []));
-  }, [lessonId]);
-
-  useEffect(() => {
-    if (!topicId) { setSkillsList([]); setSkillId(""); return; }
-    fetch(`/api/quizzes/skills/?topic=${topicId}`, { headers: { Authorization: `Token ${getToken()}` } })
-      .then(r => r.json()).then(data => setSkillsList(Array.isArray(data) ? data : data.results || []));
-  }, [topicId]);
+    if (skillId && skillsList.length > 0) {
+      const match = skillsList.find((s) => String(s.id) === String(skillId));
+      if (match) setSelectedSkillObj(match);
+    } else {
+      setSelectedSkillObj(null);
+    }
+  }, [skillId, skillsList]);
 
   const handleFileChange = (e: any) => {
     const file = e.target.files[0];
@@ -196,8 +206,8 @@ const CreateVideoMaterial = () => {
   };
 
   const handleSubmit = async () => {
-    if (!title || (!videoFile && !materialId) || !lessonId) {
-      setError("Title, Video File, and Lesson are required.");
+    if (!title || (!videoFile && !materialId) || !lessonId || !skillId) {
+      setError("Title, Video File, Lesson, and Skill are required.");
       return;
     }
     setLoading(true);
@@ -210,9 +220,7 @@ const CreateVideoMaterial = () => {
       formData.append("material_type", "VIDEO");
       if (videoFile) formData.append("file", videoFile);
       formData.append("lesson", lessonId);
-      if (topicId) formData.append("topic", topicId);
-      if (skillId) formData.append("skill", skillId);
-      if (quizId) formData.append("quiz", quizId);
+      formData.append("skill", skillId);
       formData.append("section_order", JSON.stringify(sectionOrder));
 
       const url = materialId ? `/api/quizzes/materials/${materialId}/` : "/api/quizzes/materials/";
@@ -227,13 +235,6 @@ const CreateVideoMaterial = () => {
       if (!matRes.ok) throw new Error("Failed to save video material.");
       const matData = await matRes.json();
 
-      // For simplicity on edit, delete old questions and create new ones
-      if (materialId) {
-         // Optionally we could manage IDs, but deleting and re-creating is simpler for timeline changes
-         // Skip for now, assuming new ones are added and old ones removed if remove is clicked.
-      }
-
-      // 2. Add new Questions (simple implementation: only adds questions without ID)
       for (let q of questions) {
         if (!q.id) {
           await fetch("/api/quizzes/video-questions/", {
@@ -253,7 +254,10 @@ const CreateVideoMaterial = () => {
         }
       }
 
-      navigate("/teacher/materials");
+      setSuccessMsg(materialId ? "Material updated successfully." : "Video uploaded successfully.");
+      setTimeout(() => {
+        navigate(`/teacher/materials?lessonId=${lessonId}&skillId=${skillId}`);
+      }, 1000);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -265,69 +269,64 @@ const CreateVideoMaterial = () => {
     <div style={{ display: "flex", flexDirection: "column", maxWidth: "1240px", margin: "0 auto", padding: "24px 32px 32px 32px" }}>
       
       <LearningNoteHeader 
-        onBack={() => navigate("/teacher/materials")} 
+        onBack={() => navigate(`/teacher/materials${lessonId ? `?lessonId=${lessonId}&skillId=${skillId}` : ''}`)} 
         title={materialId ? "Edit Interactive Video" : "Upload Interactive Video"}
         subtitle="Add a video and configure timeline questions."
-        helperText="Add a video, select the relevant term and lesson, and build an interactive timeline."
+        helperText="Add a video under the selected Lesson and Skill, and build an interactive timeline."
         icon={Video}
       />
+
+      {successMsg && (
+        <SuccessBanner 
+          message={successMsg} 
+          onClose={() => setSuccessMsg("")} 
+          style={{ marginTop: "16px", marginBottom: "8px" }} 
+        />
+      )}
 
       {error && <div style={{ color: "#FF4054", padding: "12px", backgroundColor: "#FDEDED", borderRadius: "8px", fontSize: "14px", fontWeight: "500", border: "1px solid #FADCDC", marginBottom: "16px" }}>{error}</div>}
 
       <MainCard>
-        <div>
-          <Label>Title <span style={{ color: "#126BFF" }}>*</span></Label>
-          <InputWrapper icon={FileText}>
-            <Input value={title} onChange={(e: any) => setTitle(e.target.value)} placeholder="E.g., Intro to Fractions" />
-          </InputWrapper>
-        </div>
-        
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-          <div>
-            <Label>Term <span style={{ color: "#126BFF" }}>*</span></Label>
-            <InputWrapper icon={Calendar}>
-              <Select value={termId} onChange={(e: any) => setTermId(e.target.value)}>
-                <option value="">Select Term</option>
-                {termsList.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </Select>
-            </InputWrapper>
+        {queryLessonId && querySkillId ? (
+          <div style={{ backgroundColor: "#F0F6FF", border: "1px solid #BAE0FF", borderRadius: "10px", padding: "14px 18px", display: "flex", gap: "24px", alignItems: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <BookOpen size={18} color="#126BFF" />
+              <span style={{ fontSize: "13px", color: "#5D78A3" }}>Lesson:</span>
+              <strong style={{ fontSize: "14px", color: "#0B1F3A" }}>{selectedLessonObj ? selectedLessonObj.title : `Lesson #${lessonId}`}</strong>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <Target size={18} color="#126BFF" />
+              <span style={{ fontSize: "13px", color: "#5D78A3" }}>Skill:</span>
+              <strong style={{ fontSize: "14px", color: "#0B1F3A" }}>{selectedSkillObj ? selectedSkillObj.name : `Skill #${skillId}`}</strong>
+            </div>
           </div>
-          <div>
-            <Label>Lesson <span style={{ color: "#126BFF" }}>*</span></Label>
-            <InputWrapper icon={BookOpen}>
-              <Select value={lessonId} onChange={(e: any) => setLessonId(e.target.value)} disabled={!termId}>
-                <option value="">Select Lesson</option>
-                {lessonsList.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
-              </Select>
-            </InputWrapper>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+            <div>
+              <Label>Lesson <span className="required-marker">*</span></Label>
+              <InputWrapper icon={BookOpen}>
+                <Select value={lessonId} onChange={(e: any) => setLessonId(e.target.value)}>
+                  <option value="">Select Lesson</option>
+                  {lessonsList.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
+                </Select>
+              </InputWrapper>
+            </div>
+            <div>
+              <Label>Skill <span className="required-marker">*</span></Label>
+              <InputWrapper icon={Target}>
+                <Select value={skillId} onChange={(e: any) => setSkillId(e.target.value)} disabled={!lessonId}>
+                  <option value="">Select Skill</option>
+                  {skillsList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </Select>
+              </InputWrapper>
+            </div>
           </div>
-          <div>
-            <Label>Topic</Label>
-            <InputWrapper icon={Layers}>
-              <Select value={topicId} onChange={(e: any) => setTopicId(e.target.value)} disabled={!lessonId}>
-                <option value="">Select Topic</option>
-                {topicsList.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </Select>
-            </InputWrapper>
-          </div>
-          <div>
-            <Label>Skill</Label>
-            <InputWrapper icon={Target}>
-              <Select value={skillId} onChange={(e: any) => setSkillId(e.target.value)} disabled={!topicId}>
-                <option value="">Select Skill</option>
-                {skillsList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </Select>
-            </InputWrapper>
-          </div>
-        </div>
+        )}
 
         <div>
-          <Label>Associated Quiz (Optional - Redirects failed students to this material)</Label>
-          <InputWrapper icon={HelpCircle}>
-            <Select value={quizId} onChange={(e: any) => setQuizId(e.target.value)}>
-              <option value="">-- None (No Direct Quiz Link) --</option>
-              {quizzesList.map(q => <option key={q.id} value={q.id}>{q.title}</option>)}
-            </Select>
+          <Label>Title <span className="required-marker">*</span></Label>
+          <InputWrapper icon={FileText}>
+            <Input value={title} onChange={(e: any) => setTitle(e.target.value)} placeholder="E.g., Intro to Fractions Video" />
           </InputWrapper>
         </div>
 
@@ -353,7 +352,7 @@ const CreateVideoMaterial = () => {
         </div>
 
         <div>
-          <Label>Video File {materialId ? "(Leave empty to keep existing)" : <span style={{ color: "#126BFF" }}>*</span>}</Label>
+          <Label>Video File {materialId ? "(Leave empty to keep existing)" : <span className="required-marker">*</span>}</Label>
           <FileUploader
             accept="video/mp4,video/webm"
             multiple={false}
