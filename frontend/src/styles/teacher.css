@@ -1019,4 +1019,339 @@
   color: #ffffff !important;
 }
 
+/* ==================================================
+   GLOBAL RESPONSIVE UTILITIES & BREAKPOINTS
+   ================================================== */
+
+/* Universal Layout & Text Overflows */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body, html {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Flex and Grid Children Safeguard */
+.teacher-app-container *,
+.teacher-main-content * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Page Headers */
+.teacher-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 24px 32px 16px 32px;
+  background-color: transparent;
+  gap: 16px;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.teacher-page-header-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.teacher-page-header-title {
+  font-size: 32px;
+  font-weight: 700;
+  color: #0B1F3A;
+  margin: 0 0 4px 0;
+  line-height: 1.2;
+}
+
+.teacher-page-header-subtitle {
+  font-size: 15px;
+  font-weight: 400;
+  color: #5D78A3;
+  margin: 0;
+}
+
+.teacher-page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Filter Bar Responsive */
+.teacher-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.teacher-filter-search-container {
+  flex: 1;
+  min-width: 240px;
+  max-width: 400px;
+}
+
+.teacher-filter-options-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.teacher-filter-input {
+  width: 100%;
+  height: 40px;
+  padding: 8px 12px 8px 36px;
+  border-radius: 8px;
+  border: 1px solid #DCE6F3;
+  background-color: #FFFFFF;
+  font-size: 13px;
+  color: #0B1F3A;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.teacher-filter-select {
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid #DCE6F3;
+  background-color: #FFFFFF;
+  color: #0B1F3A;
+  font-size: 13px;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+  min-width: 120px;
+}
+
+.teacher-filter-clear-btn {
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background-color: #FFFFFF;
+  border: 1px solid #DCE6F3;
+  color: #3D5E8A;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.teacher-filter-clear-btn:hover {
+  background-color: #F4F8FD;
+  border-color: #BFD0E5;
+}
+
+.teacher-filter-export-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 8px;
+  border: 1px solid #DCE6F3;
+  background-color: #FFFFFF;
+  color: #0B1F3A;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+/* Modals */
+.teacher-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(3, 29, 70, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.teacher-modal-container {
+  background: #ffffff;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+/* Responsive Media */
+.teacher-video-container {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  overflow: hidden;
+  background-color: #000000;
+}
+
+.teacher-video-container iframe,
+.teacher-video-container video {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+/* Table Wrappers */
+.teacher-table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 16px;
+}
+
+/* Responsive Breakpoints */
+
+/* Tablet Breakpoint (768px – 1023px) */
+@media (max-width: 1023px) {
+  .teacher-page-header {
+    padding: 20px 24px 16px 24px;
+    align-items: flex-start;
+  }
+  .teacher-page-header-title {
+    font-size: 26px;
+  }
+  .teacher-dashboard-two-col {
+    grid-template-columns: 1fr !important;
+  }
+  .teacher-action-card-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Mobile Breakpoint (< 768px) */
+@media (max-width: 767px) {
+  .teacher-page-header {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 16px 16px 12px 16px;
+    gap: 14px;
+  }
+  .teacher-page-header-title {
+    font-size: 22px;
+  }
+  .teacher-page-header-subtitle {
+    font-size: 14px;
+  }
+  .teacher-page-header-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .teacher-page-header-actions > button,
+  .teacher-page-header-actions > a {
+    width: 100% !important;
+    justify-content: center !important;
+    min-height: 44px !important;
+  }
+
+  /* Filters Stacking */
+  .teacher-filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .teacher-filter-search-container {
+    max-width: 100%;
+    min-width: 100%;
+    width: 100%;
+  }
+  .teacher-filter-options-group {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .teacher-filter-select,
+  .teacher-filter-clear-btn,
+  .teacher-filter-export-btn,
+  .teacher-filter-input {
+    width: 100% !important;
+    min-width: 100% !important;
+    min-height: 44px !important;
+    font-size: 16px !important;
+  }
+
+  /* Form Elements Touch Friendly */
+  .teacher-form-input,
+  .teacher-dropdown-filter,
+  input[type="text"],
+  input[type="number"],
+  input[type="email"],
+  input[type="password"],
+  select {
+    min-height: 44px !important;
+    font-size: 16px !important;
+  }
+
+  /* Form Action Buttons Stacking */
+  .teacher-form-actions {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+  .teacher-form-actions button {
+    width: 100% !important;
+    min-height: 44px !important;
+  }
+
+  /* Quiz Question Builder Card Controls Stacking */
+  .teacher-quiz-answers-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Modal Responsive */
+  .teacher-modal-container {
+    width: calc(100% - 32px) !important;
+    padding: 16px !important;
+  }
+}
+
+.teacher-mobile-toggle-btn {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .teacher-mobile-toggle-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    z-index: 90;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background-color: var(--navy-950);
+    color: #ffffff;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(3, 29, 70, 0.25);
+  }
+}
+
+/* Small Mobile Breakpoint (< 480px) */
+@media (max-width: 479px) {
+  .teacher-page-header-title {
+    font-size: 20px;
+  }
+}
+
 

@@ -416,13 +416,7 @@ const TeacherDashboard: React.FC = () => {
       </div>
 
       {/* 3. First Content Row: Class Performance (2fr) + Risk Alerts (1fr) */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)",
-          gap: "24px",
-        }}
-      >
+      <div className="teacher-dashboard-two-col">
         {/* Left Section — Class Performance Overview */}
         <div
           style={{
@@ -719,13 +713,7 @@ const TeacherDashboard: React.FC = () => {
       </div>
 
       {/* 4. Second Content Row: Recent Quizzes (2fr) + Recent Materials (1fr) */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)",
-          gap: "24px",
-        }}
-      >
+      <div className="teacher-dashboard-two-col">
         {/* Left Section — Recent Quizzes */}
         <div
           style={{

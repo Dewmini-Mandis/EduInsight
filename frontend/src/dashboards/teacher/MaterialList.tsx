@@ -19,6 +19,8 @@ import {
   Eye,
   RotateCcw,
   AlertCircle,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import MaterialRow from "./materials/MaterialRow";
 
@@ -96,6 +98,9 @@ const MaterialList: React.FC = () => {
   // Material Type Selection Modal State
   const [showTypeModal, setShowTypeModal] = useState(false);
   const [hoverAddMaterial, setHoverAddMaterial] = useState(false);
+
+  // Section Display Order state for Workspace / Overview page
+  const [workspaceSectionOrder, setWorkspaceSectionOrder] = useState<string[]>(["NOTE", "ATTACHMENTS", "VIDEO"]);
 
   const navigate = useNavigate();
   const isMobile = useMediaQuery("(max-width: 768px)");
@@ -361,6 +366,58 @@ const MaterialList: React.FC = () => {
     newArr[targetIdx] = temp;
 
     handleReorder(newArr);
+  };
+
+  // Compute unique section types present in workspaceMaterials:
+  const existingTypesInWorkspace = useMemo(() => {
+    const typesSet = new Set<string>();
+    workspaceMaterials.forEach((m) => {
+      if (m.material_type === "TEXT") typesSet.add("NOTE");
+      else if (m.material_type === "PDF") typesSet.add("ATTACHMENTS");
+      else if (m.material_type === "VIDEO") typesSet.add("VIDEO");
+      else typesSet.add(m.material_type);
+    });
+    return Array.from(typesSet);
+  }, [workspaceMaterials]);
+
+  // Active section types ordered dynamically according to workspaceSectionOrder
+  const activeOrderedTypes = useMemo(() => {
+    const ordered = workspaceSectionOrder.filter((t) => existingTypesInWorkspace.includes(t));
+    existingTypesInWorkspace.forEach((t) => {
+      if (!ordered.includes(t)) ordered.push(t);
+    });
+    return ordered;
+  }, [workspaceSectionOrder, existingTypesInWorkspace]);
+
+  const moveSectionType = (index: number, direction: "up" | "down") => {
+    const targetIdx = direction === "up" ? index - 1 : index + 1;
+    if (targetIdx < 0 || targetIdx >= activeOrderedTypes.length) return;
+
+    const newTypeOrder = [...activeOrderedTypes];
+    const temp = newTypeOrder[index];
+    newTypeOrder[index] = newTypeOrder[targetIdx];
+    newTypeOrder[targetIdx] = temp;
+
+    setWorkspaceSectionOrder(newTypeOrder);
+
+    // Group workspaceMaterials by new section type order
+    const reordered: MaterialItem[] = [];
+    newTypeOrder.forEach((tKey) => {
+      const matching = workspaceMaterials.filter((m) => {
+        if (tKey === "NOTE") return m.material_type === "TEXT";
+        if (tKey === "ATTACHMENTS") return m.material_type === "PDF";
+        if (tKey === "VIDEO") return m.material_type === "VIDEO";
+        return m.material_type === tKey;
+      });
+      reordered.push(...matching);
+    });
+
+    const addedIds = new Set(reordered.map((m) => m.id));
+    workspaceMaterials.forEach((m) => {
+      if (!addedIds.has(m.id)) reordered.push(m);
+    });
+
+    handleReorder(reordered);
   };
 
   // Group allMaterials by Lesson + Skill
@@ -1049,11 +1106,11 @@ const MaterialList: React.FC = () => {
                         <span style={{ color: "#CBD5E0" }}>•</span>
 
                         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <Target size={16} color="#126BFF" />
+                          <Target size={16} color="#5D78A3" />
                           <span style={{ fontSize: "13px", fontWeight: "600", color: "#5D78A3" }}>
                             Skill:
                           </span>
-                          <span style={{ fontSize: "15px", fontWeight: "700", color: "#126BFF" }}>
+                          <span style={{ fontSize: "15px", fontWeight: "700", color: "#5D78A3" }}>
                             {group.skillName}
                           </span>
                         </div>
@@ -1106,13 +1163,13 @@ const MaterialList: React.FC = () => {
                           display: "flex",
                           alignItems: "center",
                           gap: "6px",
-                          height: "40px",
-                          padding: "0 16px",
+                          height: "38px",
+                          padding: "0 14px",
                           borderRadius: "8px",
-                          border: "1px solid #DCE6F3",
-                          backgroundColor: "#F8FAFC",
+                          border: "1px solid #126BFF",
+                          backgroundColor: "#FFFFFF",
                           color: "#126BFF",
-                          fontSize: "14px",
+                          fontSize: "13.5px",
                           fontWeight: "600",
                           cursor: "pointer",
                           transition: "all 0.15s ease",
@@ -1121,15 +1178,13 @@ const MaterialList: React.FC = () => {
                           justifyContent: "center",
                         }}
                         onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = "#EAF3FF";
-                          e.currentTarget.style.borderColor = "#BAE0FF";
+                          e.currentTarget.style.backgroundColor = "#EEF4FB";
                         }}
                         onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = "#F8FAFC";
-                          e.currentTarget.style.borderColor = "#DCE6F3";
+                          e.currentTarget.style.backgroundColor = "#FFFFFF";
                         }}
                       >
-                        <Eye size={16} />
+                        <Eye size={15} />
                         <span>View Materials</span>
                       </button>
 
@@ -1140,13 +1195,13 @@ const MaterialList: React.FC = () => {
                           display: "flex",
                           alignItems: "center",
                           gap: "6px",
-                          height: "40px",
-                          padding: "0 16px",
+                          height: "38px",
+                          padding: "0 14px",
                           borderRadius: "8px",
                           border: "1px solid #DCE6F3",
-                          backgroundColor: "#F8FAFC",
-                          color: "#126BFF",
-                          fontSize: "14px",
+                          backgroundColor: "#F4F7FB",
+                          color: "#3D5E8A",
+                          fontSize: "13.5px",
                           fontWeight: "600",
                           cursor: "pointer",
                           transition: "all 0.15s ease",
@@ -1155,16 +1210,14 @@ const MaterialList: React.FC = () => {
                           justifyContent: "center",
                         }}
                         onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = "#EAF3FF";
-                          e.currentTarget.style.borderColor = "#BAE0FF";
+                          e.currentTarget.style.backgroundColor = "#EAEFF6";
                         }}
                         onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = "#F8FAFC";
-                          e.currentTarget.style.borderColor = "#DCE6F3";
+                          e.currentTarget.style.backgroundColor = "#F4F7FB";
                         }}
                       >
                         <span>Manage</span>
-                        <ArrowRight size={16} />
+                        <ArrowRight size={15} />
                       </button>
                     </div>
                   </div>
@@ -1385,8 +1438,8 @@ const MaterialList: React.FC = () => {
                 </div>
               </div>
 
-              {/* + Add New Material Button inside workspace */}
-              <div>
+              {/* Action Buttons: Add New Material & View Student Preview */}
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                 <button
                   type="button"
                   disabled={!isSelectionComplete}
@@ -1426,71 +1479,43 @@ const MaterialList: React.FC = () => {
                   <Plus size={18} strokeWidth={2.5} />
                   + Add New Material
                 </button>
+
+                {/* View Student Preview button: ONLY SHOWN IF AT LEAST ONE MATERIAL EXISTS */}
+                {isSelectionComplete && workspaceMaterials.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/teacher/materials/${selectedLessonId}/${selectedSkillId}/view`)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "6px",
+                      height: "46px",
+                      padding: "0 20px",
+                      borderRadius: "9px",
+                      border: "1px solid #126BFF",
+                      backgroundColor: "#FFFFFF",
+                      color: "#126BFF",
+                      fontSize: "14px",
+                      fontWeight: "600",
+                      cursor: "pointer",
+                      transition: "all 150ms ease",
+                      whiteSpace: "nowrap",
+                      width: isMobile ? "100%" : "auto",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = "#EEF4FB";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = "#FFFFFF";
+                    }}
+                  >
+                    <Eye size={18} />
+                    <span>View Student Preview</span>
+                  </button>
+                )}
               </div>
             </div>
-
-            {/* Selected Context Bar */}
-            {isSelectionComplete && (
-              <div
-                style={{
-                  backgroundColor: "#F0F6FF",
-                  border: "1px solid #BAE0FF",
-                  borderRadius: "10px",
-                  padding: "14px 18px",
-                  display: "flex",
-                  gap: "24px",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  flexWrap: "wrap",
-                }}
-              >
-                <div style={{ display: "flex", gap: "24px", alignItems: "center", flexWrap: "wrap" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <BookOpen size={18} color="#126BFF" />
-                    <span style={{ fontSize: "13px", color: "#5D78A3" }}>Selected Lesson:</span>
-                    <strong style={{ fontSize: "14px", color: "#0B1F3A" }}>
-                      {selectedLessonObj ? selectedLessonObj.title : `Lesson #${selectedLessonId}`}
-                    </strong>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <Target size={18} color="#126BFF" />
-                    <span style={{ fontSize: "13px", color: "#5D78A3" }}>Selected Skill:</span>
-                    <strong style={{ fontSize: "14px", color: "#0B1F3A" }}>
-                      {selectedSkillObj ? selectedSkillObj.name : `Skill #${selectedSkillId}`}
-                    </strong>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => navigate(`/teacher/materials/${selectedLessonId}/${selectedSkillId}/view`)}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    height: "36px",
-                    padding: "0 14px",
-                    borderRadius: "7px",
-                    border: "1px solid #126BFF",
-                    backgroundColor: "#FFFFFF",
-                    color: "#126BFF",
-                    fontSize: "13px",
-                    fontWeight: "600",
-                    cursor: "pointer",
-                    transition: "all 0.15s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = "#EEF4FB";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = "#FFFFFF";
-                  }}
-                >
-                  <Eye size={15} />
-                  <span>View Student Preview</span>
-                </button>
-              </div>
-            )}
           </div>
 
           {/* Ordered Materials List Container */}
@@ -1632,6 +1657,90 @@ const MaterialList: React.FC = () => {
               )}
             </div>
           </div>
+
+          {/* Section Display Order (ONLY shown if 2 or more material types exist for this lesson & skill) */}
+          {isSelectionComplete && activeOrderedTypes.length >= 2 && (
+            <div
+              style={{
+                backgroundColor: "#FFFFFF",
+                border: "1px solid #E4ECF6",
+                borderRadius: "16px",
+                boxShadow: "0 6px 20px rgba(18, 63, 110, 0.05)",
+                padding: "24px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "16px",
+              }}
+            >
+              <div>
+                <h3 style={{ margin: 0, fontSize: "17px", fontWeight: "700", color: "#0B1F3A" }}>
+                  Section Display Order
+                </h3>
+                <p style={{ margin: "4px 0 0 0", fontSize: "13.5px", color: "#5D78A3" }}>
+                  Reorder material types for this lesson & skill to control student presentation order.
+                </p>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                {activeOrderedTypes.map((typeKey, idx) => (
+                  <div
+                    key={typeKey}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "12px 18px",
+                      backgroundColor: "#F8FBFF",
+                      border: "1px solid #DCE6F3",
+                      borderRadius: "10px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                      <span style={{ fontSize: "14px", fontWeight: "700", color: "#0B1F3A" }}>
+                        {idx + 1}. {typeKey === "NOTE" ? "Note Content" : typeKey === "ATTACHMENTS" ? "Attachments & Documents" : "Video Material"}
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", gap: "6px" }}>
+                      <button
+                        type="button"
+                        onClick={() => moveSectionType(idx, "up")}
+                        disabled={idx === 0}
+                        style={{
+                          padding: "6px 10px",
+                          borderRadius: "6px",
+                          border: "1px solid #DCE6F3",
+                          backgroundColor: idx === 0 ? "#F1F5F9" : "#FFFFFF",
+                          color: idx === 0 ? "#94A3B8" : "#0B1F3A",
+                          cursor: idx === 0 ? "default" : "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                        }}
+                      >
+                        <ArrowUp size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveSectionType(idx, "down")}
+                        disabled={idx === activeOrderedTypes.length - 1}
+                        style={{
+                          padding: "6px 10px",
+                          borderRadius: "6px",
+                          border: "1px solid #DCE6F3",
+                          backgroundColor: idx === activeOrderedTypes.length - 1 ? "#F1F5F9" : "#FFFFFF",
+                          color: idx === activeOrderedTypes.length - 1 ? "#94A3B8" : "#0B1F3A",
+                          cursor: idx === activeOrderedTypes.length - 1 ? "default" : "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                        }}
+                      >
+                        <ArrowDown size={15} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
 

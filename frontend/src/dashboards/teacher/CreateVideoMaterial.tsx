@@ -287,68 +287,32 @@ const CreateVideoMaterial = () => {
       {error && <div style={{ color: "#FF4054", padding: "12px", backgroundColor: "#FDEDED", borderRadius: "8px", fontSize: "14px", fontWeight: "500", border: "1px solid #FADCDC", marginBottom: "16px" }}>{error}</div>}
 
       <MainCard>
-        {queryLessonId && querySkillId ? (
-          <div style={{ backgroundColor: "#F0F6FF", border: "1px solid #BAE0FF", borderRadius: "10px", padding: "14px 18px", display: "flex", gap: "24px", alignItems: "center" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <BookOpen size={18} color="#126BFF" />
-              <span style={{ fontSize: "13px", color: "#5D78A3" }}>Lesson:</span>
-              <strong style={{ fontSize: "14px", color: "#0B1F3A" }}>{selectedLessonObj ? selectedLessonObj.title : `Lesson #${lessonId}`}</strong>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <Target size={18} color="#126BFF" />
-              <span style={{ fontSize: "13px", color: "#5D78A3" }}>Skill:</span>
-              <strong style={{ fontSize: "14px", color: "#0B1F3A" }}>{selectedSkillObj ? selectedSkillObj.name : `Skill #${skillId}`}</strong>
-            </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+          <div>
+            <Label>Lesson <span className="required-marker">*</span></Label>
+            <InputWrapper icon={BookOpen}>
+              <Select value={lessonId} onChange={(e: any) => setLessonId(e.target.value)}>
+                <option value="">Select Lesson</option>
+                {lessonsList.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
+              </Select>
+            </InputWrapper>
           </div>
-        ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-            <div>
-              <Label>Lesson <span className="required-marker">*</span></Label>
-              <InputWrapper icon={BookOpen}>
-                <Select value={lessonId} onChange={(e: any) => setLessonId(e.target.value)}>
-                  <option value="">Select Lesson</option>
-                  {lessonsList.map(l => <option key={l.id} value={l.id}>{l.title}</option>)}
-                </Select>
-              </InputWrapper>
-            </div>
-            <div>
-              <Label>Skill <span className="required-marker">*</span></Label>
-              <InputWrapper icon={Target}>
-                <Select value={skillId} onChange={(e: any) => setSkillId(e.target.value)} disabled={!lessonId}>
-                  <option value="">Select Skill</option>
-                  {skillsList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </Select>
-              </InputWrapper>
-            </div>
+          <div>
+            <Label>Skill <span className="required-marker">*</span></Label>
+            <InputWrapper icon={Target}>
+              <Select value={skillId} onChange={(e: any) => setSkillId(e.target.value)} disabled={!lessonId}>
+                <option value="">Select Skill</option>
+                {skillsList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </Select>
+            </InputWrapper>
           </div>
-        )}
+        </div>
 
         <div>
           <Label>Title <span className="required-marker">*</span></Label>
           <InputWrapper icon={FileText}>
             <Input value={title} onChange={(e: any) => setTitle(e.target.value)} placeholder="E.g., Intro to Fractions Video" />
           </InputWrapper>
-        </div>
-
-        <div>
-          <Label>Section Display Order</Label>
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {sectionOrder.map((section, idx) => (
-              <div key={section} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", backgroundColor: "#F8FBFF", border: "1px solid #DCE6F3", borderRadius: "8px" }}>
-                <span style={{ fontSize: "14px", fontWeight: "600", color: "#0B1F3A" }}>
-                  {idx + 1}. {section === "NOTE" ? "Note Content" : section === "ATTACHMENTS" ? "Attachments & Documents" : "Video Material"}
-                </span>
-                <div style={{ display: "flex", gap: "6px" }}>
-                  <button type="button" onClick={() => moveSectionUp(idx)} disabled={idx === 0} style={{ padding: "4px 8px", borderRadius: "4px", border: "1px solid #DCE6F3", backgroundColor: idx === 0 ? "#EFEFEF" : "#FFFFFF", cursor: idx === 0 ? "default" : "pointer" }}>
-                    <ArrowUp size={14} />
-                  </button>
-                  <button type="button" onClick={() => moveSectionDown(idx)} disabled={idx === sectionOrder.length - 1} style={{ padding: "4px 8px", borderRadius: "4px", border: "1px solid #DCE6F3", backgroundColor: idx === sectionOrder.length - 1 ? "#EFEFEF" : "#FFFFFF", cursor: idx === sectionOrder.length - 1 ? "default" : "pointer" }}>
-                    <ArrowDown size={14} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
 
         <div>

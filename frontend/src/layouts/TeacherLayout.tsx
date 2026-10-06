@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import "../styles/teacher.css";
 
@@ -48,6 +48,24 @@ const TeacherLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
+  // Auto collapse sidebar on mobile or when navigating
+  useEffect(() => {
+    if (window.innerWidth < 768) {
+      setCollapsed(true);
+    }
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 768) {
+        setCollapsed(true);
+      }
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   const getPageTitle = () => {
     const path = location.pathname;
     if (path.includes("/dashboard")) return "Dashboard";
@@ -87,11 +105,35 @@ const TeacherLayout = () => {
 
   return (
     <div className={`teacher-app-container ${collapsed ? "teacher-sidebar-collapsed" : ""}`}>
+      {/* Mobile Backdrop Overlay */}
+      {!collapsed && (
+        <div 
+          className="teacher-mobile-overlay" 
+          onClick={() => setCollapsed(true)} 
+        />
+      )}
+
       {/* Sidebar Component */}
       <TeacherSidebar collapsed={collapsed} setCollapsed={setCollapsed} />
 
+      {/* Floating Mobile Menu Button (Fixed Position, does not consume page flow height) */}
+      {collapsed && (
+        <button
+          type="button"
+          className="teacher-mobile-toggle-btn"
+          onClick={() => setCollapsed(false)}
+          aria-label="Open navigation menu"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
+      )}
+
       {/* Main Panel */}
-      <main className="teacher-main-content" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: "100vh", marginLeft: collapsed ? "80px" : "280px", transition: "margin-left 0.3s ease", backgroundColor: "#F5F8FC" }}>
+      <main className="teacher-main-content">
 
         {/* Page Title Section Component */}
         {!(location.pathname.includes("/lessons/") && (location.pathname.includes("/skills") || location.pathname.includes("/topics"))) && 
@@ -109,7 +151,7 @@ const TeacherLayout = () => {
         )}
 
         {/* Nested routing outlet */}
-        <div style={{ padding: "0 32px 24px 32px", overflowY: "auto", flex: 1 }}>
+        <div className="teacher-page-body">
           <Routes>
             <Route path="dashboard" element={<TeacherDashboard />} />
             

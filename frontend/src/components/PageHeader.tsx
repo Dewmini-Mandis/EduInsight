@@ -28,34 +28,19 @@ const PageHeader: React.FC<PageHeaderProps> = ({
   };
 
   return (
-    <div style={{
-      display: "flex", 
-      justifyContent: "space-between", 
-      alignItems: "flex-end", 
-      padding: "24px 32px 16px 32px",
-      backgroundColor: "transparent"
-    }}>
-      <div>
+    <div className="teacher-page-header">
+      <div className="teacher-page-header-text">
         {renderBreadcrumbs()}
-        <h1 style={{
-          fontSize: "32px",
-          fontWeight: "700",
-          color: "#0B1F3A",
-          margin: "0 0 4px 0",
-          lineHeight: "1.2"
-        }}>{title}</h1>
-        <p style={{
-          fontSize: "15px",
-          fontWeight: "400",
-          color: "#5D78A3",
-          margin: 0
-        }}>
-          {subtitle}
-        </p>
+        <h1 className="teacher-page-header-title">{title}</h1>
+        {subtitle && (
+          <p className="teacher-page-header-subtitle">
+            {subtitle}
+          </p>
+        )}
       </div>
 
       {actions && (
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+        <div className="teacher-page-header-actions">
           {actions}
         </div>
       )}
