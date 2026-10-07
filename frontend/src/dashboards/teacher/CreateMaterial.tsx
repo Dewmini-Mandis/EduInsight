@@ -104,6 +104,20 @@ const CreateMaterial = () => {
     fetchFilteredSkills();
   }, [topicId]);
 
+  const [estimatedTime, setEstimatedTime] = useState("5");
+  const [timeError, setTimeError] = useState("");
+
+  const validateTime = (val: string) => {
+    if (!val || val.trim() === "") {
+      return "Estimated completion time is required.";
+    }
+    const num = Number(val);
+    if (isNaN(num) || !Number.isInteger(num) || num <= 0) {
+      return "Enter a valid completion time in minutes.";
+    }
+    return "";
+  };
+
   const handleSubmit = async () => {
     const token = getToken();
     if (!token) return;
@@ -115,6 +129,16 @@ const CreateMaterial = () => {
     if (!topicId) errors.topicId = "Topic is required.";
     if (!skillId) errors.skillId = "Skill is required.";
     
+    if (materialType !== "VIDEO") {
+      const tErr = validateTime(estimatedTime);
+      if (tErr) {
+        setTimeError(tErr);
+        errors.estimatedTime = tErr;
+      }
+    } else {
+      setTimeError("");
+    }
+
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       return;
@@ -123,7 +147,7 @@ const CreateMaterial = () => {
     setLoading(true);
     setError("");
 
-    const payload = {
+    const payload: any = {
       title,
       material_type: materialType,
       content,
@@ -131,6 +155,10 @@ const CreateMaterial = () => {
       topic: topicId ? parseInt(topicId) : null,
       skill: skillId ? parseInt(skillId) : null,
     };
+
+    if (materialType !== "VIDEO") {
+      payload.estimated_completion_minutes = parseInt(estimatedTime);
+    }
 
     try {
       const res = await fetch("/api/quizzes/materials/", {
@@ -174,17 +202,17 @@ const CreateMaterial = () => {
           onClose={() => setSuccessMsg("")} 
         />
       )}
-      {error && <div style={{ color: "red" }}>{error}</div>}
+      {error && <div style={{ color: "#FF4054" }}>{error}</div>}
 
       <Card>
         <div>
-          <Label>Title <span className="required-marker">*</span></Label>
+          <Label>Title <span style={{ color: "#FF4054" }}>*</span></Label>
           <Input value={title} onChange={(e: any) => setTitle(e.target.value)} placeholder="E.g., Intro to Algebra Video" />
-          {fieldErrors.title && <span style={{ color: "red", fontSize: "12px" }}>{fieldErrors.title}</span>}
+          {fieldErrors.title && <span style={{ color: "#FF4054", fontSize: "12px" }}>{fieldErrors.title}</span>}
         </div>
 
         <div>
-          <Label>Material Type <span className="required-marker">*</span></Label>
+          <Label>Material Type <span style={{ color: "#FF4054" }}>*</span></Label>
           <Select value={materialType} onChange={(e: any) => setMaterialType(e.target.value)}>
             <option value="VIDEO">Video Link (YouTube, Vimeo, etc.)</option>
             <option value="PDF">PDF URL</option>
@@ -192,8 +220,41 @@ const CreateMaterial = () => {
           </Select>
         </div>
 
+        {materialType !== "VIDEO" && (
+          <div>
+            <Label>Estimated Completion Time <span style={{ color: "#FF4054" }}>*</span></Label>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <Input
+                type="number"
+                min="1"
+                step="1"
+                value={estimatedTime}
+                onChange={(e: any) => {
+                  setEstimatedTime(e.target.value);
+                  if (timeError) setTimeError(validateTime(e.target.value));
+                }}
+                placeholder="5"
+                style={{
+                  width: "120px",
+                  padding: "8px 12px",
+                  borderRadius: "6px",
+                  border: timeError ? "1px solid #FF4054" : "1px solid #e2e8f0",
+                  fontSize: "13px",
+                  outline: "none"
+                }}
+              />
+              <span style={{ fontSize: "13px", color: "#64748b" }}>Minutes</span>
+            </div>
+            {timeError && (
+              <div style={{ color: "#FF4054", fontSize: "12px", marginTop: "4px", fontWeight: "500" }}>
+                {timeError}
+              </div>
+            )}
+          </div>
+        )}
+
         <div>
-          <Label>Content (Text or URL) <span className="required-marker">*</span></Label>
+          <Label>Content (Text or URL) <span style={{ color: "#FF4054" }}>*</span></Label>
           {materialType === "TEXT" ? (
              <textarea 
                value={content} 

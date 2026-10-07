@@ -206,212 +206,22 @@ const LessonQuizCard: React.FC<LessonQuizCardProps> = ({
     );
   }
 
-  // 3. EXHAUSTED ATTEMPTS & REMEDIATION WORKFLOW STATE
-  if (isExhausted) {
-    const requiredMaterials = quiz.requiredMaterials || [];
-    const allCompleted = quiz.allMaterialsCompleted ?? requiredMaterials.every(m => m.is_completed);
-    const isEscalated = quiz.remediationState === "ESCALATED_TEACHER";
+  // 3. FAILED STATE (FAILED / EXHAUSTED / RETRYABLE)
+  const isFailed = quiz.status === "FAILED" || quiz.status === "FAILED_RETRYABLE" || quiz.status === "FAILED_EXHAUSTED" || isExhausted || isRetryable;
 
+  if (isFailed) {
     return (
       <div
-        className="student-quiz-card exhausted-remediation"
+        className="student-quiz-card failed"
         style={{
           background: "#FFFFFF",
-          border: isEscalated ? "1.5px solid #FF4054" : "1.5px solid #F59E0B",
-          borderRadius: "16px",
-          padding: "24px",
-          boxShadow: "0 4px 16px rgba(245, 158, 11, 0.08)",
-          display: "flex",
-          flexDirection: "column",
-          gap: "16px",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-            <div
-              style={{
-                width: "48px",
-                height: "48px",
-                borderRadius: "14px",
-                background: isEscalated ? "#FEF2F2" : "#FEF3C7",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: isEscalated ? "#FF4054" : "#D97706",
-                flexShrink: 0,
-              }}
-            >
-              <AlertTriangle size={22} color={isEscalated ? "#FF4054" : "#D97706"} />
-            </div>
-            <div>
-              <h3 style={{ margin: 0, fontSize: "18px", fontWeight: "700", color: "#0B1F3A" }}>
-                {quiz.title}
-              </h3>
-              <div style={{ fontSize: "13px", color: "#5D78A3", marginTop: "4px" }}>
-                Attempt {attemptsUsed} of {maxAttempts} Ordinary Attempts Used • Pass Mark: {quiz.passMark}%
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            {quiz.highRiskWarning && (
-              <span
-                style={{
-                  background: "#FEF2F2",
-                  color: "#DC2626",
-                  fontSize: "12px",
-                  fontWeight: "600",
-                  padding: "6px 12px",
-                  borderRadius: "20px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                }}
-              >
-                <ShieldAlert size={14} color="#DC2626" />
-                High Risk Warning
-              </span>
-            )}
-
-            <span
-              style={{
-                background: isEscalated ? "#FEF2F2" : "#FEF3C7",
-                color: isEscalated ? "#991B1B" : "#B45309",
-                fontSize: "13px",
-                fontWeight: "700",
-                padding: "6px 14px",
-                borderRadius: "20px",
-              }}
-            >
-              {isEscalated ? "Teacher Escalation Pending" : "Attempts Exhausted – Remediation Required"}
-            </span>
-          </div>
-        </div>
-
-        {/* Required Remediation Materials List */}
-        {requiredMaterials.length > 0 && (
-          <div style={{ background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: "12px", padding: "16px" }}>
-            <h4 style={{ margin: "0 0 10px", fontSize: "14px", fontWeight: "700", color: "#1E293B", display: "flex", alignItems: "center", gap: "8px" }}>
-              <BookOpen size={16} color="#6C4BFF" />
-              Mandatory Remedial Materials (Complete all to unlock Post-Remedial Reassessment):
-            </h4>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              {requiredMaterials.map((mat) => (
-                <div
-                  key={mat.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    background: "#FFFFFF",
-                    border: "1px solid #CBD5E1",
-                    borderRadius: "8px",
-                    padding: "10px 14px",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    {mat.is_completed ? (
-                      <CheckSquare size={18} color="#16B978" />
-                    ) : (
-                      <Clock size={18} color="#D97706" />
-                    )}
-                    <span style={{ fontSize: "14px", fontWeight: "600", color: "#334155" }}>
-                      {mat.title} ({mat.material_type})
-                    </span>
-                  </div>
-
-                  {mat.is_completed ? (
-                    <span style={{ background: "#E9FBF4", color: "#16B978", fontSize: "12px", fontWeight: "600", padding: "4px 10px", borderRadius: "12px" }}>
-                      Completed
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/student/materials/${mat.id}`)}
-                      style={{
-                        background: "#EDF2F7",
-                        color: "#2563EB",
-                        border: "none",
-                        borderRadius: "6px",
-                        padding: "6px 12px",
-                        fontSize: "12px",
-                        fontWeight: "600",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "4px",
-                      }}
-                    >
-                      View Material <ExternalLink size={12} />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Reassessment Button Actions */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: "8px" }}>
-          <button
-            type="button"
-            className="student-btn-secondary"
-            style={{ height: "42px", padding: "0 16px" }}
-            onClick={() => onViewResults(quiz)}
-          >
-            View Diagnostic Results
-          </button>
-
-          {isEscalated ? (
-            <div style={{ fontSize: "13px", fontWeight: "600", color: "#991B1B" }}>
-              Reassessment failed. A teacher will review diagnostic evidence and provide support.
-            </div>
-          ) : (
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              {!allCompleted && (
-                <span style={{ fontSize: "12px", color: "#64748B", fontWeight: "500" }}>
-                  Complete all materials above to unlock reassessment.
-                </span>
-              )}
-              <button
-                type="button"
-                className="student-btn-primary"
-                disabled={!allCompleted}
-                style={{
-                  height: "44px",
-                  padding: "0 22px",
-                  opacity: allCompleted ? 1 : 0.5,
-                  cursor: allCompleted ? "pointer" : "not-allowed",
-                  background: allCompleted ? "#16B978" : "#94A3B8",
-                  borderColor: allCompleted ? "#16B978" : "#94A3B8",
-                }}
-                onClick={() => allCompleted && onStartQuiz(quiz, true)}
-              >
-                Start Reassessment
-                <ChevronRight size={16} />
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // 4. ORDINARY RETAKE STATE (FAILED_RETRYABLE: Attempt X of Y with attempts remaining)
-  if (isRetryable) {
-    return (
-      <div
-        className="student-quiz-card retryable"
-        style={{
-          background: "#FFFFFF",
-          border: "1px solid #DCE6F3",
+          border: "1px solid #FCA5A5",
           borderRadius: "16px",
           padding: "20px 24px",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          boxShadow: "0 2px 8px rgba(11, 31, 58, 0.04)",
+          boxShadow: "0 2px 8px rgba(239, 68, 68, 0.04)",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
@@ -420,22 +230,22 @@ const LessonQuizCard: React.FC<LessonQuizCardProps> = ({
               width: "48px",
               height: "48px",
               borderRadius: "14px",
-              background: "#FEF3C7",
+              background: "#FEF2F2",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: "#D97706",
+              color: "#EF4444",
               flexShrink: 0,
             }}
           >
-            <RefreshCw size={22} color="#D97706" />
+            <AlertTriangle size={22} color="#EF4444" />
           </div>
           <div>
             <h3 style={{ margin: 0, fontSize: "18px", fontWeight: "700", color: "#0B1F3A" }}>
               {quiz.title}
             </h3>
             <div style={{ display: "flex", alignItems: "center", gap: "12px", fontSize: "13px", color: "#5D78A3", marginTop: "6px" }}>
-              <span style={{ fontWeight: 600, color: "#D97706" }}>
+              <span style={{ fontWeight: 600, color: "#EF4444" }}>
                 Attempt {attemptsUsed} of {maxAttempts} Used
               </span>
               <span style={{ color: "#DCE6F3" }}>|</span>
@@ -473,24 +283,27 @@ const LessonQuizCard: React.FC<LessonQuizCardProps> = ({
 
           <span
             style={{
-              background: "#FEF3C7",
-              color: "#B45309",
+              background: "#FEF2F2",
+              color: "#EF4444",
               fontSize: "13px",
               fontWeight: "600",
               padding: "6px 14px",
               borderRadius: "20px",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
             }}
           >
-            Attempt {currentAttemptNumber} of {maxAttempts} Available
+            Failed
           </span>
 
           <button
             type="button"
-            className="student-btn-primary"
-            style={{ height: "44px", padding: "0 22px" }}
-            onClick={() => onStartQuiz(quiz)}
+            className="student-btn-secondary"
+            style={{ height: "44px", padding: "0 20px" }}
+            onClick={() => onViewResults(quiz)}
           >
-            Retake Quiz
+            View Results
             <ChevronRight size={16} />
           </button>
         </div>

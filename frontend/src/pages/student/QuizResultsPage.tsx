@@ -34,6 +34,7 @@ const QuizResultsPage: React.FC = () => {
   const [riskSupport, setRiskSupport] = useState<any>(null);
   const [technicalData, setTechnicalData] = useState<any>(null);
   const [showTechnicalDetails, setShowTechnicalDetails] = useState<boolean>(false);
+  const [allMaterialsCompleted, setAllMaterialsCompleted] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,11 +53,17 @@ const QuizResultsPage: React.FC = () => {
       try {
         const headers = { Authorization: `Token ${token}` };
 
-        // Fetch quiz details & all user attempts
-        const [quizRes, allAttemptsRes] = await Promise.all([
+        // Fetch quiz details, remediation status & all user attempts
+        const [quizRes, allAttemptsRes, remRes] = await Promise.all([
           fetch(`/api/quizzes/${quizId}/`, { headers }),
           fetch(`/api/attempts/attempts/?quiz=${quizId}`, { headers }),
+          fetch(`/api/attempts/attempts/remediation_status/?quiz=${quizId}`, { headers }),
         ]);
+
+        if (remRes.ok) {
+          const remData = await remRes.json();
+          setAllMaterialsCompleted(remData.all_materials_completed ?? true);
+        }
 
         let quizObj: any = null;
         if (quizRes.ok) {
@@ -271,6 +278,14 @@ const QuizResultsPage: React.FC = () => {
     }
   };
 
+  const handleReviewRecommendedMaterials = () => {
+    navigate(
+      `/student/quizzes/${quizId}/materials?termName=${encodeURIComponent(
+        termName
+      )}&lessonTitle=${encodeURIComponent(lessonTitleParam)}&lessonId=${lessonIdParam}`
+    );
+  };
+
   const handleReviewAnswers = () => {
     const targetId = actualAttemptId || attemptId;
     navigate(
@@ -280,7 +295,7 @@ const QuizResultsPage: React.FC = () => {
     );
   };
 
-  const handleBackToLessons = () => {
+  const handleBackToQuizzes = () => {
     if (lessonIdParam) {
       navigate(`/student/my-learning/term/${encodeURIComponent(termName)}/lessons/${lessonIdParam}`);
     } else {
@@ -364,7 +379,7 @@ const QuizResultsPage: React.FC = () => {
 
           <div className={`student-status-badge ${isPassed ? "passed" : "needs-practice"}`}>
             {isPassed ? <Check size={16} /> : <X size={16} />}
-            <span>{isPassed ? "Passed" : "Needs Practice"}</span>
+            <span>{isPassed ? "Passed" : "Failed"}</span>
           </div>
         </div>
 
@@ -655,7 +670,7 @@ const QuizResultsPage: React.FC = () => {
                   type="button"
                   className="student-btn-primary"
                   style={{ padding: "8px 16px", fontSize: "13px", display: "flex", alignItems: "center", gap: "6px" }}
-                  onClick={handleReviewAnswers}
+                  onClick={handleReviewRecommendedMaterials}
                 >
                   {riskSupport?.next_action?.label || "Review Recommended Materials"}
                   <ArrowRight size={16} />
@@ -904,10 +919,19 @@ const QuizResultsPage: React.FC = () => {
         <div className="student-card student-next-actions-card">
           <h3 className="student-next-actions-title">What would you like to do next?</h3>
           <p className="student-next-actions-subtitle">
-            Keep going! Choose an option below to continue your learning journey.
+            {isPassed
+              ? "Great job! Choose an option below to continue your learning journey."
+              : "Review recommended materials and answers to prepare for your retry attempt."}
           </p>
 
-          <div className="student-actions-buttons-row">
+          {!isPassed && allMaterialsCompleted && (
+            <div style={{ backgroundColor: "#E9FBF4", border: "1px solid #BBF7D0", borderRadius: "10px", padding: "12px 16px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "10px" }}>
+              <CheckCircle2 size={18} color="#16B978" />
+              <span style={{ fontSize: "14px", fontWeight: "600", color: "#15803D" }}>Recommended materials completed.</span>
+            </div>
+          )}
+
+          <div className="student-actions-buttons-row" style={{ display: "flex", flexWrap: "wrap", gap: "12px" }}>
             <button
               type="button"
               className="student-btn-primary"
@@ -917,53 +941,35 @@ const QuizResultsPage: React.FC = () => {
               <ArrowRight size={18} />
             </button>
 
-            {isPassed && (
+            {!isPassed && (
               <button
                 type="button"
                 className="student-btn-secondary"
-                style={{ background: "#EBF3FF", color: "#126BFF", borderColor: "#126BFF" }}
-                onClick={() => {
-                  if (lessonIdParam) {
-                    navigate(`/student/learning-path/term/${encodeURIComponent(termName)}/lessons/${lessonIdParam}`);
-                  } else {
-                    navigate("/student/learning-path");
-                  }
-                }}
+                style={{ background: "#EFF6FF", color: "#126BFF", borderColor: "#126BFF" }}
+                onClick={handleReviewRecommendedMaterials}
               >
-                Next Quiz
+                Review Recommended Materials
               </button>
             )}
 
-            {!isPassed && attemptsRemaining > 0 && (
+            {!isPassed && allMaterialsCompleted && (
               <button
                 type="button"
-                className="student-btn-secondary"
+                className="student-btn-primary"
+                style={{ background: "#16B978", borderColor: "#16B978" }}
                 onClick={handleTryAgain}
               >
-                Try Again
+                Retry Quiz
               </button>
             )}
 
-            {!isPassed && attemptsRemaining === 0 && (
-              <button
-                type="button"
-                className="student-btn-secondary"
-                onClick={handleBackToLessons}
-              >
-                Back to Lessons
-              </button>
-            )}
-
-            {!isPassed && attemptsRemaining === 0 && maxAttempts > 1 && (
-              <button
-                type="button"
-                className="student-btn-secondary"
-                style={{ background: "#F1EDFF", color: "#6C4BFF", borderColor: "#6C4BFF" }}
-                onClick={() => navigate(`/student/progress/quiz/${quizId}`)}
-              >
-                View All Attempts
-              </button>
-            )}
+            <button
+              type="button"
+              className="student-btn-secondary"
+              onClick={handleBackToQuizzes}
+            >
+              Back to Quizzes
+            </button>
           </div>
         </div>
 

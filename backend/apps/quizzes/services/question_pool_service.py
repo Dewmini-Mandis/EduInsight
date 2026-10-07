@@ -187,34 +187,21 @@ def verify_remediation_completion(student: Student, quiz: Quiz) -> Dict[str, Any
             required_materials = [r.material for r in remediations if r.material]
         else:
             required_materials = list(LearningMaterial.objects.filter(quiz=quiz))
-            if not required_materials and quiz.skill_id:
-                required_materials = list(LearningMaterial.objects.filter(skill_id=quiz.skill_id))
-            if not required_materials and quiz.lesson_id:
-                required_materials = list(LearningMaterial.objects.filter(lesson_id=quiz.lesson_id))
+            if not required_materials and skills:
+                required_materials = list(LearningMaterial.objects.filter(skill__in=skills))
 
     if not required_materials:
-        ordinary_attempts = QuizAttempt.objects.filter(
-            student=student, quiz=quiz, attempt_type=QuizAttempt.TYPE_ORDINARY, status=QuizAttempt.STATUS_SUBMITTED
-        )
-        max_attempts = getattr(quiz, "max_attempts", 3) or 3
-        has_failed_all = ordinary_attempts.count() >= max_attempts and not ordinary_attempts.filter(score__gte=quiz.pass_mark).exists()
-        
-        if has_failed_all:
-            return {
-                "all_completed": False,
-                "total_assigned": 0,
-                "completed_count": 0,
-                "pending_count": 0,
-                "materials_detail": [],
-                "message": "Remedial materials must be assigned and completed before reassessment."
-            }
+        if rem_state and rem_state.status == StudentRemediationState.STATUS_PENDING_MATERIALS:
+            rem_state.status = StudentRemediationState.STATUS_REASSESSMENT_UNLOCKED
+            rem_state.save(update_fields=["status", "updated_at"])
+
         return {
             "all_completed": True,
             "total_assigned": 0,
             "completed_count": 0,
             "pending_count": 0,
             "materials_detail": [],
-            "message": "No remediations required."
+            "message": "No remediations required for covered skills."
         }
 
     completed_ids = set(

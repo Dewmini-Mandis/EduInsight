@@ -7,6 +7,7 @@ import LessonQuizzesPage from "../pages/student/LessonQuizzesPage";
 import QuizAnsweringPage from "../pages/student/QuizAnsweringPage";
 import QuizResultsPage from "../pages/student/QuizResultsPage";
 import QuizReviewPage from "../pages/student/QuizReviewPage";
+import StudentQuizMaterialsPage from "../pages/student/StudentQuizMaterialsPage";
 import MyProgressPage from "../pages/student/MyProgressPage";
 import MyPerformancePage from "../pages/student/MyPerformancePage";
 import MySkillsPage from "../pages/student/MySkillsPage";
@@ -24,7 +25,10 @@ const StudentLayout: React.FC = () => {
   // Check if current route is a full-page view without sidebar
   const isFullPageNoSidebar =
     location.pathname.includes("/quizzes/") &&
-    (location.pathname.includes("/attempt") || location.pathname.includes("/results/") || location.pathname.includes("/review"));
+    (location.pathname.includes("/attempt") ||
+      location.pathname.includes("/results/") ||
+      location.pathname.includes("/review") ||
+      location.pathname.includes("/materials"));
 
   return (
     <div className={`student-app-container ${collapsed ? "student-sidebar-collapsed" : ""}`}>
@@ -67,6 +71,7 @@ const StudentLayout: React.FC = () => {
           <Route path="quizzes/:quizId/attempt" element={<QuizAnsweringPage />} />
           <Route path="quizzes/:quizId/results/:attemptId" element={<QuizResultsPage />} />
           <Route path="quizzes/:quizId/results/:attemptId/review" element={<QuizReviewPage />} />
+          <Route path="quizzes/:quizId/materials" element={<StudentQuizMaterialsPage />} />
 
           {/* Default and legacy fallback routes */}
           <Route path="lessons/:lessonId" element={<StudentLessonViewer />} />

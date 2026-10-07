@@ -199,6 +199,7 @@ class StudentContentProgress(models.Model):
 	student = models.ForeignKey("classes.Student", on_delete=models.CASCADE, related_name="content_progress")
 	material = models.ForeignKey("quizzes.LearningMaterial", on_delete=models.CASCADE, related_name="student_progress")
 	watched_percentage = models.FloatField(default=0)
+	accumulated_seconds = models.PositiveIntegerField(default=0, help_text="Accumulated active learning time in seconds.")
 	is_completed = models.BooleanField(default=False)
 	started_at = models.DateTimeField(null=True, blank=True)
 	completed_at = models.DateTimeField(null=True, blank=True)
@@ -222,6 +223,20 @@ class StudentEngagementAnswer(models.Model):
 
 	def __str__(self):
 		return f"{self.student.user.username} - {self.question.id} - {'Correct' if self.is_correct else 'Incorrect'}"
+
+
+class StudentVideoAnswer(models.Model):
+	student = models.ForeignKey("classes.Student", on_delete=models.CASCADE, related_name="video_answers")
+	question = models.ForeignKey("quizzes.VideoQuestion", on_delete=models.CASCADE, related_name="student_answers")
+	selected_answer = models.CharField(max_length=255)
+	is_correct = models.BooleanField(default=False)
+	answered_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		unique_together = ("student", "question")
+
+	def __str__(self):
+		return f"{self.student.user.username} - VideoQuestion #{self.question.id} - {'Correct' if self.is_correct else 'Incorrect'}"
 
 class StudentRemediationState(models.Model):
 	STATUS_PENDING_MATERIALS = "PENDING_MATERIALS"

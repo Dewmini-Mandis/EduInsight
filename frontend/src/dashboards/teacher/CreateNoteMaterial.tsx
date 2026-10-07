@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { getToken } from "../../auth/authUtils";
-import { FileText, BookOpen, Target, Save, ArrowUp, ArrowDown } from "lucide-react";
+import { FileText, BookOpen, Target, Save, Clock } from "lucide-react";
 
 import LearningNoteHeader from "../../components/materials/LearningNoteHeader";
 import RichTextEditor from "../../components/materials/RichTextEditor";
@@ -25,8 +25,29 @@ const InputWrapper = ({ icon: Icon, children }: any) => (
   </div>
 );
 
-const Input = ({ ...props }: any) => (
-  <input style={{ width: "100%", height: "46px", padding: "0 14px 0 42px", borderRadius: "9px", border: "1px solid #DCE6F3", fontSize: "14px", outline: "none", color: "#0B1F3A", transition: "all 0.2s" }} onFocus={(e:any) => {e.target.style.borderColor="#126BFF"; e.target.style.boxShadow="0 0 0 3px rgba(18,107,255,0.10)"}} onBlur={(e:any) => {e.target.style.borderColor="#DCE6F3"; e.target.style.boxShadow="none"}} {...props} />
+const Input = ({ hasError, ...props }: any) => (
+  <input
+    style={{
+      width: "100%",
+      height: "46px",
+      padding: "0 14px 0 42px",
+      borderRadius: "9px",
+      border: hasError ? "1px solid #FF4054" : "1px solid #DCE6F3",
+      fontSize: "14px",
+      outline: "none",
+      color: "#0B1F3A",
+      transition: "all 0.2s"
+    }}
+    onFocus={(e:any) => {
+      e.target.style.borderColor = hasError ? "#FF4054" : "#126BFF";
+      e.target.style.boxShadow = hasError ? "0 0 0 3px rgba(255,64,84,0.15)" : "0 0 0 3px rgba(18,107,255,0.10)";
+    }}
+    onBlur={(e:any) => {
+      e.target.style.borderColor = hasError ? "#FF4054" : "#DCE6F3";
+      e.target.style.boxShadow = "none";
+    }}
+    {...props}
+  />
 );
 
 const Select = ({ children, ...props }: any) => (
@@ -44,6 +65,8 @@ const CreateNoteMaterial = () => {
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const [estimatedTime, setEstimatedTime] = useState("5");
+  const [timeError, setTimeError] = useState("");
   const [attachments, setAttachments] = useState<File[]>([]);
   const [existingAttachments, setExistingAttachments] = useState<any[]>([]);
 
@@ -83,6 +106,9 @@ const CreateNoteMaterial = () => {
         const data = await res.json();
         setTitle(data.title || "");
         setContent(data.content || "");
+        if (data.estimated_completion_minutes) {
+          setEstimatedTime(String(data.estimated_completion_minutes));
+        }
         if (data.section_order && Array.isArray(data.section_order) && data.section_order.length > 0) {
           setSectionOrder(data.section_order);
         }
@@ -176,9 +202,28 @@ const CreateNoteMaterial = () => {
     setSectionOrder(newOrder);
   };
 
+  const validateTime = (val: string) => {
+    if (!val || val.trim() === "") {
+      return "Estimated completion time is required.";
+    }
+    const num = Number(val);
+    if (isNaN(num) || !Number.isInteger(num) || num <= 0) {
+      return "Enter a valid completion time in minutes.";
+    }
+    return "";
+  };
+
   const handleSubmit = async () => {
+    setTimeError("");
     if (!title || !lessonId || !skillId) {
       setError("Title, Lesson, and Skill are required.");
+      return;
+    }
+
+    const tErr = validateTime(estimatedTime);
+    if (tErr) {
+      setTimeError(tErr);
+      setError(tErr);
       return;
     }
     
@@ -194,6 +239,7 @@ const CreateNoteMaterial = () => {
       formData.append("title", title);
       formData.append("material_type", "TEXT");
       if (content) formData.append("content", content);
+      formData.append("estimated_completion_minutes", estimatedTime);
       formData.append("lesson", lessonId);
       formData.append("skill", skillId);
       formData.append("section_order", JSON.stringify(sectionOrder));
@@ -251,7 +297,7 @@ const CreateNoteMaterial = () => {
       <MainCard>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
           <div>
-            <Label>Lesson <span className="required-marker">*</span></Label>
+            <Label>Lesson <span style={{ color: "#FF4054" }}>*</span></Label>
             <InputWrapper icon={BookOpen}>
               <Select value={lessonId} onChange={(e: any) => setLessonId(e.target.value)}>
                 <option value="">Select Lesson</option>
@@ -260,7 +306,7 @@ const CreateNoteMaterial = () => {
             </InputWrapper>
           </div>
           <div>
-            <Label>Skill <span className="required-marker">*</span></Label>
+            <Label>Skill <span style={{ color: "#FF4054" }}>*</span></Label>
             <InputWrapper icon={Target}>
               <Select value={skillId} onChange={(e: any) => setSkillId(e.target.value)} disabled={!lessonId}>
                 <option value="">Select Skill</option>
@@ -270,11 +316,40 @@ const CreateNoteMaterial = () => {
           </div>
         </div>
 
-        <div>
-          <Label>Title <span className="required-marker">*</span></Label>
-          <InputWrapper icon={FileText}>
-            <Input value={title} onChange={(e: any) => setTitle(e.target.value)} placeholder="E.g., Chapter 1 Summary" />
-          </InputWrapper>
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "20px" }}>
+          <div>
+            <Label>Title <span style={{ color: "#FF4054" }}>*</span></Label>
+            <InputWrapper icon={FileText}>
+              <Input value={title} onChange={(e: any) => setTitle(e.target.value)} placeholder="E.g., Chapter 1 Summary" />
+            </InputWrapper>
+          </div>
+          <div>
+            <Label>Estimated Completion Time <span style={{ color: "#FF4054" }}>*</span></Label>
+            <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+              <InputWrapper icon={Clock}>
+                <Input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={estimatedTime}
+                  hasError={!!timeError}
+                  onChange={(e: any) => {
+                    setEstimatedTime(e.target.value);
+                    if (timeError) setTimeError(validateTime(e.target.value));
+                  }}
+                  placeholder="5"
+                />
+              </InputWrapper>
+              <span style={{ position: "absolute", right: "14px", fontSize: "14px", color: "#64748B", pointerEvents: "none" }}>
+                Minutes
+              </span>
+            </div>
+            {timeError && (
+              <div style={{ color: "#FF4054", fontSize: "12px", marginTop: "4px", fontWeight: "500" }}>
+                {timeError}
+              </div>
+            )}
+          </div>
         </div>
 
         <div>
@@ -283,7 +358,7 @@ const CreateNoteMaterial = () => {
         </div>
 
         <div>
-          <Label>Attachments (PDF / Images) <span className="required-marker">*</span></Label>
+          <Label>Attachments (PDF / Images) <span style={{ color: "#FF4054" }}>*</span></Label>
           <FileUploader 
             existingAttachments={existingAttachments}
             newAttachments={attachments}

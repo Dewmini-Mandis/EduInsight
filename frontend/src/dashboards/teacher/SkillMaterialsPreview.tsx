@@ -285,14 +285,23 @@ const SkillMaterialsPreview: React.FC = () => {
           </p>
         ) : (
           <div
+            className={
+              materials.length <= 1
+                ? "material-dynamic-grid material-dynamic-grid-1"
+                : materials.length === 2
+                ? "material-dynamic-grid material-dynamic-grid-2"
+                : "material-dynamic-grid material-dynamic-grid-3"
+            }
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "12px",
+              display: "grid",
+              gridTemplateColumns:
+                materials.length <= 1
+                  ? "1fr"
+                  : materials.length === 2
+                  ? "repeat(2, minmax(0, 1fr))"
+                  : "repeat(3, minmax(0, 1fr))",
+              gap: "14px",
               width: "100%",
-              overflowX: "auto",
-              paddingBottom: "6px",
-              scrollbarWidth: "thin",
               boxSizing: "border-box",
             }}
           >
@@ -315,15 +324,16 @@ const SkillMaterialsPreview: React.FC = () => {
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: "10px",
-                    padding: "12px 16px",
+                    gap: "12px",
+                    padding: "14px 18px",
                     borderRadius: "12px",
                     border: isSelected ? "2px solid #126BFF" : "1px solid #DCE6F3",
                     backgroundColor: isSelected ? "#F0F6FF" : "#FFFFFF",
                     color: isSelected ? "#126BFF" : "#0B1F3A",
                     cursor: "pointer",
-                    flex: "1 1 0px",
-                    minWidth: "140px",
+                    width: "100%",
+                    minWidth: 0,
+                    height: "100%",
                     transition: "all 0.15s ease",
                     boxShadow: isSelected ? "0 4px 12px rgba(18, 107, 255, 0.12)" : "none",
                     boxSizing: "border-box",
@@ -433,6 +443,12 @@ const SkillMaterialsPreview: React.FC = () => {
                 <h1 style={{ fontSize: "26px", fontWeight: "700", color: "#0B1F3A", margin: "8px 0 0 0" }}>
                   {activeMaterial.title}
                 </h1>
+                {activeMaterial.material_type !== "VIDEO" && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "14px", fontWeight: "600", color: "#475569", marginTop: "8px" }}>
+                    <span style={{ color: "#5D78A3", fontWeight: "500" }}>Estimated Completion Time:</span>
+                    <strong style={{ color: "#0B1F3A" }}>{activeMaterial.estimated_completion_minutes || 5} minutes</strong>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -728,13 +744,42 @@ const SkillMaterialsPreview: React.FC = () => {
                 </div>
               )}
 
+            {/* Simulated Mark as Complete Button for Teacher Preview */}
+            <div style={{ marginTop: "28px", display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}>
+              <button
+                type="button"
+                disabled
+                style={{
+                  width: "100%",
+                  height: "46px",
+                  borderRadius: "10px",
+                  backgroundColor: "#F1F5F9",
+                  color: "#64748B",
+                  border: "1px solid #E2E8F0",
+                  fontSize: "14px",
+                  fontWeight: "700",
+                  cursor: "not-allowed",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                }}
+              >
+                <CheckCircle2 size={18} color="#94A3B8" />
+                Mark as Complete (Preview Mode)
+              </button>
+              <span style={{ fontSize: "12px", color: "#94A3B8", fontStyle: "italic" }}>
+                Teacher Student Preview Mode — student completion progress is not affected.
+              </span>
+            </div>
+
             {/* Bottom Sequence Navigation */}
             <div
               style={{
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                marginTop: "36px",
+                marginTop: "24px",
                 paddingTop: "24px",
                 borderTop: "1px solid #E4ECF6",
               }}

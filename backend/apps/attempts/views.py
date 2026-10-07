@@ -9,17 +9,17 @@ from rest_framework.exceptions import PermissionDenied
 from apps.accounts.models import Role
 from apps.attempts.models import (
     QuizAttempt, AttemptQuestion, AttemptAnswer, ManualMark, TeacherOverride,
-    StudentLessonProgress, StudentContentProgress, StudentEngagementAnswer,
+    StudentLessonProgress, StudentContentProgress, StudentEngagementAnswer, StudentVideoAnswer,
     StudentRemediationState, TeacherIntervention
 )
 from apps.attempts.serializers import (
     QuizAttemptSerializer, ManualMarkSerializer, TeacherOverrideSerializer,
     StudentLessonProgressSerializer, StudentContentProgressSerializer,
-    StudentEngagementAnswerSerializer, StudentRemediationStateSerializer,
+    StudentEngagementAnswerSerializer, StudentVideoAnswerSerializer, StudentRemediationStateSerializer,
     TeacherInterventionSerializer
 )
 from apps.classes.models import Student
-from apps.quizzes.models import Quiz, Question, Answer, CorrectAnswer, Skill
+from apps.quizzes.models import Quiz, Question, Answer, CorrectAnswer, Skill, LearningMaterial, VideoQuestion
 from apps.quizzes.views import can_student_access_quiz
 
 def select_and_validate_quiz_questions(quiz):
@@ -1169,10 +1169,148 @@ class StudentContentProgressViewSet(viewsets.ModelViewSet):
             return StudentContentProgress.objects.filter(student__user=user)
         return StudentContentProgress.objects.none()
 
-    def perform_create(self, serializer):
-        user = self.request.user
+    def create(self, request, *args, **kwargs):
+        user = request.user
+        if not user.is_role(Role.ROLE_STUDENT) and not user.is_role(Role.ROLE_SYSTEM_ADMIN):
+            return Response({"detail": "Only students can track material progress."}, status=status.HTTP_403_FORBIDDEN)
+        
         student, _ = Student.objects.get_or_create(user=user)
-        serializer.save(student=student)
+        material_id = request.data.get("material")
+        if not material_id:
+            return Response({"detail": "material is required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            material = LearningMaterial.objects.get(id=material_id)
+        except LearningMaterial.DoesNotExist:
+            return Response({"detail": "Material not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        progress, created = StudentContentProgress.objects.get_or_create(
+            student=student,
+            material=material,
+            defaults={"started_at": timezone.now()}
+        )
+
+        is_completed_requested = request.data.get("is_completed", False)
+        new_accumulated_seconds = request.data.get("accumulated_seconds")
+        new_watched_percentage = request.data.get("watched_percentage")
+
+        if new_accumulated_seconds is not None:
+            try:
+                acc_val = int(new_accumulated_seconds)
+                if acc_val > progress.accumulated_seconds:
+                    progress.accumulated_seconds = acc_val
+            except (ValueError, TypeError):
+                pass
+
+        if new_watched_percentage is not None:
+            try:
+                wp_val = float(new_watched_percentage)
+                if wp_val > progress.watched_percentage:
+                    progress.watched_percentage = wp_val
+            except (ValueError, TypeError):
+                pass
+
+        if is_completed_requested:
+            if material.material_type == LearningMaterial.TYPE_VIDEO:
+                if progress.watched_percentage < 95.0:
+                    return Response(
+                        {"detail": "Please finish watching the video before marking this material as complete."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                video_qs = VideoQuestion.objects.filter(material=material)
+                if video_qs.exists():
+                    answered_count = StudentVideoAnswer.objects.filter(student=student, question__in=video_qs).count()
+                    if answered_count < video_qs.count():
+                        return Response(
+                            {"detail": "Please answer all embedded video questions before marking this material as complete."},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+            else:
+                est_minutes = material.estimated_completion_minutes or 0
+                required_seconds = est_minutes * 60
+                if progress.accumulated_seconds < required_seconds:
+                    return Response(
+                        {"detail": "Please complete the required learning time before marking this material as complete."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            progress.is_completed = True
+            if not progress.completed_at:
+                progress.completed_at = timezone.now()
+
+        progress.save()
+
+        if progress.is_completed and material.quiz:
+            from apps.quizzes.services.question_pool_service import verify_remediation_completion
+            verify_remediation_completion(student, material.quiz)
+
+        serializer = self.get_serializer(progress)
+        status_code = status.HTTP_200_OK if not created else status.HTTP_201_CREATED
+        return Response(serializer.data, status=status_code)
+
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        user = request.user
+        student = instance.student
+        material = instance.material
+
+        is_completed_requested = request.data.get("is_completed", False)
+        new_accumulated_seconds = request.data.get("accumulated_seconds")
+        new_watched_percentage = request.data.get("watched_percentage")
+
+        if new_accumulated_seconds is not None:
+            try:
+                acc_val = int(new_accumulated_seconds)
+                if acc_val > instance.accumulated_seconds:
+                    instance.accumulated_seconds = acc_val
+            except (ValueError, TypeError):
+                pass
+
+        if new_watched_percentage is not None:
+            try:
+                wp_val = float(new_watched_percentage)
+                if wp_val > instance.watched_percentage:
+                    instance.watched_percentage = wp_val
+            except (ValueError, TypeError):
+                pass
+
+        if is_completed_requested:
+            if material.material_type == LearningMaterial.TYPE_VIDEO:
+                if instance.watched_percentage < 95.0:
+                    return Response(
+                        {"detail": "Please finish watching the video before marking this material as complete."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                video_qs = VideoQuestion.objects.filter(material=material)
+                if video_qs.exists():
+                    answered_count = StudentVideoAnswer.objects.filter(student=student, question__in=video_qs).count()
+                    if answered_count < video_qs.count():
+                        return Response(
+                            {"detail": "Please answer all embedded video questions before marking this material as complete."},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+            else:
+                est_minutes = material.estimated_completion_minutes or 0
+                required_seconds = est_minutes * 60
+                if instance.accumulated_seconds < required_seconds:
+                    return Response(
+                        {"detail": "Please complete the required learning time before marking this material as complete."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            instance.is_completed = True
+            if not instance.completed_at:
+                instance.completed_at = timezone.now()
+
+        instance.save()
+
+        if instance.is_completed and material.quiz:
+            from apps.quizzes.services.question_pool_service import verify_remediation_completion
+            verify_remediation_completion(student, material.quiz)
+
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
 
 class StudentEngagementAnswerViewSet(viewsets.ModelViewSet):
     serializer_class = StudentEngagementAnswerSerializer
@@ -1192,3 +1330,33 @@ class StudentEngagementAnswerViewSet(viewsets.ModelViewSet):
         user = self.request.user
         student, _ = Student.objects.get_or_create(user=user)
         serializer.save(student=student)
+
+
+class StudentVideoAnswerViewSet(viewsets.ModelViewSet):
+    serializer_class = StudentVideoAnswerSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_role(Role.ROLE_SYSTEM_ADMIN):
+            return StudentVideoAnswer.objects.all()
+        if user.is_role(Role.ROLE_TEACHER):
+            return StudentVideoAnswer.objects.filter(student__registered_by=user)
+        if user.is_role(Role.ROLE_STUDENT):
+            return StudentVideoAnswer.objects.filter(student__user=user)
+        return StudentVideoAnswer.objects.none()
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        student, _ = Student.objects.get_or_create(user=user)
+        question = serializer.validated_data.get("question")
+        selected = serializer.validated_data.get("selected_answer")
+        
+        is_correct = False
+        if question and question.options:
+            for opt in question.options:
+                if str(opt.get("text", "")).strip().lower() == str(selected).strip().lower() and opt.get("is_correct"):
+                    is_correct = True
+                    break
+
+        serializer.save(student=student, is_correct=is_correct)

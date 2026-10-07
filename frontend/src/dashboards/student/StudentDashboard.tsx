@@ -682,7 +682,7 @@ const StudentDashboard = () => {
                   </div>
 
                   <div style={{ background: "white", padding: "24px 28px", borderRadius: "16px", border: "1px solid #e2e8f0", boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)", textAlign: "left" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "10px" }}>
                       <div style={{ background: "#EAF3FF", padding: "10px", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center", color: "#126BFF" }}>
                         <Calendar size={20} />
                       </div>
@@ -692,7 +692,7 @@ const StudentDashboard = () => {
                       </div>
                     </div>
                     
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px", marginTop: "12px" }}>
+                    <div className="student-term-grid">
                       {[
                         { title: "Term 1", subtitle: "Start Learning" },
                         { title: "Term 2", subtitle: "Continue Your Journey" },
@@ -708,46 +708,18 @@ const StudentDashboard = () => {
                               setLearningPathStep("lesson");
                               setSelectedLessonId("");
                             }}
-                            style={{
-                              position: "relative",
-                              display: "flex",
-                              flexDirection: "column",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              width: "100%",
-                              minHeight: "120px",
-                              padding: "16px 18px",
-                              borderRadius: "14px",
-                              background: isActive ? "#126BFF" : "white",
-                              color: isActive ? "white" : "var(--navy-900)",
-                              border: `1px solid ${isActive ? "#126BFF" : "#e2e8f0"}`,
-                              boxShadow: isActive ? "0 8px 20px rgba(18, 107, 255, 0.2)" : "0 2px 4px rgba(0, 0, 0, 0.03)",
-                              cursor: "pointer",
-                              transition: "all 0.25s ease"
-                            }}
+                            className={`student-term-card ${isActive ? "selected" : ""}`}
                           >
                             {isActive && (
-                              <div style={{ position: "absolute", top: "10px", right: "10px", background: "white", borderRadius: "50%", padding: "2px", display: "flex" }}>
-                                <CheckCircle size={14} color="#126BFF" />
+                              <div className="student-term-check-icon">
+                                <CheckCircle size={14} color="white" />
                               </div>
                             )}
-                            <div
-                              style={{
-                                width: "38px",
-                                height: "38px",
-                                borderRadius: "10px",
-                                background: isActive ? "rgba(255, 255, 255, 0.2)" : "rgba(18, 107, 255, 0.08)",
-                                color: isActive ? "white" : "#126BFF",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                marginBottom: "8px"
-                              }}
-                            >
-                              <Calendar size={20} />
+                            <div className="student-term-icon">
+                              <Calendar size={22} />
                             </div>
-                            <div style={{ fontSize: "18px", fontWeight: "700", marginBottom: "2px" }}>{t.title}</div>
-                            <div style={{ fontSize: "14px", color: isActive ? "rgba(255,255,255,0.85)" : "#64748b" }}>{t.subtitle}</div>
+                            <div className="student-term-title">{t.title}</div>
+                            <div className="student-term-subtitle">{t.subtitle}</div>
                           </button>
                         );
                       })}

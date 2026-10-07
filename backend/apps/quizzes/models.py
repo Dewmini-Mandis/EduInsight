@@ -103,6 +103,7 @@ class LearningMaterial(models.Model):
 	is_required = models.BooleanField(default=True)
 	order = models.PositiveIntegerField(default=1)
 	section_order = models.JSONField(default=list, blank=True, help_text="Ordered list of section types, e.g. ['NOTE', 'ATTACHMENTS', 'VIDEO']")
+	estimated_completion_minutes = models.PositiveIntegerField(default=5, null=True, blank=True, help_text="Estimated completion time in minutes for Note and PDF/Attachment materials.")
 	class Meta:
 		indexes = [
 			models.Index(fields=["-created_at"], name="idx_mat_created_at"),
