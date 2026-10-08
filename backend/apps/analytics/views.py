@@ -47,16 +47,49 @@ class AnalyticsViewSet(viewsets.ReadOnlyModelViewSet):
                 {"className": c.name, "avgScore": getattr(c, "average_score", 0)} for c in classes_qs
             ]
 
-            risk_qs = RiskPrediction.objects.filter(student__registered_by=user).select_related("student__user", "student__class_room").order_by("-prediction_date")[:5]
-            risk_students = [
-                {
-                    "id": str(r.id),
-                    "name": r.student.user.get_full_name() or r.student.user.username,
-                    "className": r.student.class_room.name if r.student.class_room else "Class",
-                    "riskLevel": "High Risk" if r.risk_category in ["High Risk", "HIGH", "Critical"] else "Low Risk"
-                }
-                for r in risk_qs
-            ]
+            # Scope teacher to their assigned classes / registered students
+            from django.db.models import Q
+            from apps.attempts.models import StudentRemediationState, TeacherIntervention
+
+            # Active escalated teacher interventions (is_pending=True)
+            intervention_qs = (
+                TeacherIntervention.objects.filter(
+                    is_pending=True,
+                    remediation_state__status=StudentRemediationState.STATUS_ESCALATED_TEACHER,
+                    student__user__is_active=True
+                )
+                .filter(
+                    Q(teacher=user) |
+                    Q(student__registered_by=user) |
+                    Q(student__class_room__teacherclassroom__teacher=user, student__class_room__teacherclassroom__is_active=True)
+                )
+                .select_related("student__user", "student__class_room", "quiz__lesson", "skill", "remediation_state__reassessment_attempt")
+                .distinct()
+                .order_by("-date_recorded")[:10]
+            )
+
+            risk_students = []
+            for item in intervention_qs:
+                reassess_att = item.remediation_state.reassessment_attempt if item.remediation_state else None
+                failed_score = reassess_att.score if reassess_att else None
+                pass_mark = item.quiz.pass_mark if item.quiz else 70
+                weak_skill_name = item.skill.name if item.skill else None
+                
+                risk_students.append({
+                    "id": str(item.id),
+                    "student_id": item.student.id,
+                    "quiz_id": item.quiz.id if item.quiz else None,
+                    "name": item.student.user.get_full_name() or item.student.user.username,
+                    "className": item.student.class_room.name if item.student.class_room else (item.student.class_name or "Class"),
+                    "quizTitle": item.quiz.title if item.quiz else "Reassessment",
+                    "lessonTitle": item.quiz.lesson.title if item.quiz and item.quiz.lesson else "-",
+                    "score": failed_score,
+                    "passMark": pass_mark,
+                    "weakSkill": weak_skill_name,
+                    "status": "Needs Teacher Intervention",
+                    "riskLevel": "Needs Intervention",
+                    "date": item.date_recorded.strftime("%Y-%m-%d") if item.date_recorded else ""
+                })
 
             recent_quizzes_qs = list(Quiz.objects.filter(created_by=user, is_deleted=False).select_related("lesson", "assigned_class").order_by("-created_at")[:5])
             recent_quiz_ids = [q.id for q in recent_quizzes_qs]

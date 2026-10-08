@@ -17,9 +17,18 @@ interface ClassPerformance {
 
 interface RiskStudent {
   id: string;
+  student_id?: number;
+  quiz_id?: number;
   name: string;
   className: string;
-  riskLevel: "High Risk" | "Medium Risk" | "Low Risk";
+  quizTitle?: string;
+  lessonTitle?: string;
+  score?: number | null;
+  passMark?: number;
+  weakSkill?: string | null;
+  status?: string;
+  riskLevel: string;
+  date?: string;
 }
 
 interface QuizItem {
@@ -583,76 +592,79 @@ const TeacherDashboard: React.FC = () => {
               </button>
             </div>
 
-            {/* At-Risk Students List */}
+            {/* At-Risk / Needs Intervention Students List */}
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {riskStudents.map((student) => {
-                let badgeBg = "rgba(22, 185, 120, 0.1)";
-                let badgeColor = "#16B978";
+              {riskStudents.length === 0 ? (
+                <div style={{ padding: "16px", textAlign: "center", color: "#5D78A3", fontSize: "13px" }}>
+                  No students currently require teacher intervention.
+                </div>
+              ) : (
+                riskStudents.map((student) => {
+                  const badgeBg = "rgba(255, 64, 84, 0.1)";
+                  const badgeColor = "#FF4054";
 
-                if (student.riskLevel === "High Risk") {
-                  badgeBg = "rgba(255, 64, 84, 0.1)";
-                  badgeColor = "#FF4054";
-                } else if (student.riskLevel === "Medium Risk") {
-                  badgeBg = "rgba(245, 166, 35, 0.1)";
-                  badgeColor = "#F5A623";
-                }
-
-                return (
-                  <div
-                    key={student.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "10px 12px",
-                      borderRadius: "10px",
-                      backgroundColor: "#F8FAFC",
-                      border: "1px solid #EDF2F7",
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontSize: "14px", fontWeight: "600", color: "#0B1F3A" }}>
-                        {student.name}
+                  return (
+                    <div
+                      key={student.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "10px 12px",
+                        borderRadius: "10px",
+                        backgroundColor: "#F8FAFC",
+                        border: "1px solid #EDF2F7",
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: "14px", fontWeight: "600", color: "#0B1F3A" }}>
+                          {student.name}
+                        </div>
+                        <div style={{ fontSize: "12px", color: "#5D78A3" }}>
+                          Class {student.className} • {student.quizTitle || "Reassessment"}
+                          {student.score !== null && student.score !== undefined && (
+                            <span style={{ color: "#FF4054", fontWeight: "600", marginLeft: "4px" }}>
+                              (Score: {student.score}% / Pass: {student.passMark || 70}%)
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <div style={{ fontSize: "12px", color: "#5D78A3" }}>
-                        Class {student.className}
+
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        <span
+                          style={{
+                            fontSize: "11px",
+                            fontWeight: "600",
+                            backgroundColor: badgeBg,
+                            color: badgeColor,
+                            padding: "4px 10px",
+                            borderRadius: "12px",
+                          }}
+                        >
+                          Needs Intervention
+                        </span>
+                        <button
+                          onClick={() => navigate("/teacher/analytics/risk-improvement")}
+                          title="View details"
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: "#5D78A3",
+                            cursor: "pointer",
+                            padding: "2px",
+                            display: "flex",
+                            alignItems: "center",
+                          }}
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="9 18 15 12 9 6" />
+                          </svg>
+                        </button>
                       </div>
                     </div>
-
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                      <span
-                        style={{
-                          fontSize: "11px",
-                          fontWeight: "600",
-                          backgroundColor: badgeBg,
-                          color: badgeColor,
-                          padding: "4px 10px",
-                          borderRadius: "12px",
-                        }}
-                      >
-                        {student.riskLevel}
-                      </span>
-                      <button
-                        onClick={() => navigate("/teacher/analytics/risk-improvement")}
-                        title="View details"
-                        style={{
-                          background: "none",
-                          border: "none",
-                          color: "#5D78A3",
-                          cursor: "pointer",
-                          padding: "2px",
-                          display: "flex",
-                          alignItems: "center",
-                        }}
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="9 18 15 12 9 6" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           </div>
 

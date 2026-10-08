@@ -1155,15 +1155,22 @@ class TeacherInterventionViewSet(viewsets.ModelViewSet):
             return TeacherIntervention.objects.all().select_related("student__user", "teacher", "quiz")
         if user.is_role(Role.ROLE_TEACHER):
             return TeacherIntervention.objects.filter(
-                models.Q(teacher=user) | models.Q(student__registered_by=user)
-            ).select_related("student__user", "teacher", "quiz")
+                models.Q(teacher=user) |
+                models.Q(student__registered_by=user) |
+                models.Q(student__class_room__teacherclassroom__teacher=user, student__class_room__teacherclassroom__is_active=True)
+            ).select_related("student__user", "student__class_room", "teacher", "quiz__lesson", "skill", "remediation_state__reassessment_attempt").distinct().order_by("-date_recorded")
         if user.is_role(Role.ROLE_STUDENT):
             return TeacherIntervention.objects.filter(student__user=user).select_related("student__user", "teacher", "quiz")
         return TeacherIntervention.objects.none()
 
     @action(detail=False, methods=["get"])
     def pending(self, request):
-        queryset = self.get_queryset().filter(is_pending=True)
+        from .models import StudentRemediationState
+        queryset = self.get_queryset().filter(
+            is_pending=True,
+            remediation_state__status=StudentRemediationState.STATUS_ESCALATED_TEACHER,
+            student__user__is_active=True
+        )
         return Response(self.get_serializer(queryset, many=True).data)
 
     @action(detail=False, methods=["post"])

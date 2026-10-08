@@ -43,74 +43,48 @@ const RiskAlerts = () => {
     }
 
     try {
-      const [riskRes, pendingRes] = await Promise.allSettled([
-        fetch("/api/analytics/risk/", {
-          headers: { Authorization: `Token ${token}` },
-        }),
-        fetch("/api/attempts/interventions/pending/", {
-          headers: { Authorization: `Token ${token}` },
-        })
-      ]);
+      const res = await fetch("/api/attempts/interventions/pending/", {
+        headers: { Authorization: `Token ${token}` },
+      });
 
-      let pendingList: any[] = [];
-      if (pendingRes.status === "fulfilled" && pendingRes.value.ok) {
-        pendingList = await pendingRes.value.json();
+      if (!res.ok) {
+        throw new Error("Failed to load intervention alerts.");
       }
 
-      let mappedData: RiskAlert[] = [];
-      if (riskRes.status === "fulfilled" && riskRes.value.ok) {
-        const data = await riskRes.value.json() as any[];
-        mappedData = data.map(a => {
-          const name = a.student_name || `Student #${a.student}`;
-          const initials = name.split(" ").slice(0, 2).map((n: string) => n[0]).join("").toUpperCase();
-          
-          let trigger_reason = "No data";
-          if (a.contributing_factors && Object.keys(a.contributing_factors).length > 0) {
-            const keys = Object.keys(a.contributing_factors).slice(0, 3);
-            trigger_reason = keys.map(k => `${k}: ${a.contributing_factors[k]}`).join(", ");
-          }
+      const pendingList: any[] = await res.json();
 
-          return {
-            id: a.id,
-            student_id: a.student,
-            student_name: name,
-            initials,
-            skill_id: a.skill,
-            skill_name: a.skill_name || "",
-            student_class: a.student_class || "Grade 10",
-            topic_lesson: a.topic_lesson || "-",
-            risk_category: "Performance",
-            severity: a.risk_category === "High Risk" ? "High" : "Moderate",
-            trigger_reason: trigger_reason,
-            last_updated: a.prediction_date ? new Date(a.prediction_date).toLocaleDateString() : ""
-          };
-        });
-      }
+      const mappedData: RiskAlert[] = pendingList.map((p) => {
+        const name = p.student_name || `Student #${p.student}`;
+        const initials = name
+          .split(" ")
+          .slice(0, 2)
+          .map((n: string) => n[0])
+          .join("")
+          .toUpperCase();
 
-      // Merge pending escalation alerts
-      for (const p of pendingList) {
-        const existingIdx = mappedData.findIndex(a => a.student_id === p.student);
-        if (existingIdx !== -1) {
-          mappedData[existingIdx].is_pending_escalation = true;
-          mappedData[existingIdx].severity = "Critical";
-          mappedData[existingIdx].quiz_id = p.quiz;
-        } else {
-          mappedData.unshift({
-            id: p.id + 10000,
-            student_id: p.student,
-            student_name: p.student_name || `Student #${p.student}`,
-            initials: (p.student_name || "S").substring(0, 2).toUpperCase(),
-            student_class: "Grade 10",
-            topic_lesson: p.quiz_title || "Post-Remedial Escalation",
-            quiz_id: p.quiz,
-            risk_category: "Escalated Reassessment Failure",
-            severity: "Critical",
-            trigger_reason: "Failed post-remedial reassessment after exhaustion",
-            last_updated: new Date(p.date_recorded).toLocaleDateString(),
-            is_pending_escalation: true,
-          });
-        }
-      }
+        const scoreText = p.failed_reassessment_score !== null && p.failed_reassessment_score !== undefined
+          ? `${p.failed_reassessment_score}% (Pass: ${p.pass_mark}%)`
+          : "Failed";
+
+        const trigger = p.notes || `Failed reassessment (${scoreText})`;
+
+        return {
+          id: p.id,
+          student_id: p.student,
+          student_name: name,
+          initials,
+          skill_id: p.skill,
+          skill_name: p.weak_skill_name || "",
+          student_class: p.student_class || "Grade 10",
+          topic_lesson: `${p.quiz_title || "Quiz"} - ${p.lesson_title || "Lesson"}`,
+          quiz_id: p.quiz,
+          risk_category: "Needs Teacher Intervention",
+          severity: "Critical",
+          trigger_reason: trigger,
+          last_updated: p.date_recorded ? new Date(p.date_recorded).toLocaleDateString() : "",
+          is_pending_escalation: true,
+        };
+      });
 
       setAlerts(mappedData);
     } catch (err: any) {

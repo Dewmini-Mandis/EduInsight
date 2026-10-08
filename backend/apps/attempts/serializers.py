@@ -293,9 +293,47 @@ class TeacherInterventionSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source="student.user.get_full_name", read_only=True)
     teacher_name = serializers.CharField(source="teacher.get_full_name", read_only=True, default=None)
     quiz_title = serializers.CharField(source="quiz.title", read_only=True, default=None)
+    student_class = serializers.SerializerMethodField()
+    lesson_title = serializers.SerializerMethodField()
+    failed_reassessment_score = serializers.SerializerMethodField()
+    pass_mark = serializers.SerializerMethodField()
+    weak_skill_name = serializers.SerializerMethodField()
+    display_status = serializers.SerializerMethodField()
 
     class Meta:
         model = TeacherIntervention
         fields = "__all__"
         read_only_fields = ["date_recorded"]
+
+    def get_student_class(self, obj):
+        if obj.student:
+            if obj.student.class_room:
+                return obj.student.class_room.name
+            return obj.student.class_name or "Class"
+        return "Class"
+
+    def get_lesson_title(self, obj):
+        if obj.quiz and obj.quiz.lesson:
+            return obj.quiz.lesson.title
+        return "-"
+
+    def get_failed_reassessment_score(self, obj):
+        if obj.remediation_state and obj.remediation_state.reassessment_attempt:
+            return obj.remediation_state.reassessment_attempt.score
+        return None
+
+    def get_pass_mark(self, obj):
+        if obj.quiz:
+            return obj.quiz.pass_mark
+        return 70
+
+    def get_weak_skill_name(self, obj):
+        if obj.skill:
+            return obj.skill.name
+        if obj.remediation_state and obj.remediation_state.weak_skills.exists():
+            return obj.remediation_state.weak_skills.first().name
+        return None
+
+    def get_display_status(self, obj):
+        return "Needs Teacher Intervention" if obj.is_pending else "Intervention Completed"
 
