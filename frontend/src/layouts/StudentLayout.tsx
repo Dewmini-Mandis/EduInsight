@@ -1,22 +1,25 @@
-import React, { useState } from "react";
+import React, { useState, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import StudentSidebar from "../components/student/StudentSidebar";
-import LearningPathPage from "../pages/student/LearningPathPage";
-import TermLessonsPage from "../pages/student/TermLessonsPage";
-import LessonQuizzesPage from "../pages/student/LessonQuizzesPage";
-import QuizAnsweringPage from "../pages/student/QuizAnsweringPage";
-import QuizResultsPage from "../pages/student/QuizResultsPage";
-import QuizReviewPage from "../pages/student/QuizReviewPage";
-import StudentQuizMaterialsPage from "../pages/student/StudentQuizMaterialsPage";
-import MyProgressPage from "../pages/student/MyProgressPage";
-import MyPerformancePage from "../pages/student/MyPerformancePage";
-import MySkillsPage from "../pages/student/MySkillsPage";
-import QuizHistoryPage from "../pages/student/QuizHistoryPage";
-import QuizAttemptDetailsPage from "../pages/student/QuizAttemptDetailsPage";
-import LearningImprovementPage from "../pages/student/LearningImprovementPage";
-import StudentLessonViewer from "../dashboards/student/StudentLessonViewer";
-import PreviewMaterial from "../dashboards/teacher/PreviewMaterial";
+import { CardSkeleton } from "../components/common/Skeletons";
 import "../styles/student.css";
+
+// Lazy-loaded Student Page Components
+const LearningPathPage = lazy(() => import("../pages/student/LearningPathPage"));
+const TermLessonsPage = lazy(() => import("../pages/student/TermLessonsPage"));
+const LessonQuizzesPage = lazy(() => import("../pages/student/LessonQuizzesPage"));
+const QuizAnsweringPage = lazy(() => import("../pages/student/QuizAnsweringPage"));
+const QuizResultsPage = lazy(() => import("../pages/student/QuizResultsPage"));
+const QuizReviewPage = lazy(() => import("../pages/student/QuizReviewPage"));
+const StudentQuizMaterialsPage = lazy(() => import("../pages/student/StudentQuizMaterialsPage"));
+const MyProgressPage = lazy(() => import("../pages/student/MyProgressPage"));
+const MyPerformancePage = lazy(() => import("../pages/student/MyPerformancePage"));
+const MySkillsPage = lazy(() => import("../pages/student/MySkillsPage"));
+const QuizHistoryPage = lazy(() => import("../pages/student/QuizHistoryPage"));
+const QuizAttemptDetailsPage = lazy(() => import("../pages/student/QuizAttemptDetailsPage"));
+const LearningImprovementPage = lazy(() => import("../pages/student/LearningImprovementPage"));
+const StudentLessonViewer = lazy(() => import("../dashboards/student/StudentLessonViewer"));
+const PreviewMaterial = lazy(() => import("../dashboards/teacher/PreviewMaterial"));
 
 const StudentLayout: React.FC = () => {
   const [collapsed, setCollapsed] = useState<boolean>(false);
@@ -44,41 +47,43 @@ const StudentLayout: React.FC = () => {
           padding: isFullPageNoSidebar ? "24px 0" : undefined,
         }}
       >
-        <Routes>
-          <Route index element={<Navigate to="my-learning" replace />} />
-          <Route path="my-learning" element={<LearningPathPage />} />
-          <Route path="my-learning/term/:termName/lessons" element={<TermLessonsPage />} />
-          <Route path="my-learning/term/:termName/lessons/:lessonId" element={<LessonQuizzesPage />} />
+        <Suspense fallback={<CardSkeleton />}>
+          <Routes>
+            <Route index element={<Navigate to="my-learning" replace />} />
+            <Route path="my-learning" element={<LearningPathPage />} />
+            <Route path="my-learning/term/:termName/lessons" element={<TermLessonsPage />} />
+            <Route path="my-learning/term/:termName/lessons/:lessonId" element={<LessonQuizzesPage />} />
 
-          {/* Legacy route redirects for backward compatibility */}
-          <Route path="learning-path" element={<Navigate to="/student/my-learning" replace />} />
-          <Route path="learning-path/term/:termName/lessons" element={<TermLessonsPage />} />
-          <Route path="learning-path/term/:termName/lessons/:lessonId" element={<LessonQuizzesPage />} />
-          <Route path="dashboard" element={<Navigate to="/student/my-learning" replace />} />
+            {/* Legacy route redirects for backward compatibility */}
+            <Route path="learning-path" element={<Navigate to="/student/my-learning" replace />} />
+            <Route path="learning-path/term/:termName/lessons" element={<TermLessonsPage />} />
+            <Route path="learning-path/term/:termName/lessons/:lessonId" element={<LessonQuizzesPage />} />
+            <Route path="dashboard" element={<Navigate to="/student/my-learning" replace />} />
 
-          {/* MY PERFORMANCE & MY SKILLS ROUTES */}
-          <Route path="performance" element={<MyPerformancePage />} />
-          <Route path="skills" element={<MySkillsPage />} />
-          <Route path="risk-improvement" element={<Navigate to="/student/progress" replace />} />
+            {/* MY PERFORMANCE & MY SKILLS ROUTES */}
+            <Route path="performance" element={<MyPerformancePage />} />
+            <Route path="skills" element={<MySkillsPage />} />
+            <Route path="risk-improvement" element={<Navigate to="/student/progress" replace />} />
 
-          {/* MY PROGRESS & LEARNING HISTORY ROUTES */}
-          <Route path="progress" element={<MyProgressPage />} />
-          <Route path="progress/history" element={<QuizHistoryPage />} />
-          <Route path="progress/quiz/:quizId" element={<QuizAttemptDetailsPage />} />
-          <Route path="progress/remediation" element={<Navigate to="/student/progress" replace />} />
+            {/* MY PROGRESS & LEARNING HISTORY ROUTES */}
+            <Route path="progress" element={<MyProgressPage />} />
+            <Route path="progress/history" element={<QuizHistoryPage />} />
+            <Route path="progress/quiz/:quizId" element={<QuizAttemptDetailsPage />} />
+            <Route path="progress/remediation" element={<Navigate to="/student/progress" replace />} />
 
-          {/* FULL PAGES WITHOUT SIDEBAR */}
-          <Route path="quizzes/:quizId/attempt" element={<QuizAnsweringPage />} />
-          <Route path="quizzes/:quizId/results/:attemptId" element={<QuizResultsPage />} />
-          <Route path="quizzes/:quizId/results/:attemptId/review" element={<QuizReviewPage />} />
-          <Route path="quizzes/:quizId/materials" element={<StudentQuizMaterialsPage />} />
+            {/* FULL PAGES WITHOUT SIDEBAR */}
+            <Route path="quizzes/:quizId/attempt" element={<QuizAnsweringPage />} />
+            <Route path="quizzes/:quizId/results/:attemptId" element={<QuizResultsPage />} />
+            <Route path="quizzes/:quizId/results/:attemptId/review" element={<QuizReviewPage />} />
+            <Route path="quizzes/:quizId/materials" element={<StudentQuizMaterialsPage />} />
 
-          {/* Default and legacy fallback routes */}
-          <Route path="lessons/:lessonId" element={<StudentLessonViewer />} />
-          <Route path="materials/:materialId/preview" element={<PreviewMaterial />} />
-          <Route path="materials/:materialId" element={<PreviewMaterial />} />
-          <Route path="*" element={<Navigate to="my-learning" replace />} />
-        </Routes>
+            {/* Default and legacy fallback routes */}
+            <Route path="lessons/:lessonId" element={<StudentLessonViewer />} />
+            <Route path="materials/:materialId/preview" element={<PreviewMaterial />} />
+            <Route path="materials/:materialId" element={<PreviewMaterial />} />
+            <Route path="*" element={<Navigate to="my-learning" replace />} />
+          </Routes>
+        </Suspense>
       </main>
     </div>
   );

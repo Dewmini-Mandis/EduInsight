@@ -50,5 +50,10 @@ class ProficiencyPrediction(models.Model):
 	is_flagged = models.BooleanField(default=False)
 	flag_reason = models.TextField(blank=True)
 
+	class Meta:
+		indexes = [
+			models.Index(fields=["student", "-prediction_date"], name="idx_prof_student_date"),
+		]
+
 	def __str__(self):
 		return f"{self.student} - {self.proficiency_level}"

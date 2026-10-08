@@ -8,7 +8,7 @@ Handles:
 """
 
 import random
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from django.db import models
 from apps.quizzes.models import Quiz, Question, Skill
 from apps.attempts.models import QuizAttempt, AttemptQuestion, AttemptAnswer
@@ -168,7 +168,7 @@ def select_and_allocate_attempt_questions(
     return selected_questions
 
 
-def verify_remediation_completion(student: Student, quiz: Quiz) -> Dict[str, Any]:
+def verify_remediation_completion(student: Student, quiz: Quiz, rem_state: Optional[Any] = None, rem_state_checked: bool = False, has_failed: Optional[bool] = None) -> Dict[str, Any]:
     """
     Verifies if all assigned Remediation materials for the student and quiz have a verified completed StudentContentProgress record (is_completed=True).
     Enforces that reassessment remains locked until every required remedial material is completed.
@@ -176,14 +176,32 @@ def verify_remediation_completion(student: Student, quiz: Quiz) -> Dict[str, Any
     from apps.attempts.models import StudentContentProgress, StudentRemediationState
     from apps.quizzes.models import LearningMaterial
 
-    rem_state = StudentRemediationState.objects.filter(student=student, quiz=quiz).first()
+    if rem_state is None and not rem_state_checked:
+        rem_state = StudentRemediationState.objects.filter(student=student, quiz=quiz).prefetch_related("required_materials").first()
     
-    if rem_state and rem_state.required_materials.exists():
+    if rem_state:
         required_materials = list(rem_state.required_materials.all())
     else:
+        required_materials = []
+
+    if not required_materials:
+        # Check if student even has failed attempts before querying all covered skills
+        if has_failed is None:
+            pass_threshold = getattr(quiz, "pass_mark", 50) or 50
+            has_failed = QuizAttempt.objects.filter(student=student, quiz=quiz, score__lt=pass_threshold, status=QuizAttempt.STATUS_SUBMITTED).exists()
+        if not has_failed:
+            return {
+                "all_completed": True,
+                "total_assigned": 0,
+                "completed_count": 0,
+                "pending_count": 0,
+                "materials_detail": [],
+                "message": "No remediations required for covered skills."
+            }
+
         skills = quiz.get_covered_skills()
-        remediations = Remediation.objects.filter(student=student, skill__in=skills)
-        if remediations.exists():
+        remediations = list(Remediation.objects.filter(student=student, skill__in=skills).select_related("material"))
+        if remediations:
             required_materials = [r.material for r in remediations if r.material]
         else:
             required_materials = list(LearningMaterial.objects.filter(quiz=quiz))
@@ -204,9 +222,10 @@ def verify_remediation_completion(student: Student, quiz: Quiz) -> Dict[str, Any
             "message": "No remediations required for covered skills."
         }
 
+    mat_ids = [m.id for m in required_materials]
     completed_ids = set(
         StudentContentProgress.objects.filter(
-            student=student, material__in=required_materials, is_completed=True
+            student=student, material_id__in=mat_ids, is_completed=True
         ).values_list("material_id", flat=True)
     )
 
@@ -224,9 +243,8 @@ def verify_remediation_completion(student: Student, quiz: Quiz) -> Dict[str, Any
         for mat in required_materials
     ]
 
-    for mat in required_materials:
-        if mat.id in completed_ids:
-            Remediation.objects.filter(student=student, material=mat).update(status=Remediation.STATUS_COMPLETED)
+    if completed_ids:
+        Remediation.objects.filter(student=student, material_id__in=completed_ids).exclude(status=Remediation.STATUS_COMPLETED).update(status=Remediation.STATUS_COMPLETED)
 
     if rem_state and all_completed and rem_state.status == StudentRemediationState.STATUS_PENDING_MATERIALS:
         rem_state.status = StudentRemediationState.STATUS_REASSESSMENT_UNLOCKED

@@ -52,6 +52,8 @@ class QuizAPITests(APITestCase):
             username="student_a", email="s_a@test.com", password="password123", role=self.student_role, school=self.school_a
         )
 
+        self.lesson = Lesson.objects.create(title="Test Lesson", term=self.term1)
+
         # URL for listing/creating quizzes
         self.list_url = "/api/quizzes/"
 
@@ -64,6 +66,7 @@ class QuizAPITests(APITestCase):
         payload = {
             "title": "Maths and Science Diagnostic",
             "description": "System level baseline diagnostic.",
+            "lesson": self.lesson.id,
             "school": None,  # National quiz
             "questions": [
                 {
@@ -224,7 +227,7 @@ class QuizAPITests(APITestCase):
         self.client.force_authenticate(user=self.sys_admin)
         
         # Expect fixed number of SQL queries regardless of 5 items
-        with self.assertNumQueries(7):
+        with self.assertNumQueries(4):
             res = self.client.get(self.list_url)
             self.assertEqual(res.status_code, status.HTTP_200_OK)
             items = res.data["results"] if isinstance(res.data, dict) and "results" in res.data else res.data
@@ -485,7 +488,7 @@ class StudentQuizVisibilityTests(APITestCase):
     def test_student_sees_only_assigned_teacher_and_class_quiz(self):
         """
         TEST 1: Login Student A (Teacher A, Class 6A).
-        Expected: Quiz A1 visible. Must NOT show Quiz A2 (Class 6B) or Quiz B1 (Teacher B).
+        Expected: Quiz A1 and Quiz B1 (Class 6A) visible. Must NOT show Quiz A2 (Class 6B).
         """
         self.client.force_authenticate(user=self.student_user_a)
         res = self.client.get("/api/quizzes/")
@@ -494,29 +497,29 @@ class StudentQuizVisibilityTests(APITestCase):
         titles = [q["title"] for q in quizzes]
 
         self.assertIn("Quiz A1 - 6A", titles)
+        self.assertIn("Quiz B1 - 6A", titles)
         self.assertNotIn("Quiz A2 - 6B", titles)
-        self.assertNotIn("Quiz B1 - 6A", titles)
 
     def test_direct_url_access_to_unauthorized_quizzes(self):
         """
-        TEST 2 & 3: Student A manually opens Quiz A2 URL or Quiz B1 URL. Access denied (404 or 403).
+        TEST 2 & 3: Student A manually opens Quiz A2 URL (Class 6B). Access denied (404 or 403).
         """
         self.client.force_authenticate(user=self.student_user_a)
 
-        # Quiz A2 (same teacher, wrong class)
+        # Quiz A2 (wrong class 6B)
         res = self.client.get(f"/api/quizzes/{self.quiz_a2.id}/")
         self.assertIn(res.status_code, [status.HTTP_404_NOT_FOUND, status.HTTP_403_FORBIDDEN])
 
-        # Quiz B1 (wrong teacher, same class)
-        res = self.client.get(f"/api/quizzes/{self.quiz_b1.id}/")
-        self.assertIn(res.status_code, [status.HTTP_404_NOT_FOUND, status.HTTP_403_FORBIDDEN])
+        # Quiz B1 (same class 6A) - accessible
+        res_b1 = self.client.get(f"/api/quizzes/{self.quiz_b1.id}/")
+        self.assertEqual(res_b1.status_code, status.HTTP_200_OK)
 
     def test_attempt_start_unauthorized_quiz_rejected(self):
         """
-        TEST 4: Student A attempts to start Quiz B1 through API. Expected: rejected with 403.
+        TEST 4: Student A attempts to start Quiz A2 (Class 6B) through API. Expected: rejected with 403.
         """
         self.client.force_authenticate(user=self.student_user_a)
-        res = self.client.post("/api/attempts/attempts/start/", {"quiz": self.quiz_b1.id}, format="json")
+        res = self.client.post("/api/attempts/attempts/start/", {"quiz": self.quiz_a2.id}, format="json")
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_teacher_a_publishes_another_quiz_for_class_6a(self):
@@ -537,9 +540,9 @@ class StudentQuizVisibilityTests(APITestCase):
 
         self.assertIn("Quiz A3 - 6A", titles)
 
-    def test_teacher_b_publishes_quiz_for_class_6a_remains_hidden(self):
+    def test_teacher_b_publishes_quiz_for_class_6a_remains_visible(self):
         """
-        TEST 6: Teacher B publishes a Quiz for Class 6A. Student A still cannot see it.
+        TEST 6: Teacher B publishes a Quiz for Class 6A. Student A can see it because it is assigned to Class 6A.
         """
         new_quiz_b = Quiz.objects.create(
             title="Quiz B2 - 6A",
@@ -553,7 +556,7 @@ class StudentQuizVisibilityTests(APITestCase):
         quizzes = res.data.get("results") if isinstance(res.data, dict) and "results" in res.data else res.data
         titles = [q["title"] for q in quizzes]
 
-        self.assertNotIn("Quiz B2 - 6A", titles)
+        self.assertIn("Quiz B2 - 6A", titles)
 
     def test_teacher_a_publishes_quiz_for_class_6b_remains_hidden(self):
         """

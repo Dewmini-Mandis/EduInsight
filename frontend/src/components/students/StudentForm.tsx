@@ -327,7 +327,6 @@ const StudentForm: React.FC<StudentFormProps> = ({
               aria-required="true"
               aria-invalid={Boolean(touched.email && fieldErrors.email)}
               aria-describedby={touched.email && fieldErrors.email ? "email-error" : undefined}
-              disabled={mode === "edit"}
               className={`admin-form-input ${touched.email && fieldErrors.email ? "is-invalid" : ""}`}
               placeholder="student@eduinsight.com"
               value={formData.email}

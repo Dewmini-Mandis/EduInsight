@@ -21,6 +21,51 @@ class AttemptAnswerSerializer(serializers.ModelSerializer):
             "hint_count",
         ]
 
+class QuizAttemptListSerializer(serializers.ModelSerializer):
+    quiz_title = serializers.CharField(source="quiz.title", read_only=True)
+    student_id = serializers.IntegerField(read_only=True)
+    student_user_id = serializers.IntegerField(source="student.user_id", read_only=True)
+    student_username = serializers.CharField(source="student.user.username", read_only=True)
+    student_name = serializers.SerializerMethodField()
+    quiz_lesson_id = serializers.IntegerField(source="quiz.lesson_id", read_only=True)
+    quiz_lesson_title = serializers.CharField(source="quiz.lesson.title", read_only=True)
+    quiz_skill_id = serializers.IntegerField(source="quiz.skill_id", read_only=True)
+    quiz_skill_name = serializers.CharField(source="quiz.skill.name", read_only=True)
+    quiz_term_id = serializers.IntegerField(source="quiz.lesson.term_id", read_only=True)
+    quiz_term_name = serializers.CharField(source="quiz.lesson.term.name", read_only=True)
+
+    class Meta:
+        model = QuizAttempt
+        fields = [
+            "id",
+            "quiz",
+            "quiz_title",
+            "quiz_lesson_id",
+            "quiz_lesson_title",
+            "quiz_skill_id",
+            "quiz_skill_name",
+            "quiz_term_id",
+            "quiz_term_name",
+            "student",
+            "student_id",
+            "student_user_id",
+            "student_username",
+            "student_name",
+            "attempt_number",
+            "attempt_type",
+            "start_time",
+            "end_time",
+            "expires_at",
+            "status",
+            "auto_submitted",
+            "score",
+        ]
+        read_only_fields = ["student", "attempt_number", "start_time", "expires_at", "status", "auto_submitted", "score"]
+
+    def get_student_name(self, obj):
+        name = obj.student.user.get_full_name()
+        return name if name else obj.student.user.username
+
 class QuizAttemptSerializer(serializers.ModelSerializer):
     answers = AttemptAnswerSerializer(many=True, read_only=True)
     attempt_questions = AttemptQuestionSerializer(many=True, read_only=True)
@@ -78,18 +123,16 @@ class QuizAttemptSerializer(serializers.ModelSerializer):
         return name if name else obj.student.user.username
 
     def _get_latest_risk_pred(self, obj):
-        latest_pred = obj.risk_predictions.order_by("-prediction_date", "-id").first()
+        if hasattr(obj, "_cached_latest_pred"):
+            return getattr(obj, "_cached_latest_pred")
+
+        preds = list(obj.risk_predictions.all())
+        latest_pred = preds[0] if preds else None
         if not latest_pred:
             from apps.analytics.models import RiskPrediction
             latest_pred = RiskPrediction.objects.filter(student=obj.student).order_by("-prediction_date", "-id").first()
 
-        if not latest_pred and obj.status in [QuizAttempt.STATUS_SUBMITTED, QuizAttempt.STATUS_EXPIRED]:
-            try:
-                from apps.analytics.services.risk_predictor import evaluate_and_store_attempt_risk
-                latest_pred = evaluate_and_store_attempt_risk(obj)
-            except Exception as e:
-                print(f"On-the-fly risk prediction evaluation failed: {e}")
-
+        setattr(obj, "_cached_latest_pred", latest_pred)
         return latest_pred
 
     def get_risk_prediction(self, obj):
@@ -126,10 +169,10 @@ class QuizAttemptSerializer(serializers.ModelSerializer):
 
     def get_skill_results(self, obj):
         results = {}
-        attempt_qs = obj.attempt_questions.select_related("question__skill").all()
+        attempt_qs = list(obj.attempt_questions.all())
         answers_map = {ans.question_id: ans for ans in obj.answers.all()}
 
-        if attempt_qs.exists():
+        if attempt_qs:
             for aq in attempt_qs:
                 q = aq.question
                 skill = q.skill or obj.quiz.skill
@@ -153,7 +196,7 @@ class QuizAttemptSerializer(serializers.ModelSerializer):
                 else:
                     results[skill_id]["incorrect_count"] += 1
         else:
-            for ans in obj.answers.select_related("question__skill", "skill").all():
+            for ans in obj.answers.all():
                 skill = ans.skill or getattr(ans.question, "skill", None)
                 skill_id = skill.id if skill else 0
                 skill_name = skill.name if skill else "General Knowledge"

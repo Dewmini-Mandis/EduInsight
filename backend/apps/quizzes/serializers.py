@@ -63,6 +63,7 @@ class LearningMaterialSerializer(serializers.ModelSerializer):
         read_only_fields = ["created_by"]
 
 class LessonSerializer(serializers.ModelSerializer):
+    description = serializers.CharField(required=False, allow_blank=True, default="")
     created_by_name = serializers.CharField(source="created_by.get_full_name", read_only=True)
     term_name = serializers.CharField(source="term.name", read_only=True)
 
@@ -151,6 +152,83 @@ class QuestionSerializer(serializers.ModelSerializer):
             correct_ans = getattr(instance, "correct_answer", None)
             ret["correct_value"] = correct_ans.correct_value if correct_ans else ""
         return ret
+
+class StudentQuizListSerializer(serializers.ModelSerializer):
+    lesson_title = serializers.CharField(source="lesson.title", read_only=True, allow_null=True)
+    quiz_level_name = serializers.CharField(source="quiz_level.name", read_only=True, allow_null=True)
+    difficulty_name = serializers.CharField(source="difficulty.name", read_only=True, allow_null=True)
+    question_count = serializers.IntegerField(source="annotated_question_count", read_only=True, default=0)
+
+    class Meta:
+        model = Quiz
+        fields = [
+            "id",
+            "title",
+            "description",
+            "status",
+            "lesson",
+            "lesson_title",
+            "quiz_level",
+            "quiz_level_name",
+            "difficulty",
+            "difficulty_name",
+            "order",
+            "pass_mark",
+            "estimated_time_minutes",
+            "question_count",
+        ]
+
+class QuizListSerializer(serializers.ModelSerializer):
+    created_by_name = serializers.CharField(source="created_by.get_full_name", read_only=True)
+    school_name = serializers.CharField(source="school.name", read_only=True, allow_null=True)
+    lesson_title = serializers.CharField(source="lesson.title", read_only=True, allow_null=True)
+    assigned_class_name = serializers.CharField(source="assigned_class.name", read_only=True, allow_null=True)
+    assigned_classes_details = SchoolClassSerializer(source="assigned_classes", many=True, read_only=True)
+    quiz_level_name = serializers.CharField(source="quiz_level.name", read_only=True, allow_null=True)
+    difficulty_name = serializers.CharField(source="difficulty.name", read_only=True, allow_null=True)
+    covered_skills_details = SkillSerializer(source="skills", many=True, read_only=True)
+    skill_ids = serializers.SerializerMethodField()
+    question_count = serializers.IntegerField(source="annotated_question_count", read_only=True, default=0)
+
+    class Meta:
+        model = Quiz
+        fields = [
+            "id",
+            "title",
+            "description",
+            "status",
+            "lesson",
+            "lesson_title",
+            "assigned_class",
+            "assigned_class_name",
+            "assigned_classes",
+            "assigned_classes_details",
+            "quiz_level_name",
+            "difficulty_name",
+            "topic",
+            "skill",
+            "skills",
+            "skill_ids",
+            "covered_skills_details",
+            "quiz_level",
+            "difficulty",
+            "order",
+            "pass_mark",
+            "estimated_time_minutes",
+            "school",
+            "school_name",
+            "created_by",
+            "created_by_name",
+            "created_at",
+            "max_attempts",
+            "question_count",
+        ]
+        read_only_fields = ["created_by"]
+
+    def get_skill_ids(self, obj):
+        if hasattr(obj, "_prefetched_objects_cache") and "skills" in obj._prefetched_objects_cache:
+            return [s.id for s in obj.skills.all()]
+        return [s.id for s in obj.get_covered_skills()]
 
 class QuizSerializer(serializers.ModelSerializer):
     questions = QuestionSerializer(many=True, required=False)

@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getToken } from "../../auth/authUtils";
 import { Users, UserPlus, FileText, BarChart2, ChevronLeft, ChevronRight, Search, RotateCcw } from "lucide-react";
+import { queryClient } from "../../api/queryClient";
+import { TableSkeleton } from "../../components/common/Skeletons";
 
 type StudentItem = {
   id: number;
@@ -44,33 +46,30 @@ const StudentList = () => {
     
     setLoading(true);
     try {
-      const res = await fetch("/api/accounts/users/", {
-        headers: { Authorization: `Token ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const users = Array.isArray(data) ? data : (data.results || []);
-        
-        const processedUsers = users.map((u: any) => {
-          const fn = u.first_name || "";
-          const ln = u.last_name || "";
-          return {
-            ...u,
-            full_name: `${fn} ${ln}`.trim(),
-            initials: `${fn.charAt(0) || ""}${ln.charAt(0) || ""}`.toUpperCase(),
-            index_no: u.student_profile?.index_no || "N/A",
-            class_name: u.student_profile?.class_room?.name || u.student_profile?.class_name || "10A",
-            is_active: u.is_active !== undefined ? u.is_active : true
-          };
+      const usersData = await queryClient.fetchQuery(["teacher", "students"], async () => {
+        const res = await fetch("/api/accounts/users/", {
+          headers: { Authorization: `Token ${token}` },
         });
-        
-        setStudents(processedUsers);
-      } else {
-        setError("Failed to fetch students");
-      }
+        return res.ok ? await res.json() : [];
+      }, { staleTime: 0 });
+
+      const users = Array.isArray(usersData) ? usersData : (usersData as any).results || [];
+      const processedUsers = users.map((u: any) => {
+        const fn = u.first_name || "";
+        const ln = u.last_name || "";
+        return {
+          ...u,
+          full_name: `${fn} ${ln}`.trim(),
+          initials: `${fn.charAt(0) || ""}${ln.charAt(0) || ""}`.toUpperCase(),
+          index_no: u.student_profile?.index_no || "N/A",
+          class_name: u.student_profile?.class_room?.name || u.student_profile?.class_name || "10A",
+          is_active: u.is_active !== undefined ? u.is_active : true
+        };
+      });
+      setStudents(processedUsers);
     } catch (err) {
       console.error(err);
-      setError("An error occurred while fetching students");
+      setError("Failed to fetch students");
     } finally {
       setLoading(false);
     }

@@ -4,7 +4,12 @@ import { BookOpen, CheckCircle2, Check, X, Target, FileText, Clock, ArrowRight, 
 import Breadcrumbs from "../../components/student/Breadcrumbs";
 import QuickFeedback from "../../components/student/QuickFeedback";
 import { getToken, getUser } from "../../auth/authUtils";
+import { StatCardSkeleton, CardSkeleton } from "../../components/common/Skeletons";
 import "../../styles/student.css";
+
+// Chunk prefetch helpers
+const prefetchReviewPage = () => import("./QuizReviewPage");
+const prefetchMaterialsPage = () => import("./StudentQuizMaterialsPage");
 
 const QuizResultsPage: React.FC = () => {
   const { quizId, attemptId } = useParams<{ quizId: string; attemptId: string }>();
@@ -16,31 +21,55 @@ const QuizResultsPage: React.FC = () => {
   const lessonTitleParam = searchParams.get("lessonTitle") || "Lesson Quiz";
   const lessonIdParam = searchParams.get("lessonId") || "";
 
-  const [quizTitle, setQuizTitle] = useState<string>("");
-  const [subjectName, setSubjectName] = useState<string>("Mathematics");
-  const [scorePercentage, setScorePercentage] = useState<number>(0);
-  const [accuracyPercentage, setAccuracyPercentage] = useState<number>(0);
-  const [passMark, setPassMark] = useState<number>(60);
-  const [totalQuestions, setTotalQuestions] = useState<number>(0);
-  const [skillResults, setSkillResults] = useState<any[]>([]);
+  const stateAttempt = (location.state as any)?.result || (location.state as any)?.attempt || null;
+  const stateQuiz = (location.state as any)?.quiz || null;
+  const resultSummary = (location.state as any)?.resultSummary || null;
+
+  const hasInitialSummary = Boolean(stateAttempt || resultSummary);
+
+  const initialScore = stateAttempt?.score !== undefined && stateAttempt?.score !== null
+    ? Math.round(stateAttempt.score)
+    : (resultSummary?.score !== undefined && resultSummary?.score !== null
+      ? Math.round(resultSummary.score)
+      : (searchParams.get("score") ? Math.round(Number(searchParams.get("score"))) : 0));
+
+  const [rawAttemptObj, setRawAttemptObj] = useState<any>(stateAttempt);
+  const [rawQuizObj, setRawQuizObj] = useState<any>(stateQuiz);
+
+  const [quizTitle, setQuizTitle] = useState<string>(
+    stateAttempt?.quiz_title || stateQuiz?.title || resultSummary?.quizTitle || lessonTitleParam
+  );
+  const [subjectName, setSubjectName] = useState<string>(
+    stateQuiz?.subject_name || stateQuiz?.subject || lessonTitleParam
+  );
+  const [scorePercentage, setScorePercentage] = useState<number>(initialScore);
+  const [accuracyPercentage, setAccuracyPercentage] = useState<number>(initialScore);
+  const [passMark, setPassMark] = useState<number>(stateQuiz?.pass_mark ?? resultSummary?.passMark ?? 60);
+  const [totalQuestions, setTotalQuestions] = useState<number>(
+    stateAttempt?.attempt_questions?.length || stateAttempt?.answers?.length || stateQuiz?.questions?.length || 10
+  );
+  const [skillResults, setSkillResults] = useState<any[]>(stateAttempt?.skill_results || []);
   const [correctCount, setCorrectCount] = useState<number>(0);
   const [incorrectCount, setIncorrectCount] = useState<number>(0);
   const [unansweredCount, setUnansweredCount] = useState<number>(0);
   const [timeTakenText, setTimeTakenText] = useState<string>("00:00");
   const [attemptsRemaining, setAttemptsRemaining] = useState<number>(0);
-  const [maxAttempts, setMaxAttempts] = useState<number>(3);
-  const [actualAttemptId, setActualAttemptId] = useState<string | number>(attemptId || "");
-  const [riskPrediction, setRiskPrediction] = useState<any>(null);
-  const [riskSupport, setRiskSupport] = useState<any>(null);
+  const [maxAttempts, setMaxAttempts] = useState<number>(stateQuiz?.max_attempts ?? resultSummary?.maxAttempts ?? 3);
+  const [actualAttemptId, setActualAttemptId] = useState<string | number>(attemptId || stateAttempt?.id || resultSummary?.attemptId || "");
+  const [riskPrediction, setRiskPrediction] = useState<any>(stateAttempt?.risk_prediction || null);
+  const [riskSupport, setRiskSupport] = useState<any>(stateAttempt?.risk_support || null);
   const [technicalData, setTechnicalData] = useState<any>(null);
   const [showTechnicalDetails, setShowTechnicalDetails] = useState<boolean>(false);
   const [allMaterialsCompleted, setAllMaterialsCompleted] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [startingTryAgain, setStartingTryAgain] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(!hasInitialSummary);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchResultsData = async () => {
-      setLoading(true);
+      if (!hasInitialSummary) {
+        setLoading(true);
+      }
       setError(null);
       const token = getToken();
 
@@ -78,6 +107,9 @@ const QuizResultsPage: React.FC = () => {
 
         // 1. Determine specific attempt object: navigation state fallback first
         let attemptObj: any = (location.state as any)?.result || (location.state as any)?.attempt || null;
+        if (!quizObj) {
+          quizObj = (location.state as any)?.quiz || null;
+        }
 
         const targetAttemptId = attemptId && attemptId !== "latest" ? attemptId : attemptObj?.id;
 
@@ -114,10 +146,15 @@ const QuizResultsPage: React.FC = () => {
 
         if (attemptObj) {
           setActualAttemptId(attemptObj.id);
+          setRawAttemptObj(attemptObj);
         } else {
           setError("No finalized quiz attempt found to display results.");
           setLoading(false);
           return;
+        }
+
+        if (quizObj) {
+          setRawQuizObj(quizObj);
         }
 
         // Apply Quiz Object Details
@@ -176,7 +213,7 @@ const QuizResultsPage: React.FC = () => {
             (a: any) =>
               a.is_correct === false &&
               (a.selected_answer !== null && a.selected_answer !== undefined ||
-               (a.typed_answer !== null && a.typed_answer !== undefined && String(a.typed_answer).trim() !== ""))
+                (a.typed_answer !== null && a.typed_answer !== undefined && String(a.typed_answer).trim() !== ""))
           ).length;
 
           const unanswered = Math.max(0, qCount - (correct + incorrect));
@@ -235,8 +272,6 @@ const QuizResultsPage: React.FC = () => {
 
   const isPassed = scorePercentage >= passMark;
 
-  const [startingTryAgain, setStartingTryAgain] = useState<boolean>(false);
-
   const handleTryAgain = async () => {
     if (startingTryAgain) return;
     setStartingTryAgain(true);
@@ -288,10 +323,13 @@ const QuizResultsPage: React.FC = () => {
 
   const handleReviewAnswers = () => {
     const targetId = actualAttemptId || attemptId;
+    const attemptToPass = rawAttemptObj || stateAttempt;
+    const quizToPass = rawQuizObj || stateQuiz;
     navigate(
       `/student/quizzes/${quizId}/results/${targetId}/review?termName=${encodeURIComponent(
         termName
-      )}&lessonTitle=${encodeURIComponent(lessonTitleParam)}&lessonId=${lessonIdParam}`
+      )}&lessonTitle=${encodeURIComponent(lessonTitleParam)}&lessonId=${lessonIdParam}`,
+      { state: { attempt: attemptToPass, quiz: quizToPass } }
     );
   };
 
@@ -318,8 +356,10 @@ const QuizResultsPage: React.FC = () => {
   if (loading) {
     return (
       <div className="student-full-page-container">
-        <div style={{ padding: "60px", textAlign: "center", color: "#5D78A3", fontSize: "16px" }}>
-          Loading quiz results...
+        <Breadcrumbs items={breadcrumbsList} />
+        <div style={{ marginTop: "20px", display: "flex", flexDirection: "column", gap: "20px" }}>
+          <StatCardSkeleton count={3} />
+          <CardSkeleton count={2} />
         </div>
       </div>
     );
@@ -936,6 +976,8 @@ const QuizResultsPage: React.FC = () => {
               type="button"
               className="student-btn-primary"
               onClick={handleReviewAnswers}
+              onMouseEnter={prefetchReviewPage}
+              onFocus={prefetchReviewPage}
             >
               Review Answers
               <ArrowRight size={18} />
@@ -947,6 +989,8 @@ const QuizResultsPage: React.FC = () => {
                 className="student-btn-secondary"
                 style={{ background: "#EFF6FF", color: "#126BFF", borderColor: "#126BFF" }}
                 onClick={handleReviewRecommendedMaterials}
+                onMouseEnter={prefetchMaterialsPage}
+                onFocus={prefetchMaterialsPage}
               >
                 Review Recommended Materials
               </button>

@@ -59,25 +59,126 @@ class UserSerializer(serializers.ModelSerializer):
 			return None
 		profile = obj.student_profile
 		reg_by = profile.registered_by
+
+		class_id = None
+		class_name = ""
+		assigned_teacher_id = None
+		assigned_teacher_name = ""
+		assigned_teacher_email = ""
+
+		class_obj = profile.class_room
+		if class_obj and class_obj.is_active:
+			class_id = class_obj.id
+			class_name = class_obj.name
+
+			# Find active teacher assigned to this classroom
+			tc_list = [
+				tc for tc in getattr(class_obj, "teacherclassroom_set", []).all()
+				if tc.is_active and tc.teacher and tc.teacher.is_active
+			] if hasattr(class_obj, "teacherclassroom_set") else []
+
+			if not tc_list:
+				from apps.classes.models import TeacherClassroom
+				tc_list = list(TeacherClassroom.objects.filter(
+					classroom=class_obj,
+					is_active=True,
+					teacher__is_active=True
+				).select_related("teacher"))
+
+			if tc_list and tc_list[0].teacher:
+				t_user = tc_list[0].teacher
+				assigned_teacher_id = t_user.id
+				assigned_teacher_name = t_user.get_full_name() or t_user.username
+				assigned_teacher_email = t_user.email
+
+		if not assigned_teacher_name and reg_by and reg_by.is_active:
+			assigned_teacher_id = reg_by.id
+			assigned_teacher_name = reg_by.get_full_name() or reg_by.username
+			assigned_teacher_email = reg_by.email
+
+		resolved_class_name = class_name or profile.class_name or ""
+
 		return {
 			"id": profile.id,
 			"index_no": profile.index_no,
 			"grade": profile.grade,
-			"class_name": profile.class_name,
-			"class_room": {"id": profile.class_room.id, "name": profile.class_room.name} if profile.class_room else None,
-			"assigned_teacher_id": reg_by.id if reg_by else None,
-			"assigned_teacher_name": (reg_by.get_full_name() or reg_by.username) if reg_by else None,
-			"assigned_teacher_email": reg_by.email if reg_by else None,
+			"class_id": class_id,
+			"class_name": resolved_class_name,
+			"class_room": {"id": class_obj.id, "name": class_obj.name} if class_obj and class_obj.is_active else None,
+			"assigned_teacher_id": assigned_teacher_id,
+			"assigned_teacher_name": assigned_teacher_name,
+			"assigned_teacher_email": assigned_teacher_email,
 		}
 
 	def get_teacher_profile(self, obj: User):
 		if not obj.is_role(Role.ROLE_TEACHER):
 			return None
 		profile = getattr(obj, "teacher_profile", None)
+		classrooms = [
+			{"id": tc.classroom.id, "name": tc.classroom.name}
+			for tc in obj.teacherclassroom_set.all()
+			if tc.is_active and tc.classroom
+		]
 		return {
 			"subjects": profile.subjects if profile else [],
-			"classrooms": [{"id": c.classroom.id, "name": c.classroom.name} for c in obj.teacherclassroom_set.filter(is_active=True).select_related("classroom")],
+			"classrooms": classrooms,
 		}
+
+
+from django.db import transaction
+
+def get_or_create_default_school(user=None):
+	if user and user.school:
+		return user.school
+	from apps.schools.models import School
+	school = School.objects.first()
+	if not school:
+		school = School.objects.create(name="Default School", location="Main Campus")
+	if user and not user.school:
+		user.school = school
+		user.save(update_fields=["school"])
+	return school
+
+
+def sync_teacher_classrooms(user, classrooms_data):
+	from apps.classes.models import SchoolClass, TeacherClassroom
+	school = get_or_create_default_school(user)
+	
+	target_classes = []
+	for c_val in classrooms_data:
+		if c_val is None or c_val == "":
+			continue
+		sc = None
+		c_str = str(c_val).strip()
+		
+		# 1. Match by integer ID
+		if c_str.isdigit():
+			sc = SchoolClass.objects.filter(id=int(c_str)).first()
+			
+		# 2. Match by class name
+		if not sc and c_str:
+			sc = SchoolClass.objects.filter(name__iexact=c_str).first()
+			
+		# 3. Create class under default school if not existing
+		if not sc and c_str and not c_str.isdigit():
+			sc, _ = SchoolClass.objects.get_or_create(name=c_str, school=school)
+			
+		if sc and sc not in target_classes:
+			target_classes.append(sc)
+			
+	target_ids = {sc.id for sc in target_classes}
+	
+	# Deactivate assignments not in target_ids
+	TeacherClassroom.objects.filter(teacher=user).exclude(classroom_id__in=target_ids).update(is_active=False)
+	
+	# Activate or create assignments in target_ids
+	for sc in target_classes:
+		tc, created = TeacherClassroom.objects.get_or_create(teacher=user, classroom=sc)
+		if not tc.is_active:
+			tc.is_active = True
+			tc.save(update_fields=["is_active"])
+			
+	return target_classes
 
 
 class UserCreateSerializer(serializers.ModelSerializer):
@@ -108,6 +209,9 @@ class UserCreateSerializer(serializers.ModelSerializer):
 	classrooms = serializers.ListField(
 		child=serializers.CharField(), write_only=True, required=False
 	)
+	assigned_class_ids = serializers.ListField(
+		child=serializers.IntegerField(), write_only=True, required=False
+	)
 
 	class Meta:
 		model = User
@@ -127,12 +231,17 @@ class UserCreateSerializer(serializers.ModelSerializer):
 			"assigned_teacher_id",
 			"subjects",
 			"classrooms",
+			"assigned_class_ids",
 		]
 
 	def to_internal_value(self, data):
 		data = data.copy() if hasattr(data, "copy") else dict(data)
 		if not data.get("username") and data.get("email"):
 			data["username"] = data.get("email")
+		if "assigned_class_ids" in data and "classrooms" not in data:
+			data["classrooms"] = data["assigned_class_ids"]
+		elif "assignedClasses" in data and "classrooms" not in data:
+			data["classrooms"] = data["assignedClasses"]
 		return super().to_internal_value(data)
 
 	def validate(self, attrs):
@@ -163,6 +272,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
 			raise serializers.ValidationError("An account with this email address already exists.")
 		return value
 
+	@transaction.atomic
 	def create(self, validated_data):
 		role = validated_data.get("role")
 		if role and role.role_name != Role.ROLE_STUDENT:
@@ -207,23 +317,10 @@ class UserCreateSerializer(serializers.ModelSerializer):
 					student.save()
 				except SchoolClass.DoesNotExist:
 					pass
-		if role and role.role_name == Role.ROLE_TEACHER:
-			TeacherProfile.objects.create(user=user, subjects=subjects or [FIXED_SUBJECT])
+		elif role and role.role_name == Role.ROLE_TEACHER:
+			TeacherProfile.objects.get_or_create(user=user, defaults={"subjects": subjects or [FIXED_SUBJECT]})
 			if classrooms:
-				from apps.classes.models import SchoolClass, TeacherClassroom
-				for c_val in classrooms:
-					sc = None
-					c_str = str(c_val).strip()
-					if c_str.isdigit():
-						sc = SchoolClass.objects.filter(id=int(c_str)).first()
-					if not sc and c_str:
-						sc = SchoolClass.objects.filter(name__iexact=c_str).first()
-						if not sc:
-							school = user.school or School.objects.first()
-							if school:
-								sc = SchoolClass.objects.create(name=c_str, school=school)
-					if sc:
-						TeacherClassroom.objects.get_or_create(teacher=user, classroom=sc)
+				sync_teacher_classrooms(user, classrooms)
 		return user
 
 
@@ -259,7 +356,27 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 	classrooms = serializers.ListField(
 		child=serializers.CharField(), write_only=True, required=False
 	)
+	assigned_class_ids = serializers.ListField(
+		child=serializers.IntegerField(), write_only=True, required=False
+	)
 	password = serializers.CharField(write_only=True, required=False, min_length=8)
+
+	def to_internal_value(self, data):
+		data = data.copy() if hasattr(data, "copy") else dict(data)
+		if "assigned_class_ids" in data and "classrooms" not in data:
+			data["classrooms"] = data["assigned_class_ids"]
+		elif "assignedClasses" in data and "classrooms" not in data:
+			data["classrooms"] = data["assignedClasses"]
+		return super().to_internal_value(data)
+
+	def validate_email(self, value):
+		if value:
+			qs = User.objects.filter(email__iexact=value)
+			if self.instance:
+				qs = qs.exclude(pk=self.instance.pk)
+			if qs.exists():
+				raise serializers.ValidationError("An account with this email address already exists.")
+		return value
 
 	def validate(self, attrs):
 		attrs = super().validate(attrs)
@@ -300,8 +417,10 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 			"assigned_teacher_id",
 			"subjects",
 			"classrooms",
+			"assigned_class_ids",
 		]
 
+	@transaction.atomic
 	def update(self, instance, validated_data):
 		index_no = validated_data.pop("index_no", None)
 		grade = validated_data.pop("grade", None)
@@ -311,9 +430,16 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 		subjects = validated_data.pop("subjects", None)
 		classrooms = validated_data.pop("classrooms", None)
 		password = validated_data.pop("password", None)
+		new_email = validated_data.get("email")
 		role = validated_data.get("role") or instance.role
 
+		old_email = instance.email
 		instance = super().update(instance, validated_data)
+
+		if new_email and new_email != old_email:
+			if instance.username == old_email or (role and role.role_name != Role.ROLE_STUDENT):
+				instance.username = new_email
+				instance.save(update_fields=["username"])
 
 		if password:
 			instance.set_password(password)
@@ -352,23 +478,7 @@ class UserUpdateSerializer(serializers.ModelSerializer):
 				teacher.subjects = subjects
 				teacher.save()
 			if classrooms is not None:
-				from apps.classes.models import SchoolClass, TeacherClassroom
-				TeacherClassroom.objects.filter(teacher=instance).update(is_active=False)
-				for class_val in classrooms:
-					sc = None
-					c_str = str(class_val).strip()
-					if c_str.isdigit():
-						sc = SchoolClass.objects.filter(id=int(c_str)).first()
-					if not sc and c_str:
-						sc = SchoolClass.objects.filter(name__iexact=c_str).first()
-						if not sc:
-							school = instance.school or School.objects.first()
-							if school:
-								sc = SchoolClass.objects.create(name=c_str, school=school)
-					if sc:
-						tc, _ = TeacherClassroom.objects.get_or_create(teacher=instance, classroom=sc)
-						tc.is_active = True
-						tc.save()
+				sync_teacher_classrooms(instance, classrooms)
 		return User.objects.get(pk=instance.pk)
 
 	def to_representation(self, instance):

@@ -17,7 +17,7 @@ const InteractiveVideoPlayer: React.FC<InteractiveVideoPlayerProps> = ({
   const materialId = propMaterialId || params.materialId;
   const navigate = useNavigate();
   const videoRef = useRef<HTMLVideoElement>(null);
-  
+
   const [material, setMaterial] = useState<any>(materialData || null);
   const [loading, setLoading] = useState(!materialData);
   const [error, setError] = useState("");
@@ -25,7 +25,7 @@ const InteractiveVideoPlayer: React.FC<InteractiveVideoPlayerProps> = ({
   const [activeQuestion, setActiveQuestion] = useState<any>(null);
   const [answeredQuestions, setAnsweredQuestions] = useState<Set<number>>(new Set());
   const [selectedOptionIdx, setSelectedOptionIdx] = useState<number | null>(null);
-  const [feedback, setFeedback] = useState<{msg: string, isError: boolean} | null>(null);
+  const [feedback, setFeedback] = useState<{ msg: string, isError: boolean } | null>(null);
 
   useEffect(() => {
     if (materialData) {
@@ -106,7 +106,7 @@ const InteractiveVideoPlayer: React.FC<InteractiveVideoPlayerProps> = ({
 
   const handleSubmitAnswer = () => {
     if (selectedOptionIdx === null || !activeQuestion) return;
-    
+
     const option = activeQuestion.options[selectedOptionIdx];
     if (option.is_correct) {
       setFeedback({ msg: "Correct!", isError: false });
@@ -140,15 +140,15 @@ const InteractiveVideoPlayer: React.FC<InteractiveVideoPlayerProps> = ({
       )}
 
       <div style={{ position: "relative", width: "100%", backgroundColor: "#000", borderRadius: "12px", overflow: "hidden" }}>
-        <video 
+        <video
           ref={videoRef}
-          src={material.file} 
-          controls={!activeQuestion} 
+          src={material.file}
+          controls={!activeQuestion}
           onTimeUpdate={handleTimeUpdate}
           onSeeking={handleSeeking}
           onSeeked={handleSeeking}
           onEnded={handleVideoEnded}
-          style={{ width: "100%", display: "block", maxHeight: "500px" }} 
+          style={{ width: "100%", display: "block", maxHeight: "500px" }}
         />
 
         {activeQuestion && (
@@ -162,10 +162,10 @@ const InteractiveVideoPlayer: React.FC<InteractiveVideoPlayerProps> = ({
                 <span style={{ fontSize: "12px", backgroundColor: "#EFF6FF", color: "#126BFF", padding: "2px 8px", borderRadius: "4px", fontWeight: "600" }}>{activeQuestion.question_type}</span>
               </div>
               <p style={{ color: "#334155", fontSize: "15px", marginBottom: "20px", fontWeight: "500" }}>{activeQuestion.question_text}</p>
-              
+
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                 {activeQuestion.options?.map((opt: any, idx: number) => (
-                  <button 
+                  <button
                     key={idx}
                     onClick={() => { setSelectedOptionIdx(idx); setFeedback(null); }}
                     style={{
@@ -188,7 +188,7 @@ const InteractiveVideoPlayer: React.FC<InteractiveVideoPlayerProps> = ({
               )}
 
               <div style={{ marginTop: "20px", display: "flex", justifyContent: "flex-end" }}>
-                <button 
+                <button
                   onClick={handleSubmitAnswer}
                   disabled={selectedOptionIdx === null}
                   style={{ padding: "10px 24px", backgroundColor: "#126BFF", color: "white", borderRadius: "8px", border: "none", fontWeight: "600", fontSize: "14px", cursor: selectedOptionIdx === null ? "not-allowed" : "pointer", opacity: selectedOptionIdx === null ? 0.6 : 1 }}

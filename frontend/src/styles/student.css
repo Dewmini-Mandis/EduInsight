@@ -53,6 +53,7 @@ body {
   z-index: 100;
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 4px 0 20px rgba(6, 38, 83, 0.08);
+  overflow-x: hidden;
 }
 
 .student-sidebar-collapsed .student-sidebar {
@@ -63,6 +64,10 @@ body {
   padding: 24px 20px;
 }
 
+.student-sidebar-collapsed .student-sidebar-top {
+  padding: 24px 14px;
+}
+
 .student-sidebar-brand {
   display: flex;
   align-items: center;
@@ -70,15 +75,50 @@ body {
   margin-bottom: 32px;
 }
 
+.student-sidebar-collapsed .student-sidebar-brand {
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
 .student-brand-container {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
+}
+
+.student-sidebar-collapsed .student-brand-container {
+  justify-content: center;
 }
 
 .student-sidebar-logo {
   height: 32px;
+  max-width: 140px;
+  width: auto;
   object-fit: contain;
+}
+
+.student-sidebar-collapsed .student-sidebar-logo {
+  height: 28px;
+  max-width: 36px;
+}
+
+/* Scoped fallbacks so no logo or unstyled image in student sidebar can ever expand */
+.student-sidebar .sidebar-logo,
+.student-sidebar img {
+  max-height: 32px;
+  max-width: 140px;
+  width: auto;
+  object-fit: contain;
+}
+
+.student-sidebar-collapsed .sidebar-logo,
+.student-sidebar-collapsed .student-sidebar img {
+  max-height: 28px;
+  max-width: 36px;
 }
 
 .student-role-badge {

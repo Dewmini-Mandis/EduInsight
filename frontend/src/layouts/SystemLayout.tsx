@@ -1,28 +1,31 @@
-import React, { useState } from "react";
+import React, { useState, lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import "../styles/teacher.css"; // Reuse teacher styles for now
 
 import SystemSidebar from "../components/SystemSidebar";
 import PageHeader from "../components/PageHeader";
-import SystemAdminDashboard from "../dashboards/system/SystemAdminDashboard";
-import ManageCurriculum from "../dashboards/system/ManageCurriculum";
-import AdminSchools from "../dashboards/system/AdminSchools";
-import AdminTeachers from "../dashboards/system/AdminTeachers";
-import SystemAdminReportsPage from "../dashboards/system/reports/SystemAdminReportsPage";
+import { CardSkeleton } from "../components/common/Skeletons";
+
+const SystemAdminDashboard = lazy(() => import("../dashboards/system/SystemAdminDashboard"));
+const ManageCurriculum = lazy(() => import("../dashboards/system/ManageCurriculum"));
+const AdminSchools = lazy(() => import("../dashboards/system/AdminSchools"));
+const AdminTeachers = lazy(() => import("../dashboards/system/AdminTeachers"));
+const SystemAdminReportsPage = lazy(() => import("../dashboards/system/reports/SystemAdminReportsPage"));
 
 // Reused Lesson Management Components
-import LessonList from "../dashboards/teacher/LessonList";
-import CreateLesson from "../dashboards/teacher/CreateLesson";
-import TopicSkillManager from "../dashboards/teacher/TopicSkillManager";
-import LessonBuilder from "../dashboards/teacher/LessonBuilder";
+const LessonList = lazy(() => import("../dashboards/teacher/LessonList"));
+const CreateLesson = lazy(() => import("../dashboards/teacher/CreateLesson"));
+const EditLesson = lazy(() => import("../dashboards/teacher/EditLesson"));
+const TopicSkillManager = lazy(() => import("../dashboards/teacher/TopicSkillManager"));
+const LessonBuilder = lazy(() => import("../dashboards/teacher/LessonBuilder"));
 
-import CreateTeacherPage from "../pages/admin/CreateTeacherPage";
-import EditTeacherPage from "../pages/admin/EditTeacherPage";
+const CreateTeacherPage = lazy(() => import("../pages/admin/CreateTeacherPage"));
+const EditTeacherPage = lazy(() => import("../pages/admin/EditTeacherPage"));
 
-import StudentsPage from "../pages/admin/StudentsPage";
-import CreateStudentPage from "../pages/admin/CreateStudentPage";
-import EditStudentPage from "../pages/admin/EditStudentPage";
-import SystemAdminProfilePage from "../pages/admin/SystemAdminProfilePage";
+const StudentsPage = lazy(() => import("../pages/admin/StudentsPage"));
+const CreateStudentPage = lazy(() => import("../pages/admin/CreateStudentPage"));
+const EditStudentPage = lazy(() => import("../pages/admin/EditStudentPage"));
+const SystemAdminProfilePage = lazy(() => import("../pages/admin/SystemAdminProfilePage"));
 
 const SystemLayout = () => {
   const [collapsed, setCollapsed] = useState(false);
@@ -64,28 +67,31 @@ const SystemLayout = () => {
         )}
 
         <div style={{ padding: "24px 32px", overflowY: "auto", flex: 1 }}>
-          <Routes>
-            <Route path="dashboard" element={<SystemAdminDashboard />} />
-            <Route path="teachers" element={<AdminTeachers />} />
-            <Route path="teachers/create" element={<CreateTeacherPage />} />
-            <Route path="teachers/edit/:id" element={<EditTeacherPage />} />
-            <Route path="students" element={<StudentsPage />} />
-            <Route path="students/create" element={<CreateStudentPage />} />
-            <Route path="students/edit/:id" element={<EditStudentPage />} />
-            <Route path="schools" element={<AdminSchools />} />
-            <Route path="curriculum" element={<ManageCurriculum />} />
-            <Route path="reports" element={<SystemAdminReportsPage />} />
-            <Route path="profile" element={<SystemAdminProfilePage />} />
-            
-            {/* System Admin Lessons Management Routes */}
-            <Route path="lessons" element={<LessonList />} />
-            <Route path="lessons/create" element={<CreateLesson />} />
-            <Route path="lessons/:lessonId/skills" element={<TopicSkillManager />} />
-            <Route path="lessons/:lessonId/topics" element={<TopicSkillManager />} />
-            <Route path="lessons/:lessonId/builder" element={<LessonBuilder />} />
+          <Suspense fallback={<CardSkeleton />}>
+            <Routes>
+              <Route path="dashboard" element={<SystemAdminDashboard />} />
+              <Route path="teachers" element={<AdminTeachers />} />
+              <Route path="teachers/create" element={<CreateTeacherPage />} />
+              <Route path="teachers/edit/:id" element={<EditTeacherPage />} />
+              <Route path="students" element={<StudentsPage />} />
+              <Route path="students/create" element={<CreateStudentPage />} />
+              <Route path="students/edit/:id" element={<EditStudentPage />} />
+              <Route path="schools" element={<AdminSchools />} />
+              <Route path="curriculum" element={<ManageCurriculum />} />
+              <Route path="reports" element={<SystemAdminReportsPage />} />
+              <Route path="profile" element={<SystemAdminProfilePage />} />
+              
+              {/* System Admin Lessons Management Routes */}
+              <Route path="lessons" element={<LessonList />} />
+              <Route path="lessons/create" element={<CreateLesson />} />
+              <Route path="lessons/:lessonId/edit" element={<EditLesson />} />
+              <Route path="lessons/:lessonId/skills" element={<TopicSkillManager />} />
+              <Route path="lessons/:lessonId/topics" element={<TopicSkillManager />} />
+              <Route path="lessons/:lessonId/builder" element={<LessonBuilder />} />
 
-            <Route path="*" element={<Navigate to="dashboard" replace />} />
-          </Routes>
+              <Route path="*" element={<Navigate to="dashboard" replace />} />
+            </Routes>
+          </Suspense>
         </div>
       </main>
     </div>

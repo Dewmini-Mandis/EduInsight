@@ -11,7 +11,7 @@ class TeacherClassroomSerializer(serializers.ModelSerializer):
 
 class SchoolClassSerializer(serializers.ModelSerializer):
     school_name = serializers.CharField(source="school.name", read_only=True)
-    teachers = TeacherClassroomSerializer(source="teacherclassroom_set", many=True, read_only=True)
+    teachers = serializers.SerializerMethodField()
 
     class Meta:
         model = SchoolClass
@@ -19,6 +19,10 @@ class SchoolClassSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             "school": {"required": False, "allow_null": True}
         }
+
+    def get_teachers(self, obj):
+        active_tc = obj.teacherclassroom_set.filter(is_active=True)
+        return TeacherClassroomSerializer(active_tc, many=True).data
 
 class StudentSerializer(serializers.ModelSerializer):
     user_name = serializers.SerializerMethodField()

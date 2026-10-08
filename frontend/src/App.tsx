@@ -1,14 +1,17 @@
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./auth/Login";
 import Logout from "./auth/Logout";
 import RequireAuth from "./auth/RequireAuth";
 import { getToken, getUser } from "./auth/authUtils";
-import DashboardRouter from "./routes/DashboardRouter";
-import StudentLayout from "./layouts/StudentLayout";
-import TeacherLayout from "./layouts/TeacherLayout";
-import SystemLayout from "./layouts/SystemLayout";
+import { CardSkeleton } from "./components/common/Skeletons";
 import "./styles/auth.css";
+
+// Lazy-loaded Role Layouts & Routers
+const DashboardRouter = lazy(() => import("./routes/DashboardRouter"));
+const StudentLayout = lazy(() => import("./layouts/StudentLayout"));
+const TeacherLayout = lazy(() => import("./layouts/TeacherLayout"));
+const SystemLayout = lazy(() => import("./layouts/SystemLayout"));
 
 // Role guard component
 const RequireRole: React.FC<{ children: React.ReactNode; role: string }> = ({ children, role }) => {
@@ -49,54 +52,56 @@ const NotFound = () => (
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/logout" element={<Logout />} />
-        <Route path="/unauthorized" element={<Unauthorized />} />
-        
-        {/* Legacy redirect route */}
-        <Route
-          path="/dashboard/*"
-          element={
-            <RequireAuth>
-              <DashboardRouter />
-            </RequireAuth>
-          }
-        />
-        
-        {/* Protected System Admin Layout Wrapper */}
-        <Route
-          path="/system-admin/*"
-          element={
-            <RequireRole role="SYSTEM_ADMIN">
-              <SystemLayout />
-            </RequireRole>
-          }
-        />
+      <Suspense fallback={<CardSkeleton />}>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/logout" element={<Logout />} />
+          <Route path="/unauthorized" element={<Unauthorized />} />
+          
+          {/* Legacy redirect route */}
+          <Route
+            path="/dashboard/*"
+            element={
+              <RequireAuth>
+                <DashboardRouter />
+              </RequireAuth>
+            }
+          />
+          
+          {/* Protected System Admin Layout Wrapper */}
+          <Route
+            path="/system-admin/*"
+            element={
+              <RequireRole role="SYSTEM_ADMIN">
+                <SystemLayout />
+              </RequireRole>
+            }
+          />
 
-        {/* Protected Student Routes Wrapper */}
-        <Route
-          path="/student/*"
-          element={
-            <RequireRole role="STUDENT">
-              <StudentLayout />
-            </RequireRole>
-          }
-        />
+          {/* Protected Student Routes Wrapper */}
+          <Route
+            path="/student/*"
+            element={
+              <RequireRole role="STUDENT">
+                <StudentLayout />
+              </RequireRole>
+            }
+          />
 
-        {/* Protected Teacher Layout Wrapper */}
-        <Route
-          path="/teacher/*"
-          element={
-            <RequireRole role="TEACHER">
-              <TeacherLayout />
-            </RequireRole>
-          }
-        />
-        
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+          {/* Protected Teacher Layout Wrapper */}
+          <Route
+            path="/teacher/*"
+            element={
+              <RequireRole role="TEACHER">
+                <TeacherLayout />
+              </RequireRole>
+            }
+          />
+          
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

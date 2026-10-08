@@ -192,7 +192,7 @@ const LessonList = () => {
               <LessonTable 
                 lessons={termLessons} 
                 isReadOnly={isReadOnly}
-                onManageSkills={(id: number) => navigate(`${basePath}/${id}/skills`)} 
+                onEdit={(id: number) => navigate(isReadOnly ? `/teacher/lessons/${id}/skills` : `/system-admin/lessons/${id}/edit`)} 
                 onDelete={handleDeleteLesson} 
               />
             </TermSyllabusCard>

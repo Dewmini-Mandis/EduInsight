@@ -92,7 +92,7 @@ const CreateQuiz = () => {
   const [description, setDescription] = useState("");
   const [lessonId, setLessonId] = useState("");
   const [estimatedTime, setEstimatedTime] = useState("");
-  
+
   const [enableHints, setEnableHints] = useState(false);
   const [shuffleAnswers, setShuffleAnswers] = useState(true);
   const [passMark, setPassMark] = useState("70");
@@ -122,7 +122,7 @@ const CreateQuiz = () => {
   const [termsList, setTermsList] = useState<any[]>([]);
   const [quizLevels, setQuizLevels] = useState<any[]>([]);
   const [diffLevels, setDiffLevels] = useState<any[]>([]);
-  
+
   // Field states
   const [termId, setTermId] = useState("");
   const [quizLevelId, setQuizLevelId] = useState("");
@@ -619,23 +619,23 @@ const CreateQuiz = () => {
             </div>
           </div>
 
-          <button 
+          <button
             onClick={() => navigate("/teacher/quizzes")}
             onMouseEnter={() => setHoverBack(true)}
             onMouseLeave={() => setHoverBack(false)}
-            style={{ 
-              display: "flex", 
-              alignItems: "center", 
+            style={{
+              display: "flex",
+              alignItems: "center",
               justifyContent: "center",
-              gap: "8px", 
-              height: "42px", 
-              padding: "0 18px", 
-              borderRadius: "9px", 
-              border: `1px solid ${hoverBack ? "#C8D8EB" : "#DCE6F3"}`, 
-              backgroundColor: hoverBack ? "#EEF4FB" : "#F7FAFE", 
-              color: "#3D5E8A", 
-              fontSize: "14px", 
-              fontWeight: "600", 
+              gap: "8px",
+              height: "42px",
+              padding: "0 18px",
+              borderRadius: "9px",
+              border: `1px solid ${hoverBack ? "#C8D8EB" : "#DCE6F3"}`,
+              backgroundColor: hoverBack ? "#EEF4FB" : "#F7FAFE",
+              color: "#3D5E8A",
+              fontSize: "14px",
+              fontWeight: "600",
               cursor: "pointer",
               transition: "all 150ms ease",
               width: isMobile ? "100%" : "auto"
@@ -648,9 +648,9 @@ const CreateQuiz = () => {
       </div>
 
       {successMsg && (
-        <SuccessBanner 
-          message={successMsg} 
-          onClose={() => setSuccessMsg("")} 
+        <SuccessBanner
+          message={successMsg}
+          onClose={() => setSuccessMsg("")}
         />
       )}
 
@@ -665,19 +665,19 @@ const CreateQuiz = () => {
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: "24px" }}>
         {/* 1. Basic Quiz Details Card */}
         <Card>
-          <CardTitle 
-            title="1. Quiz Details" 
-            icon={<FileText size={16} color="#3b82f6" />} 
+          <CardTitle
+            title="1. Quiz Details"
+            icon={<FileText size={16} color="#3b82f6" />}
           />
           <div>
             <Label>Quiz Title <span className="required-marker">*</span></Label>
-            <Input value={title} onChange={(e: any) => { setTitle(e.target.value); setFieldErrors({...fieldErrors, title: null}); }} />
+            <Input value={title} onChange={(e: any) => { setTitle(e.target.value); setFieldErrors({ ...fieldErrors, title: null }); }} />
             {fieldErrors.title && <span style={{ color: "#ef4444", fontSize: "11px", marginTop: "4px", display: "block" }}>{fieldErrors.title}</span>}
           </div>
 
           <div>
             <Label>Short Description</Label>
-            <textarea 
+            <textarea
               value={description} onChange={(e) => setDescription(e.target.value)}
               style={{ width: "100%", padding: "8px 12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "13px", outline: "none", color: "#1e293b", minHeight: "60px", resize: "none" }}
             />
@@ -695,10 +695,10 @@ const CreateQuiz = () => {
 
             <div>
               <Label>Lesson <span className="required-marker">*</span></Label>
-              <Select 
+              <Select
                 id="lesson-select"
-                value={lessonId} 
-                onChange={(e: any) => handleLessonChange(e.target.value)} 
+                value={lessonId}
+                onChange={(e: any) => handleLessonChange(e.target.value)}
                 disabled={!termId}
                 style={fieldErrors.lessonId ? { borderColor: "#ef4444" } : undefined}
               >
@@ -714,7 +714,7 @@ const CreateQuiz = () => {
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <div style={{ position: "relative", width: "100px" }}>
                 <div style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8", display: "flex" }}>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
                 </div>
                 <input type="number" value={estimatedTime} onChange={(e: any) => setEstimatedTime(e.target.value)} style={{ width: "100%", padding: "8px 12px 8px 30px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "13px", outline: "none" }} />
               </div>
@@ -725,40 +725,40 @@ const CreateQuiz = () => {
 
         {/* 2. Difficulty & Progression Card */}
         <Card>
-          <CardTitle 
-            title="2. Difficulty & Progression" 
-            icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" color="#8b5cf6"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>} 
+          <CardTitle
+            title="2. Difficulty & Progression"
+            icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" color="#8b5cf6"><path d="M3 3v18h18" /><path d="M18 17V9" /><path d="M13 17V5" /><path d="M8 17v-3" /></svg>}
           />
           <div>
             <Label>Level</Label>
             <Select value={quizLevelId} onChange={(e: any) => setQuizLevelId(e.target.value)}>
-                <option value="">Select Level</option>
-                {quizLevels.map(ql => <option key={ql.id} value={ql.id}>{ql.name}</option>)}
+              <option value="">Select Level</option>
+              {quizLevels.map(ql => <option key={ql.id} value={ql.id}>{ql.name}</option>)}
             </Select>
           </div>
           <div>
             <Label>Difficulty</Label>
             <Select value={diffLevelId} onChange={(e: any) => setDiffLevelId(e.target.value)}>
-                <option value="">Select Difficulty</option>
-                {diffLevels.map(dl => <option key={dl.id} value={dl.id}>{dl.name}</option>)}
+              <option value="">Select Difficulty</option>
+              {diffLevels.map(dl => <option key={dl.id} value={dl.id}>{dl.name}</option>)}
             </Select>
           </div>
           <div>
             <Label>Order Number</Label>
-            <input 
-              type="number" 
-              value={order} 
-              onChange={(e: any) => setOrder(e.target.value)} 
-              style={{ 
-                width: "100%", 
-                padding: "8px 12px", 
-                borderRadius: "6px", 
-                border: orderError ? "1px solid #FF4054" : "1px solid #e2e8f0", 
-                fontSize: "13px", 
+            <input
+              type="number"
+              value={order}
+              onChange={(e: any) => setOrder(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "8px 12px",
+                borderRadius: "6px",
+                border: orderError ? "1px solid #FF4054" : "1px solid #e2e8f0",
+                fontSize: "13px",
                 outline: "none",
                 boxSizing: "border-box"
-              }} 
-              min="1" 
+              }}
+              min="1"
               step="1"
             />
             {orderError && (
@@ -767,16 +767,13 @@ const CreateQuiz = () => {
               </span>
             )}
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "8px" }}>
-            <Toggle checked={enableHints} onChange={setEnableHints} label="Enable hints during quiz" />
-            <Toggle checked={shuffleAnswers} onChange={setShuffleAnswers} label="Shuffle answers" />
-          </div>
+
 
           <div style={{ marginTop: "auto" }}>
             <Label>Pass Mark (%)</Label>
             <div style={{ position: "relative" }}>
               <div style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8", display: "flex" }}>
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
               </div>
               <input type="number" value={passMark} onChange={(e: any) => setPassMark(e.target.value)} style={{ width: "100%", padding: "8px 30px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "13px", outline: "none" }} />
               <div style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8", fontSize: "13px" }}>%</div>
@@ -786,9 +783,9 @@ const CreateQuiz = () => {
 
         {/* 3. Assignment & Availability Card */}
         <Card>
-          <CardTitle 
-            title="3. Assignment & Availability" 
-            icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" color="#6366f1"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>} 
+          <CardTitle
+            title="3. Assignment & Availability"
+            icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" color="#6366f1"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>}
           />
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
@@ -878,7 +875,7 @@ const CreateQuiz = () => {
               <Label>Start Date</Label>
               <div style={{ position: "relative" }}>
                 <div style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8", display: "flex" }}>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
                 </div>
                 <input type="date" value={startDate} onChange={(e: any) => setStartDate(e.target.value)} style={{ width: "100%", padding: "8px 12px 8px 30px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "13px", outline: "none", color: "#1e293b" }} />
               </div>
@@ -887,13 +884,13 @@ const CreateQuiz = () => {
               <Label>Due Date</Label>
               <div style={{ position: "relative" }}>
                 <div style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8", display: "flex" }}>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
                 </div>
                 <input type="date" value={dueDate} onChange={(e: any) => setDueDate(e.target.value)} style={{ width: "100%", padding: "8px 12px 8px 30px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "13px", outline: "none", color: "#1e293b" }} />
               </div>
             </div>
           </div>
-          
+
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "8px 0" }}>
             <span style={{ fontSize: "13px", fontWeight: "600", color: "#1e293b" }}>Schedule Quiz</span>
             <div onClick={() => setScheduleQuiz(!scheduleQuiz)} style={{ width: "36px", height: "20px", borderRadius: "10px", backgroundColor: scheduleQuiz ? "#22c55e" : "#cbd5e1", position: "relative", cursor: "pointer", transition: "all 0.2s" }}>
@@ -906,7 +903,7 @@ const CreateQuiz = () => {
               <Label>Release Time</Label>
               <div style={{ position: "relative" }}>
                 <div style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "#94a3b8", display: "flex" }}>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
                 </div>
                 <input type="time" value={releaseTime} onChange={(e: any) => setReleaseTime(e.target.value)} style={{ width: "100%", padding: "8px 12px 8px 30px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "13px", outline: "none" }} />
               </div>
@@ -924,9 +921,9 @@ const CreateQuiz = () => {
 
       {/* NEW: SKILLS & QUESTIONS SECTION */}
       <Card>
-        <CardTitle 
-          title="Skills & Questions Selection" 
-          icon={<Layers size={18} color="#6C4BFF" />} 
+        <CardTitle
+          title="Skills & Questions Selection"
+          icon={<Layers size={18} color="#6C4BFF" />}
         />
         <p style={{ margin: "0 0 8px 0", fontSize: "13px", color: "#64748b" }}>
           Select active skills configured for the chosen lesson, and add unique questions per skill.
@@ -1391,9 +1388,9 @@ const CreateQuiz = () => {
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: "24px" }}>
         {/* 5. Scoring & Settings Card */}
         <Card>
-          <CardTitle 
-            title="5. Scoring & Settings" 
-            icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" color="#3b82f6"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>} 
+          <CardTitle
+            title="5. Scoring & Settings"
+            icon={<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" color="#3b82f6"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>}
           />
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
             <Toggle checked={randomizeOrder} onChange={setRandomizeOrder} label="Randomize question order" />
@@ -1405,9 +1402,9 @@ const CreateQuiz = () => {
 
         {/* Quiz Summary Card */}
         <Card>
-          <CardTitle 
-            title="Quiz Summary" 
-            icon={<FileText size={16} color="#3b82f6" />} 
+          <CardTitle
+            title="Quiz Summary"
+            icon={<FileText size={16} color="#3b82f6" />}
           />
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 0", height: "100%" }}>
             <div style={{ textAlign: "center" }}>
@@ -1470,7 +1467,7 @@ const CreateQuiz = () => {
             cursor: canPublish && !loading && !savingDraft ? "pointer" : "not-allowed"
           }}
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
           {loading ? "Publishing..." : "Publish Quiz"}
         </button>
       </div>

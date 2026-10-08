@@ -37,6 +37,7 @@ const TeacherForm: React.FC<TeacherFormProps> = ({
   mode,
   formData,
   setFormData,
+  availableClassrooms,
   onSubmit,
   onCancel,
   loading,
@@ -283,7 +284,6 @@ const TeacherForm: React.FC<TeacherFormProps> = ({
               aria-required="true"
               aria-invalid={Boolean(touched.email && fieldErrors.email)}
               aria-describedby={touched.email && fieldErrors.email ? "email-error" : undefined}
-              disabled={mode === "edit"}
               className={`admin-form-input ${touched.email && fieldErrors.email ? "is-invalid" : ""}`}
               placeholder="e.g. suranga@gmail.com"
               value={formData.email}
@@ -339,8 +339,9 @@ const TeacherForm: React.FC<TeacherFormProps> = ({
                 <input
                   ref={classInputRef}
                   type="text"
+                  list="available-classrooms-datalist"
                   className="admin-form-input"
-                  placeholder="Enter class name"
+                  placeholder="Select or enter class name (e.g. Grade 6A)"
                   value={classInput}
                   onChange={(e) => {
                     setClassInput(e.target.value);
@@ -353,6 +354,11 @@ const TeacherForm: React.FC<TeacherFormProps> = ({
                     }
                   }}
                 />
+                <datalist id="available-classrooms-datalist">
+                  {availableClassrooms?.map((cls: ClassroomItem) => (
+                    <option key={cls.id} value={cls.name} />
+                  ))}
+                </datalist>
               </div>
 
               <button

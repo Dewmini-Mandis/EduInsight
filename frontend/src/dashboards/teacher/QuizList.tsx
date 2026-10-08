@@ -20,6 +20,8 @@ import {
 import StatusBadge from "../../components/StatusBadge";
 import EmptyState from "../../components/EmptyState";
 import { sortQuizzesByProgression } from "../../utils/quizOrdering";
+import { queryClient } from "../../api/queryClient";
+import { CardSkeleton } from "../../components/common/Skeletons";
 
 const getLevelName = (quiz: any): string | null => {
   const name = quiz.quiz_level_name || quiz.quiz_level_details?.name || quiz.learning_level || (typeof quiz.quiz_level === "object" ? quiz.quiz_level?.name : "") || (typeof quiz.quiz_level === "string" ? quiz.quiz_level : "");
@@ -140,43 +142,40 @@ const QuizList = () => {
     setLoading(true);
     setError("");
     try {
-      const [quizzesRes, lessonsRes, skillsRes, levelsRes, diffRes] = await Promise.all([
-        fetch("/api/quizzes/", { headers: { Authorization: `Token ${token}` } }),
-        fetch("/api/quizzes/lessons/", { headers: { Authorization: `Token ${token}` } }),
-        fetch("/api/quizzes/skills/", { headers: { Authorization: `Token ${token}` } }),
-        fetch("/api/quizzes/quiz-levels/", { headers: { Authorization: `Token ${token}` } }),
-        fetch("/api/quizzes/difficulty-levels/", { headers: { Authorization: `Token ${token}` } }),
+      const headers = { Authorization: `Token ${token}` };
+      const [quizzesData, lessonsData, skillsData, levelsData, diffData] = await Promise.all([
+        queryClient.fetchQuery(["teacher", "quizzes"], async () => {
+          const res = await fetch("/api/quizzes/", { headers });
+          return res.ok ? await res.json() : [];
+        }, { staleTime: 120000 }),
+        queryClient.fetchQuery(["teacher", "lessons"], async () => {
+          const res = await fetch("/api/quizzes/lessons/", { headers });
+          return res.ok ? await res.json() : [];
+        }, { staleTime: 600000 }),
+        queryClient.fetchQuery(["teacher", "skills"], async () => {
+          const res = await fetch("/api/quizzes/skills/", { headers });
+          return res.ok ? await res.json() : [];
+        }, { staleTime: 600000 }),
+        queryClient.fetchQuery(["teacher", "quiz-levels"], async () => {
+          const res = await fetch("/api/quizzes/quiz-levels/", { headers });
+          return res.ok ? await res.json() : [];
+        }, { staleTime: 600000 }),
+        queryClient.fetchQuery(["teacher", "difficulty-levels"], async () => {
+          const res = await fetch("/api/quizzes/difficulty-levels/", { headers });
+          return res.ok ? await res.json() : [];
+        }, { staleTime: 600000 }),
       ]);
 
-      if (quizzesRes.ok) {
-        const data = await quizzesRes.json();
-        setQuizzes(Array.isArray(data) ? data : (data.results || []));
-      } else {
-        setError("Failed to fetch quizzes");
-      }
+      const qList = Array.isArray(quizzesData) ? quizzesData : (quizzesData as any).results || [];
+      setQuizzes(qList);
 
-      if (lessonsRes.ok) {
-        const data = await lessonsRes.json();
-        const lessonList = Array.isArray(data) ? data : (data.results || []);
-        // Sort lessons according to configured order (lesson.order || lesson.id)
-        lessonList.sort((a: any, b: any) => (a.order ?? a.id) - (b.order ?? b.id));
-        setLessons(lessonList);
-      }
+      const lessonList = Array.isArray(lessonsData) ? lessonsData : (lessonsData as any).results || [];
+      lessonList.sort((a: any, b: any) => (a.order ?? a.id) - (b.order ?? b.id));
+      setLessons(lessonList);
 
-      if (skillsRes.ok) {
-        const data = await skillsRes.json();
-        setSkills(Array.isArray(data) ? data : (data.results || []));
-      }
-
-      if (levelsRes.ok) {
-        const data = await levelsRes.json();
-        setQuizLevels(Array.isArray(data) ? data : (data.results || []));
-      }
-
-      if (diffRes.ok) {
-        const data = await diffRes.json();
-        setDifficultyLevels(Array.isArray(data) ? data : (data.results || []));
-      }
+      setSkills(Array.isArray(skillsData) ? skillsData : (skillsData as any).results || []);
+      setQuizLevels(Array.isArray(levelsData) ? levelsData : (levelsData as any).results || []);
+      setDifficultyLevels(Array.isArray(diffData) ? diffData : (diffData as any).results || []);
     } catch (err) {
       console.error("Error fetching quizzes data:", err);
       setError("Error connecting to server");

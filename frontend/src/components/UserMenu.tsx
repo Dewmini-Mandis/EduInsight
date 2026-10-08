@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getToken, logout } from "../auth/authUtils";
+import { getToken, getUser, logout } from "../auth/authUtils";
+import { queryClient } from "../api/queryClient";
 
 type UserProfile = {
   id: number;
@@ -13,20 +14,29 @@ type UserProfile = {
 
 const UserMenu = () => {
   const navigate = useNavigate();
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<UserProfile | null>(() => getUser());
+  const [loading, setLoading] = useState<boolean>(() => !getUser());
 
   useEffect(() => {
     const fetchUser = async () => {
       try {
         const token = getToken();
-        const res = await fetch("/api/accounts/me/", {
-          headers: { Authorization: `Token ${token}` },
-        });
-        if (res.ok) {
-          const data = (await res.json()) as UserProfile;
-          setUser(data);
+        if (!token) {
+          setLoading(false);
+          return;
         }
+        const data = await queryClient.fetchQuery<UserProfile>(
+          ["accounts", "me"],
+          async () => {
+            const res = await fetch("/api/accounts/me/", {
+              headers: { Authorization: `Token ${token}` },
+            });
+            if (!res.ok) throw new Error("Failed to fetch user");
+            return await res.json();
+          },
+          { staleTime: 300000 }
+        );
+        setUser(data);
       } catch (error) {
         console.error("Failed to fetch user:", error);
       } finally {

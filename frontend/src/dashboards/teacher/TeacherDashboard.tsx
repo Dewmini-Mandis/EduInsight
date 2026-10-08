@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getToken, getUser } from "../../auth/authUtils";
+import { queryClient } from "../../api/queryClient";
 
 interface SummaryData {
   totalStudents: number;
@@ -65,78 +66,36 @@ const TeacherDashboard: React.FC = () => {
       }
       const headers = { Authorization: `Token ${token}` };
       try {
-        const [overviewRes, classesRes, riskRes, quizzesRes, materialsRes] = await Promise.allSettled([
-          fetch("/api/analytics/overview/", { headers }),
-          fetch("/api/classes/classrooms/", { headers }),
-          fetch("/api/analytics/risk/", { headers }),
-          fetch("/api/quizzes/", { headers }),
-          fetch("/api/materials/", { headers }),
-        ]);
+        const data = await queryClient.fetchQuery(
+          ["teacher", "dashboard-summary"],
+          async () => {
+            const res = await fetch("/api/analytics/overview/dashboard_summary/", { headers });
+            return res.ok ? await res.json() : null;
+          },
+          { staleTime: 120000 }
+        );
 
-        if (overviewRes.status === "fulfilled" && overviewRes.value.ok) {
-          const apiData = await overviewRes.value.json();
-          setSummary({
-            totalStudents: apiData.total_students ?? 0,
-            activeQuizzes: apiData.published_quizzes ?? 0,
-            learningMaterials: apiData.learning_materials ?? apiData.total_materials ?? 0,
-            lessonsManaged: apiData.active_lessons ?? 0,
-          });
-        }
-
-        if (classesRes.status === "fulfilled" && classesRes.value.ok) {
-          const classesData = await classesRes.value.json();
-          const list = Array.isArray(classesData) ? classesData : classesData.results || [];
-          setClassPerformance(
-            list.map((c: any) => ({
-              className: c.name || c.grade_class || `Class #${c.id}`,
-              avgScore: c.average_score ?? 0,
-            }))
-          );
-        }
-
-        if (riskRes.status === "fulfilled" && riskRes.value.ok) {
-          const riskData = await riskRes.value.json();
-          const list = Array.isArray(riskData) ? riskData : riskData.results || [];
-          setRiskStudents(
-            list.slice(0, 5).map((r: any) => {
-              const cat = (r.risk_category || "").toString().toUpperCase();
-              return {
-                id: String(r.id),
-                name: r.student_name || r.student?.user?.first_name || `Student #${r.student}`,
-                className: r.student_class || r.student?.grade_class || "Class",
-                riskLevel: cat.includes("HIGH") && !cat.includes("NOT HIGH") ? "High Risk" : "Not High Risk",
-              };
-            })
-          );
-        }
-
-        if (quizzesRes.status === "fulfilled" && quizzesRes.value.ok) {
-          const quizData = await quizzesRes.value.json();
-          const list = Array.isArray(quizData) ? quizData : quizData.results || [];
-          const activeList = list.filter((q: any) => !q.is_deleted);
-          setRecentQuizzes(
-            activeList.slice(0, 5).map((q: any) => ({
-              id: String(q.id),
-              title: q.title,
-              lesson: typeof q.lesson === "object" ? q.lesson?.title : `Lesson #${q.lesson || ""}`,
-              assignedClass: q.assigned_class_name || "Assigned Class",
-              attempts: q.total_attempts ?? q.attempts_count ?? 0,
-              status: q.is_published ? "Active" : "Draft",
-            }))
-          );
-        }
-
-        if (materialsRes.status === "fulfilled" && materialsRes.value.ok) {
-          const matData = await materialsRes.value.json();
-          const list = Array.isArray(matData) ? matData : matData.results || [];
-          setRecentMaterials(
-            list.slice(0, 5).map((m: any) => ({
-              id: String(m.id),
-              title: m.title,
-              type: m.material_type === "VIDEO" ? "Video" : m.material_type === "NOTE" ? "Note" : "Attachment",
-              uploadDate: m.created_at ? new Date(m.created_at).toLocaleDateString() : "Recent",
-            }))
-          );
+        if (data) {
+          if (data.summary) {
+            setSummary({
+              totalStudents: data.summary.totalStudents ?? 0,
+              activeQuizzes: data.summary.activeQuizzes ?? 0,
+              learningMaterials: data.summary.learningMaterials ?? 0,
+              lessonsManaged: data.summary.lessonsManaged ?? 0,
+            });
+          }
+          if (data.classPerformance) {
+            setClassPerformance(data.classPerformance);
+          }
+          if (data.riskStudents) {
+            setRiskStudents(data.riskStudents);
+          }
+          if (data.recentQuizzes) {
+            setRecentQuizzes(data.recentQuizzes);
+          }
+          if (data.recentMaterials) {
+            setRecentMaterials(data.recentMaterials);
+          }
         }
       } catch (e) {
         console.error("Error fetching dashboard metrics:", e);

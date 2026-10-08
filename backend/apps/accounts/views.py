@@ -42,6 +42,14 @@ class RegisterView(generics.CreateAPIView):
 		)
 
 
+def _get_prefetched_user(user_obj):
+	if not user_obj or not getattr(user_obj, "pk", None):
+		return user_obj
+	return User.objects.filter(pk=user_obj.pk).select_related(
+		"role", "school", "student_profile__registered_by", "student_profile__class_room", "teacher_profile"
+	).prefetch_related("teacherclassroom_set__classroom").first() or user_obj
+
+
 class LoginView(APIView):
 	permission_classes = [AllowAny]
 
@@ -50,7 +58,8 @@ class LoginView(APIView):
 		serializer.is_valid(raise_exception=True)
 		user = serializer.validated_data["user"]
 		token, _ = Token.objects.get_or_create(user=user)
-		return Response({"token": token.key, "user": UserSerializer(user).data})
+		prefetched_user = _get_prefetched_user(user)
+		return Response({"token": token.key, "user": UserSerializer(prefetched_user).data})
 
 
 class LogoutView(APIView):
@@ -63,7 +72,8 @@ class LogoutView(APIView):
 
 class MeView(APIView):
 	def get(self, request):
-		return Response(UserSerializer(request.user).data)
+		user = _get_prefetched_user(request.user)
+		return Response(UserSerializer(user).data)
 
 	def patch(self, request):
 		if request.user.is_role(Role.ROLE_STUDENT):
@@ -73,11 +83,12 @@ class MeView(APIView):
 		)
 		serializer.is_valid(raise_exception=True)
 		serializer.save()
-		return Response(UserSerializer(request.user).data)
+		user = _get_prefetched_user(request.user)
+		return Response(UserSerializer(user).data)
 
 
 class UserViewSet(viewsets.ModelViewSet):
-	queryset = User.objects.select_related("role", "school", "student_profile__registered_by")
+	queryset = User.objects.select_related("role", "school", "student_profile__registered_by", "student_profile__class_room", "teacher_profile").prefetch_related("teacherclassroom_set__classroom", "student_profile__class_room__teacherclassroom_set__teacher")
 	permission_classes = [IsAuthenticated]
 
 	def get_queryset(self):

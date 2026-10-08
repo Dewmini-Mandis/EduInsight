@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { getToken, getUser } from "../../auth/authUtils";
 import { Edit3, ArrowLeft, RefreshCw } from "lucide-react";
 import SuccessBanner from "../../components/SuccessBanner";
+import { queryClient } from "../../api/queryClient";
 import "../../styles/teacher.css";
 
 type StudentProfile = {
@@ -192,6 +193,7 @@ const EditStudentProfile = () => {
       }
 
       setSuccessMessage("Student updated successfully.");
+      queryClient.invalidateQueries(["teacher", "students"]);
       setTimeout(() => {
         navigate(`/teacher/students/${studentId}`);
       }, 1000);

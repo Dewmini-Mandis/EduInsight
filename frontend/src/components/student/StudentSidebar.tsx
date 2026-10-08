@@ -38,20 +38,20 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({ collapsed, setCollapsed
   return (
     <aside className="student-sidebar">
       <div className="student-sidebar-top">
-        <div className="teacher-sidebar-brand" style={{ padding: "8px 8px 0 8px", marginBottom: "24px" }}>
-          <div className="sidebar-brand-container">
+        <div className="student-sidebar-brand">
+          <div className="student-brand-container">
             <img
               src={collapsed ? "/eduinsight-logo-icon.png" : "/eduinsight-logo.png"}
               alt="EduInsight"
-              className="sidebar-logo"
+              className="student-sidebar-logo"
             />
             {!collapsed && (
-              <div className="sidebar-role">STUDENT</div>
+              <div className="student-role-badge">STUDENT</div>
             )}
           </div>
           <button
             type="button"
-            className="sidebar-collapse-btn"
+            className="student-sidebar-collapse-btn"
             onClick={() => setCollapsed(!collapsed)}
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >

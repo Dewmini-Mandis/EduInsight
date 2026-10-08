@@ -7,7 +7,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = "dev-insecure-change-me"
 DEBUG = True
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "testserver", "*"]
 
 INSTALLED_APPS = [
 	"django.contrib.admin",
@@ -79,6 +79,14 @@ db_config = dj_database_url.parse(
 )
 db_config["CONN_HEALTH_CHECKS"] = conn_health_checks
 
+db_host = db_config.get("HOST")
+if db_host and not db_host.startswith("localhost") and db_host != "127.0.0.1":
+	try:
+		resolved_ip = socket.gethostbyname(db_host)
+		db_config.setdefault("OPTIONS", {})["hostaddr"] = resolved_ip
+	except Exception:
+		pass
+
 import sys
 USE_SQLITE = os.getenv("USE_SQLITE", "False").lower() in ("true", "1", "t")
 
@@ -116,6 +124,9 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR.parent / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

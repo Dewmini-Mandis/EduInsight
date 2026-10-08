@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { getToken, getUser, setUser } from "../auth/authUtils";
+import { queryClient } from "../api/queryClient";
 
-type CurrentUser = {
+export type CurrentUser = {
   id: number;
   username: string;
   email: string;
@@ -16,25 +17,29 @@ const useCurrentUser = () => {
 
   useEffect(() => {
     const token = getToken();
-    if (!token || user) return;
+    if (!token) {
+      setUserState(null);
+      return;
+    }
 
-    const load = async () => {
-      try {
-        const res = await fetch("/api/accounts/me/", {
-          headers: {
-            Authorization: `Token ${token}`,
-          },
-        });
-        if (!res.ok) throw new Error("Failed to load profile");
-        const data = (await res.json()) as CurrentUser;
-        setUser(data);
-        setUserState(data);
-      } catch {
-        setUserState(null);
-      }
-    };
+    if (user) return;
 
-    load();
+    queryClient
+      .fetchQuery<CurrentUser>(
+        ["user", "me"],
+        async () => {
+          const res = await fetch("/api/accounts/me/", {
+            headers: { Authorization: `Token ${token}` },
+          });
+          if (!res.ok) throw new Error("Failed to load profile");
+          const data = (await res.json()) as CurrentUser;
+          setUser(data);
+          return data;
+        },
+        { staleTime: 600000 } // Cache user profile for 10 minutes
+      )
+      .then((data) => setUserState(data))
+      .catch(() => setUserState(null));
   }, [user]);
 
   return user;

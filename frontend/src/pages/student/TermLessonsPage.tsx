@@ -4,59 +4,89 @@ import Breadcrumbs from "../../components/student/Breadcrumbs";
 import TermLessonsHeader from "../../components/student/TermLessonsHeader";
 import LessonCard, { LessonData } from "../../components/student/LessonCard";
 import { getToken } from "../../auth/authUtils";
+import { queryClient } from "../../api/queryClient";
+import { CardSkeleton } from "../../components/common/Skeletons";
 import "../../styles/student.css";
 
 const TermLessonsPage: React.FC = () => {
   const { termName: paramTerm } = useParams<{ termName: string }>();
   const termName = paramTerm ? decodeURIComponent(paramTerm) : "Term 1";
 
-  const [lessons, setLessons] = useState<LessonData[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [lessons, setLessons] = useState<LessonData[]>(() => {
+    const cachedLessonsData = queryClient.getQueryData<any>(["student", "lessons"]);
+    const cachedQuizzesData = queryClient.getQueryData<any>(["student", "quizzes"]);
+    if (cachedLessonsData && cachedQuizzesData) {
+      const lessonsList = Array.isArray(cachedLessonsData) ? cachedLessonsData : (cachedLessonsData as any).results || [];
+      const quizzesList = Array.isArray(cachedQuizzesData) ? cachedQuizzesData : (cachedQuizzesData as any).results || [];
+      const filtered = lessonsList.filter((l: any) => l.term_name === termName);
+      if (filtered.length > 0) {
+        return filtered.map((l: any) => {
+          const lQuizzes = quizzesList.filter((q: any) => {
+            const qLessonId = typeof q.lesson === "object" ? q.lesson?.id : q.lesson;
+            return String(qLessonId) === String(l.id);
+          });
+          return {
+            id: l.id.toString(),
+            title: l.title,
+            description: l.description,
+            status: "Pending" as const,
+            progress: 0,
+            quizzesCount: lQuizzes.length,
+            estimatedMinutes: lQuizzes.length * 15,
+          };
+        });
+      }
+    }
+    return [];
+  });
+  const [loading, setLoading] = useState<boolean>(() => {
+    const cachedLessonsData = queryClient.getQueryData<any>(["student", "lessons"]);
+    const cachedQuizzesData = queryClient.getQueryData<any>(["student", "quizzes"]);
+    if (cachedLessonsData && cachedQuizzesData) {
+      const lessonsList = Array.isArray(cachedLessonsData) ? cachedLessonsData : (cachedLessonsData as any).results || [];
+      return !lessonsList.some((l: any) => l.term_name === termName);
+    }
+    return true;
+  });
 
   useEffect(() => {
     const fetchLessons = async () => {
-      setLoading(true);
+      if (lessons.length === 0) {
+        setLoading(true);
+      }
       try {
         const token = getToken();
         if (token) {
-          const [lessonsRes, quizzesRes, attemptsRes] = await Promise.allSettled([
-            fetch("/api/quizzes/lessons/", { headers: { Authorization: `Token ${token}` } }),
-            fetch("/api/quizzes/", { headers: { Authorization: `Token ${token}` } }),
-            fetch("/api/attempts/attempts/", { headers: { Authorization: `Token ${token}` } }),
+          const headers = { Authorization: `Token ${token}` };
+          const [lessonsData, quizzesData] = await Promise.all([
+            queryClient.fetchQuery(["student", "lessons"], async () => {
+              const res = await fetch("/api/quizzes/lessons/", { headers });
+              return res.ok ? await res.json() : [];
+            }, { staleTime: 600000 }),
+            queryClient.fetchQuery(["student", "quizzes"], async () => {
+              const res = await fetch("/api/quizzes/", { headers });
+              return res.ok ? await res.json() : [];
+            }, { staleTime: 120000 }),
           ]);
 
-          let lessonsList: any[] = [];
-          if (lessonsRes.status === "fulfilled" && lessonsRes.value.ok) {
-            const lessonsData = await lessonsRes.value.json();
-            lessonsList = Array.isArray(lessonsData) ? lessonsData : lessonsData.results || [];
-          }
+          const lessonsList = Array.isArray(lessonsData) ? lessonsData : (lessonsData as any).results || [];
+          const quizzesList = Array.isArray(quizzesData) ? quizzesData : (quizzesData as any).results || [];
+          const attemptsList: any[] = [];
 
-          let quizzesList: any[] = [];
-          if (quizzesRes.status === "fulfilled" && quizzesRes.value.ok) {
-            const quizzesData = await quizzesRes.value.json();
-            quizzesList = Array.isArray(quizzesData) ? quizzesData : quizzesData.results || [];
-          }
-
-          let attemptsList: any[] = [];
-          if (attemptsRes.status === "fulfilled" && attemptsRes.value.ok) {
-            const attemptsData = await attemptsRes.value.json();
-            attemptsList = Array.isArray(attemptsData) ? attemptsData : attemptsData.results || [];
-          }
-
-          const filtered = lessonsList.filter((l) => l.term_name === termName);
+          const filtered = lessonsList.filter((l: any) => l.term_name === termName);
 
           if (filtered.length > 0) {
-            const mapped: LessonData[] = filtered.map((l) => {
-              const lQuizzes = quizzesList.filter((q) => {
+            const mapped: LessonData[] = filtered.map((l: any) => {
+              const lQuizzes = quizzesList.filter((q: any) => {
                 const qLessonId = typeof q.lesson === "object" ? q.lesson?.id : q.lesson;
                 return String(qLessonId) === String(l.id);
               });
 
-              const completedQuizzes = lQuizzes.filter((q) =>
-                attemptsList.some((att) => att.quiz === q.id && att.score >= (q.pass_mark || 75))
+              const completedQuizzes = lQuizzes.filter((q: any) =>
+                attemptsList.some((att: any) => att.quiz === q.id && att.score >= (q.pass_mark || 75))
               ).length;
-              const hasAttempts = lQuizzes.some((q) =>
-                attemptsList.some((att) => att.quiz === q.id)
+              const hasAttempts = lQuizzes.some((q: any) =>
+                attemptsList.some((att: any) => att.quiz === q.id)
               );
 
               const progressPct =

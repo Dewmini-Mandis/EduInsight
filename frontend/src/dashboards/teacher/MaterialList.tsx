@@ -23,6 +23,7 @@ import {
   ArrowDown,
 } from "lucide-react";
 import MaterialRow from "./materials/MaterialRow";
+import { queryClient } from "../../api/queryClient";
 
 const useMediaQuery = (query: string) => {
   const [matches, setMatches] = useState(false);
@@ -120,14 +121,14 @@ const MaterialList: React.FC = () => {
 
   const fetchLessons = async () => {
     try {
-      const res = await fetch("/api/quizzes/lessons/", {
-        headers: { Authorization: `Token ${getToken()}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const list = Array.isArray(data) ? data : data.results || [];
-        setLessonsList(list);
-      }
+      const data = await queryClient.fetchQuery(["teacher", "lessons"], async () => {
+        const res = await fetch("/api/quizzes/lessons/", {
+          headers: { Authorization: `Token ${getToken()}` },
+        });
+        return res.ok ? await res.json() : [];
+      }, { staleTime: 600000 });
+      const list = Array.isArray(data) ? data : (data as any).results || [];
+      setLessonsList(list);
     } catch (e) {
       console.error("Error fetching lessons:", e);
     }

@@ -8,19 +8,24 @@ from .models import SchoolClass, TeacherClassroom, Student, TeacherProfile, Clas
 from .serializers import SchoolClassSerializer, TeacherClassroomSerializer, StudentSerializer, TeacherProfileSerializer, ClassroomAccessRequestSerializer
 
 class SchoolClassViewSet(viewsets.ModelViewSet):
-    queryset = SchoolClass.objects.all()
+    queryset = SchoolClass.objects.all().select_related("school").prefetch_related("teacherclassroom_set__teacher")
     serializer_class = SchoolClassSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
+        qs = super().get_queryset()
+        if self.request.query_params.get("include_inactive") != "true":
+            qs = qs.filter(is_active=True)
+        if self.request.query_params.get("teacher_assigned_only") == "true":
+            qs = qs.filter(teacherclassroom__is_active=True).distinct()
         if user.is_role(Role.ROLE_SYSTEM_ADMIN):
-            return self.queryset.all()
+            return qs
         if user.is_role(Role.ROLE_TEACHER):
-            return self.queryset.filter(teacherclassroom__teacher=user)
+            return qs.filter(teacherclassroom__teacher=user, teacherclassroom__is_active=True).distinct()
         if user.is_role(Role.ROLE_STUDENT):
-            return self.queryset.filter(students__user=user)
-        return self.queryset.none()
+            return qs.filter(students__user=user)
+        return SchoolClass.objects.none()
 
     def create(self, request, *args, **kwargs):
         user = request.user
@@ -60,7 +65,7 @@ class SchoolClassViewSet(viewsets.ModelViewSet):
 from rest_framework.decorators import action
 
 class TeacherClassroomViewSet(viewsets.ModelViewSet):
-    queryset = TeacherClassroom.objects.all()
+    queryset = TeacherClassroom.objects.select_related("teacher", "classroom__school")
     serializer_class = TeacherClassroomSerializer
     permission_classes = [IsAuthenticated]
 
@@ -108,7 +113,7 @@ class TeacherClassroomViewSet(viewsets.ModelViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 class ClassroomAccessRequestViewSet(viewsets.ModelViewSet):
-    queryset = ClassroomAccessRequest.objects.all()
+    queryset = ClassroomAccessRequest.objects.select_related("teacher", "classroom")
     serializer_class = ClassroomAccessRequestSerializer
     permission_classes = [IsAuthenticated]
 

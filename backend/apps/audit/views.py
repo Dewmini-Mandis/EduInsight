@@ -13,7 +13,7 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
         if not (user.is_role(Role.ROLE_SYSTEM_ADMIN) or user.is_superuser):
             raise PermissionDenied("Only System Administrators can view activity logs.")
         
-        queryset = AuditLog.objects.all().order_by("-timestamp")
+        queryset = AuditLog.objects.select_related("user").order_by("-timestamp")
         
         limit = self.request.query_params.get("limit")
         entity_type = self.request.query_params.get("entity_type")

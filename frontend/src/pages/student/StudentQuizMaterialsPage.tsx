@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import Breadcrumbs from "../../components/student/Breadcrumbs";
 import { getToken } from "../../auth/authUtils";
+import { queryClient } from "../../api/queryClient";
+import { CardSkeleton } from "../../components/common/Skeletons";
 import "../../styles/student.css";
 
 interface MaterialAttachmentItem {
@@ -74,10 +76,18 @@ const StudentQuizMaterialsPage: React.FC = () => {
   const [completedMaterialIds, setCompletedMaterialIds] = useState<Set<number>>(new Set());
 
   // Time & Video Tracking States
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const [accumulatedTimes, setAccumulatedTimes] = useState<{ [materialId: number]: number }>({});
   const [watchedPercents, setWatchedPercents] = useState<{ [materialId: number]: number }>({});
   const [answeredQuestionIds, setAnsweredQuestionIds] = useState<Set<number>>(new Set());
   const [selectedAnswers, setSelectedAnswers] = useState<{ [questionId: number]: string }>({});
+
+  // Active Timed Question Modal States
+  const [activeTimedQuestion, setActiveTimedQuestion] = useState<VideoQuestionItem | null>(null);
+  const [timedQuestionState, setTimedQuestionState] = useState<"IDLE" | "OPEN" | "INCORRECT" | "CORRECT">("IDLE");
+  const [selectedOptionText, setSelectedOptionText] = useState<string | null>(null);
+  const [submittingAnswer, setSubmittingAnswer] = useState<boolean>(false);
+  const [feedbackMsg, setFeedbackMsg] = useState<string>("");
 
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -107,17 +117,25 @@ const StudentQuizMaterialsPage: React.FC = () => {
     try {
       const headers = { Authorization: `Token ${token}` };
 
-      // Fetch Quiz, Remediation Status, Materials, and Content Progress
-      const [quizRes, remRes, materialsRes, progressRes, videoAnsRes] = await Promise.all([
-        fetch(`/api/quizzes/${quizId}/`, { headers }),
-        fetch(`/api/attempts/attempts/remediation_status/?quiz=${quizId}`, { headers }),
-        fetch(`/api/quizzes/materials/?quiz=${quizId}`, { headers }),
-        fetch(`/api/attempts/content-progress/`, { headers }),
-        fetch(`/api/attempts/video-answers/`, { headers }),
-      ]);
+      const data = await queryClient.fetchQuery(
+        ["student", "remediation-summary", quizId],
+        async () => {
+          const res = await fetch(`/api/attempts/attempts/remediation_summary/?quiz=${quizId}`, { headers });
+          return res.ok ? await res.json() : null;
+        },
+        { staleTime: 30000 }
+      );
 
-      if (quizRes.ok) {
-        const qData = await quizRes.json();
+      if (!data) {
+        throw new Error("Unable to fetch remediation data.");
+      }
+
+      const qData = data.quiz;
+      const remData = data.remediation_status;
+      const fetchedMaterials: LearningMaterialItem[] = data.materials || [];
+      const answeredVqIds: number[] = data.answered_video_question_ids || [];
+
+      if (qData) {
         setQuizTitle(qData.title || `Quiz #${quizId}`);
       }
 
@@ -125,39 +143,15 @@ const StudentQuizMaterialsPage: React.FC = () => {
       const initialTimes: { [materialId: number]: number } = {};
       const initialWatched: { [materialId: number]: number } = {};
 
-      if (progressRes.ok) {
-        const pData = await progressRes.json();
-        const pList = Array.isArray(pData) ? pData : pData.results || [];
-        pList.forEach((prog: any) => {
-          if (prog.is_completed) completedSet.add(prog.material);
-          if (prog.accumulated_seconds) initialTimes[prog.material] = prog.accumulated_seconds;
-          if (prog.watched_percentage) initialWatched[prog.material] = prog.watched_percentage;
-        });
-      }
-
-      if (remRes.ok) {
-        const remData = await remRes.json();
+      if (remData) {
         const reqMats = remData.required_materials || [];
         reqMats.forEach((m: any) => {
           if (m.is_completed) completedSet.add(m.id);
         });
       }
 
-      const answeredQSet = new Set<number>();
-      if (videoAnsRes.ok) {
-        const vaData = await videoAnsRes.json();
-        const vaList = Array.isArray(vaData) ? vaData : vaData.results || [];
-        vaList.forEach((va: any) => {
-          answeredQSet.add(va.question);
-        });
-      }
+      const answeredQSet = new Set<number>(answeredVqIds);
       setAnsweredQuestionIds(answeredQSet);
-
-      let fetchedMaterials: LearningMaterialItem[] = [];
-      if (materialsRes.ok) {
-        const matData = await materialsRes.json();
-        fetchedMaterials = Array.isArray(matData) ? matData : matData.results || [];
-      }
 
       // Group materials by covered skills
       const skillMap = new Map<number, { skillName: string; materials: LearningMaterialItem[] }>();
@@ -283,7 +277,10 @@ const StudentQuizMaterialsPage: React.FC = () => {
       });
 
       if (res.ok) {
-        setAnsweredQuestionIds((prev) => new Set(prev).add(vqId));
+        const data = await res.json();
+        if (data.is_correct) {
+          setAnsweredQuestionIds((prev) => new Set(prev).add(vqId));
+        }
       }
     } catch (e) {
       console.error("Error submitting video answer:", e);
@@ -295,18 +292,124 @@ const StudentQuizMaterialsPage: React.FC = () => {
     const video = e.currentTarget;
     if (!video.duration || isNaN(video.duration)) return;
 
-    const pct = Math.floor((video.currentTime / video.duration) * 100);
+    const currentTime = video.currentTime;
+    const pct = Math.floor((currentTime / video.duration) * 100);
     setWatchedPercents((prev) => {
       const current = prev[activeMaterial.id] || 0;
-      if (pct > current) {
-        return { ...prev, [activeMaterial.id]: pct };
-      }
-      return prev;
+      return pct > current ? { ...prev, [activeMaterial.id]: pct } : prev;
     });
+
+    // Check Timed Video Questions
+    if (
+      activeMaterial.material_type === "VIDEO" &&
+      activeMaterial.video_questions &&
+      activeMaterial.video_questions.length > 0
+    ) {
+      // Sort questions by timestamp ascending
+      const sortedQs = [...activeMaterial.video_questions].sort((a, b) => a.timestamp - b.timestamp);
+
+      // Seek protection & Timestamp Trigger:
+      // Find the earliest unanswered question whose timestamp is <= currentTime (or was passed)
+      const unansweredQ = sortedQs.find(
+        (vq) => !answeredQuestionIds.has(vq.id) && currentTime >= vq.timestamp
+      );
+
+      if (unansweredQ) {
+        if (!activeTimedQuestion || activeTimedQuestion.id !== unansweredQ.id) {
+          video.pause();
+          // Snap back to question timestamp if seeked far past it
+          if (currentTime - unansweredQ.timestamp > 1.0) {
+            video.currentTime = unansweredQ.timestamp;
+          }
+          setActiveTimedQuestion(unansweredQ);
+          setTimedQuestionState("OPEN");
+          setSelectedOptionText(null);
+          setFeedbackMsg("");
+        } else {
+          // If modal is currently open or incorrect, ensure video STAYS PAUSED
+          if (timedQuestionState !== "IDLE" && !video.paused) {
+            video.pause();
+          }
+        }
+      }
+    }
+  };
+
+  const handleSubmitTimedAnswer = async () => {
+    if (!activeTimedQuestion || !selectedOptionText || submittingAnswer) return;
+    const token = getToken();
+    if (!token) return;
+
+    setSubmittingAnswer(true);
+    setFeedbackMsg("");
+
+    try {
+      const res = await fetch("/api/attempts/video-answers/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Token ${token}`,
+        },
+        body: JSON.stringify({
+          question: activeTimedQuestion.id,
+          selected_answer: selectedOptionText,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.is_correct) {
+          // CORRECT ANSWER FLOW
+          setTimedQuestionState("CORRECT");
+          setFeedbackMsg("Correct answer! Resuming video...");
+
+          setAnsweredQuestionIds((prev) => new Set(prev).add(activeTimedQuestion.id));
+
+          setTimeout(() => {
+            setTimedQuestionState("IDLE");
+            setActiveTimedQuestion(null);
+            setSelectedOptionText(null);
+            setFeedbackMsg("");
+            if (videoRef.current) {
+              videoRef.current.play().catch(() => {});
+            }
+          }, 1000);
+        } else {
+          // WRONG ANSWER FLOW - Keep video PAUSED!
+          setTimedQuestionState("INCORRECT");
+          setFeedbackMsg("Incorrect answer. Click Retry to try again.");
+          // DO NOT CALL video.play()!
+        }
+      } else {
+        setFeedbackMsg("Failed to submit answer. Please try again.");
+      }
+    } catch (e) {
+      console.error("Error submitting video answer:", e);
+      setFeedbackMsg("Network error while submitting answer.");
+    } finally {
+      setSubmittingAnswer(false);
+    }
+  };
+
+  const handleRetryTimedQuestion = () => {
+    setSelectedOptionText(null);
+    setFeedbackMsg("");
+    setTimedQuestionState("OPEN");
+    // Video remains PAUSED!
   };
 
   const markMaterialComplete = async (materialId: number) => {
     if (completedMaterialIds.has(materialId) || markingCompletion) return;
+
+    const matObj = allMaterials.find((m) => m.id === materialId) || activeMaterial;
+    if (matObj && matObj.material_type === "VIDEO" && matObj.video_questions && matObj.video_questions.length > 0) {
+      const allQsAnswered = matObj.video_questions.every((vq) => answeredQuestionIds.has(vq.id));
+      if (!allQsAnswered) {
+        setCompletionError("Please answer all embedded video questions correctly before marking this material as completed.");
+        return;
+      }
+    }
+
     setMarkingCompletion(materialId);
     setCompletionError(null);
     const token = getToken();
@@ -430,8 +533,9 @@ const StudentQuizMaterialsPage: React.FC = () => {
   if (loading) {
     return (
       <div className="student-full-page-container">
-        <div style={{ padding: "60px", textAlign: "center", color: "#5D78A3", fontSize: "16px" }}>
-          Loading recommended learning materials...
+        <Breadcrumbs items={breadcrumbsList} />
+        <div style={{ marginTop: "20px", display: "flex", flexDirection: "column", gap: "20px" }}>
+          <CardSkeleton count={3} />
         </div>
       </div>
     );
@@ -565,13 +669,13 @@ const StudentQuizMaterialsPage: React.FC = () => {
                   const gridClass = count <= 1
                     ? "material-dynamic-grid material-dynamic-grid-1"
                     : count === 2
-                    ? "material-dynamic-grid material-dynamic-grid-2"
-                    : "material-dynamic-grid material-dynamic-grid-3";
+                      ? "material-dynamic-grid material-dynamic-grid-2"
+                      : "material-dynamic-grid material-dynamic-grid-3";
                   const inlineGridCols = count <= 1
                     ? "1fr"
                     : count === 2
-                    ? "repeat(2, minmax(0, 1fr))"
-                    : "repeat(3, minmax(0, 1fr))";
+                      ? "repeat(2, minmax(0, 1fr))"
+                      : "repeat(3, minmax(0, 1fr))";
 
                   return (
                     <div
@@ -750,6 +854,7 @@ const StudentQuizMaterialsPage: React.FC = () => {
                   <div style={{ width: "100%" }}>
                     <div
                       style={{
+                        position: "relative",
                         width: "100%",
                         aspectRatio: "16 / 9",
                         maxHeight: "560px",
@@ -760,11 +865,155 @@ const StudentQuizMaterialsPage: React.FC = () => {
                       }}
                     >
                       <video
+                        ref={videoRef}
                         src={activeMaterial.file}
                         controls
                         onTimeUpdate={handleVideoTimeUpdate}
                         style={{ width: "100%", height: "100%", display: "block", objectFit: "contain" }}
                       />
+
+                      {/* Timed Question Modal Overlay */}
+                      {timedQuestionState !== "IDLE" && activeTimedQuestion && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            backgroundColor: "rgba(11, 31, 58, 0.88)",
+                            zIndex: 20,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            padding: "24px",
+                            boxSizing: "border-box",
+                            backdropFilter: "blur(4px)",
+                          }}
+                        >
+                          <div
+                            style={{
+                              backgroundColor: "#FFFFFF",
+                              borderRadius: "16px",
+                              padding: "24px",
+                              maxWidth: "520px",
+                              width: "100%",
+                              boxShadow: "0 20px 40px rgba(0, 0, 0, 0.3)",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "16px",
+                            }}
+                          >
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <span style={{ fontSize: "13px", fontWeight: "700", color: "#126BFF", backgroundColor: "#EFF6FF", padding: "4px 12px", borderRadius: "20px" }}>
+                                Checkpoint at {Math.floor(activeTimedQuestion.timestamp / 60)}:{String(Math.floor(activeTimedQuestion.timestamp % 60)).padStart(2, "0")}
+                              </span>
+                              <span style={{ fontSize: "12px", fontWeight: "600", color: "#64748B" }}>
+                                {activeTimedQuestion.question_type || "Question"}
+                              </span>
+                            </div>
+
+                            <h3 style={{ margin: "4px 0 0 0", fontSize: "17px", fontWeight: "700", color: "#0B1F3A", lineHeight: "1.4" }}>
+                              {activeTimedQuestion.question_text}
+                            </h3>
+
+                            {/* Options List */}
+                            <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "4px" }}>
+                              {(activeTimedQuestion.options || []).map((opt: any, optIdx: number) => {
+                                const optText = typeof opt === "string" ? opt : opt.text;
+                                const isSelected = selectedOptionText === optText;
+                                const isDisabled = timedQuestionState === "INCORRECT" || timedQuestionState === "CORRECT" || submittingAnswer;
+
+                                return (
+                                  <button
+                                    key={optIdx}
+                                    type="button"
+                                    disabled={isDisabled}
+                                    onClick={() => setSelectedOptionText(optText)}
+                                    style={{
+                                      padding: "12px 16px",
+                                      borderRadius: "10px",
+                                      border: isSelected ? "2px solid #126BFF" : "1px solid #DCE6F3",
+                                      backgroundColor: isSelected ? "#F0F6FF" : "#F8FAFC",
+                                      color: isSelected ? "#126BFF" : "#0B1F3A",
+                                      fontSize: "14px",
+                                      fontWeight: isSelected ? "600" : "500",
+                                      textAlign: "left",
+                                      cursor: isDisabled ? "default" : "pointer",
+                                      transition: "all 0.15s ease",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      justifyContent: "space-between",
+                                    }}
+                                  >
+                                    <span>{optText}</span>
+                                    {isSelected && <span style={{ fontWeight: "700" }}>✓</span>}
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {/* Feedback Banner */}
+                            {feedbackMsg && (
+                              <div
+                                style={{
+                                  padding: "12px 14px",
+                                  borderRadius: "8px",
+                                  fontSize: "14px",
+                                  fontWeight: "600",
+                                  backgroundColor: timedQuestionState === "CORRECT" ? "#DCFCE7" : "#FEE2E2",
+                                  color: timedQuestionState === "CORRECT" ? "#15803D" : "#DC2626",
+                                  border: timedQuestionState === "CORRECT" ? "1px solid #BBF7D0" : "1px solid #FCA5A5",
+                                }}
+                              >
+                                {feedbackMsg}
+                              </div>
+                            )}
+
+                            {/* Action Buttons */}
+                            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "8px" }}>
+                              {timedQuestionState === "INCORRECT" ? (
+                                <button
+                                  type="button"
+                                  onClick={handleRetryTimedQuestion}
+                                  style={{
+                                    padding: "10px 20px",
+                                    borderRadius: "8px",
+                                    backgroundColor: "#126BFF",
+                                    color: "#FFFFFF",
+                                    fontSize: "14px",
+                                    fontWeight: "600",
+                                    border: "none",
+                                    cursor: "pointer",
+                                    boxShadow: "0 2px 6px rgba(18, 107, 255, 0.3)",
+                                  }}
+                                >
+                                  Retry Question
+                                </button>
+                              ) : timedQuestionState === "OPEN" ? (
+                                <button
+                                  type="button"
+                                  disabled={!selectedOptionText || submittingAnswer}
+                                  onClick={handleSubmitTimedAnswer}
+                                  style={{
+                                    padding: "10px 20px",
+                                    borderRadius: "8px",
+                                    backgroundColor: !selectedOptionText || submittingAnswer ? "#94A3B8" : "#126BFF",
+                                    color: "#FFFFFF",
+                                    fontSize: "14px",
+                                    fontWeight: "600",
+                                    border: "none",
+                                    cursor: !selectedOptionText || submittingAnswer ? "not-allowed" : "pointer",
+                                    boxShadow: !selectedOptionText || submittingAnswer ? "none" : "0 2px 6px rgba(18, 107, 255, 0.3)",
+                                  }}
+                                >
+                                  {submittingAnswer ? "Submitting..." : "Submit Answer"}
+                                </button>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Embedded Video Questions Checkpoints */}

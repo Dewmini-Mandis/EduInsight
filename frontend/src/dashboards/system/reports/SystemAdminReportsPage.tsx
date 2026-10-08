@@ -27,9 +27,14 @@ interface UserItem {
   is_active: boolean;
   school_id?: number | null;
   student_profile?: {
+    id?: number;
     index_no?: string;
     grade?: string;
+    class_id?: number | null;
     class_name?: string;
+    assigned_teacher_id?: number | null;
+    assigned_teacher_name?: string;
+    assigned_teacher_email?: string;
   } | null;
   teacher_profile?: {
     subjects?: string[];
@@ -39,6 +44,13 @@ interface UserItem {
 interface ClassItem {
   id: number;
   name: string;
+  is_active?: boolean;
+  teachers?: {
+    id: number;
+    teacher: number;
+    teacher_name?: string;
+    is_active?: boolean;
+  }[];
   school?: number | null;
 }
 
@@ -186,7 +198,7 @@ const SystemAdminReportsPage: React.FC = () => {
     try {
       const [usersRes, classesRes, lessonsRes, termsRes] = await Promise.all([
         fetch("/api/accounts/users/?page_size=1000", { headers: { Authorization: `Token ${token}` } }),
-        fetch("/api/classes/classrooms/?page_size=1000", { headers: { Authorization: `Token ${token}` } }),
+        fetch("/api/classes/classrooms/?page_size=1000&teacher_assigned_only=true", { headers: { Authorization: `Token ${token}` } }),
         fetch("/api/quizzes/lessons/?page_size=1000", { headers: { Authorization: `Token ${token}` } }),
         fetch("/api/quizzes/terms/?page_size=1000", { headers: { Authorization: `Token ${token}` } }),
       ]);
@@ -234,6 +246,13 @@ const SystemAdminReportsPage: React.FC = () => {
     }
   };
 
+  // Active (non-deleted) classes with assigned teachers only
+  const activeClasses = useMemo(() => {
+    return classes.filter(
+      (c) => c.is_active !== false && Array.isArray(c.teachers) && c.teachers.some((t) => t.is_active !== false)
+    );
+  }, [classes]);
+
   // Filtered Teacher Data
   const teachers = useMemo(() => {
     return users.filter((u) => {
@@ -268,7 +287,7 @@ const SystemAdminReportsPage: React.FC = () => {
       if (filterStatus === "Inactive" && s.is_active) return false;
       if (filterClass !== "All" && s.student_profile?.class_name !== filterClass) return false;
       if (searchTerm) {
-        const full = `${s.first_name} ${s.last_name} ${s.email} ${s.student_profile?.index_no || ""}`.toLowerCase();
+        const full = `${s.first_name} ${s.last_name} ${s.email} ${s.student_profile?.index_no || ""} ${s.student_profile?.class_name || ""} ${s.student_profile?.assigned_teacher_name || ""}`.toLowerCase();
         if (!full.includes(searchTerm.toLowerCase())) return false;
       }
       return true;
@@ -305,12 +324,27 @@ const SystemAdminReportsPage: React.FC = () => {
 
   const studentsByClassData = useMemo(() => {
     const counts: Record<string, number> = {};
-    students.forEach((s) => {
-      const cName = s.student_profile?.class_name || "Unassigned";
-      counts[cName] = (counts[cName] || 0) + 1;
+    activeClasses.forEach((c) => {
+      counts[c.name] = 0;
     });
-    return Object.entries(counts).slice(0, 6).map(([label, value]) => ({ label, value }));
-  }, [students]);
+
+    let unassignedCount = 0;
+
+    students.forEach((s) => {
+      const cName = s.student_profile?.class_name;
+      if (cName && counts.hasOwnProperty(cName)) {
+        counts[cName] += 1;
+      } else {
+        unassignedCount += 1;
+      }
+    });
+
+    if (unassignedCount > 0) {
+      counts["Unassigned"] = unassignedCount;
+    }
+
+    return Object.entries(counts).map(([label, value]) => ({ label, value }));
+  }, [activeClasses, students]);
 
   const userDistributionData = useMemo(() => {
     const teacherCount = teachers.length;
@@ -399,7 +433,7 @@ const SystemAdminReportsPage: React.FC = () => {
               style={{ padding: "6px 14px", borderRadius: "8px", border: "1px solid #DCE6F3", fontSize: "14px", fontWeight: 600, color: "#0B1F3A" }}
             >
               <option value="All">All Classes</option>
-              {classes.map((c) => (
+              {activeClasses.map((c) => (
                 <option key={c.id} value={c.name}>{c.name}</option>
               ))}
             </select>
@@ -566,7 +600,7 @@ const SystemAdminReportsPage: React.FC = () => {
             <div className="teacher-card" style={{ padding: "20px 24px", marginBottom: 0, borderLeft: "4px solid #F59E0B", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
                 <div style={{ fontSize: "14px", color: "#5D78A3", fontWeight: 600 }}>Total Classes</div>
-                <div style={{ fontSize: "28px", fontWeight: 700, color: "#0B1F3A", marginTop: "4px" }}>{classes.length}</div>
+                <div style={{ fontSize: "28px", fontWeight: 700, color: "#0B1F3A", marginTop: "4px" }}>{activeClasses.length}</div>
               </div>
               <div style={{ width: "44px", height: "44px", borderRadius: "10px", backgroundColor: "#FFFBEB", color: "#D97706", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <SchoolIcon size={22} />
@@ -577,34 +611,40 @@ const SystemAdminReportsPage: React.FC = () => {
           {/* Table */}
           <div className="teacher-card" style={{ padding: "24px 28px" }}>
             <h2 style={{ fontSize: "20px", fontWeight: 700, color: "#0B1F3A", margin: "0 0 16px 0" }}>Student Directory & Class Assignments</h2>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
-              <thead>
-                <tr style={{ borderBottom: "2px solid #E7EEF7" }}>
-                  <th style={{ padding: "12px", fontSize: "13px", color: "#5D78A3", fontWeight: 600 }}>Student Name</th>
-                  <th style={{ padding: "12px", fontSize: "13px", color: "#5D78A3", fontWeight: 600 }}>Index No</th>
-                  <th style={{ padding: "12px", fontSize: "13px", color: "#5D78A3", fontWeight: 600 }}>Class</th>
-                  <th style={{ padding: "12px", fontSize: "13px", color: "#5D78A3", fontWeight: 600 }}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredStudents.map((s) => (
-                  <tr key={s.id} style={{ borderBottom: "1px solid #E7EEF7" }}>
-                    <td style={{ padding: "14px 12px", fontSize: "14px", fontWeight: 600, color: "#0B1F3A" }}>
-                      {s.first_name} {s.last_name}
-                    </td>
-                    <td style={{ padding: "14px 12px", fontSize: "14px", color: "#5D78A3" }}>{s.student_profile?.index_no || "-"}</td>
-                    <td style={{ padding: "14px 12px", fontSize: "14px", fontWeight: 600, color: "#3D5E8A" }}>
-                      {s.student_profile?.class_name || "Unassigned"}
-                    </td>
-                    <td style={{ padding: "14px 12px" }}>
-                      <span style={{ padding: "4px 12px", borderRadius: "12px", fontSize: "12px", fontWeight: 600, backgroundColor: s.is_active ? "#ECFDF5" : "#FEF2F2", color: s.is_active ? "#059669" : "#EF4444" }}>
-                        {s.is_active ? "Active" : "Inactive"}
-                      </span>
-                    </td>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", minWidth: "600px" }}>
+                <thead>
+                  <tr style={{ borderBottom: "2px solid #E7EEF7" }}>
+                    <th style={{ padding: "12px", fontSize: "13px", color: "#5D78A3", fontWeight: 600 }}>Student Name</th>
+                    <th style={{ padding: "12px", fontSize: "13px", color: "#5D78A3", fontWeight: 600 }}>Index No</th>
+                    <th style={{ padding: "12px", fontSize: "13px", color: "#5D78A3", fontWeight: 600 }}>Class</th>
+                    <th style={{ padding: "12px", fontSize: "13px", color: "#5D78A3", fontWeight: 600 }}>Teacher</th>
+                    <th style={{ padding: "12px", fontSize: "13px", color: "#5D78A3", fontWeight: 600 }}>Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {filteredStudents.map((s) => (
+                    <tr key={s.id} style={{ borderBottom: "1px solid #E7EEF7" }}>
+                      <td style={{ padding: "14px 12px", fontSize: "14px", fontWeight: 600, color: "#0B1F3A" }}>
+                        {s.first_name} {s.last_name}
+                      </td>
+                      <td style={{ padding: "14px 12px", fontSize: "14px", color: "#5D78A3" }}>{s.student_profile?.index_no || "-"}</td>
+                      <td style={{ padding: "14px 12px", fontSize: "14px", fontWeight: 600, color: "#3D5E8A" }}>
+                        {s.student_profile?.class_name || "Unassigned"}
+                      </td>
+                      <td style={{ padding: "14px 12px", fontSize: "14px", fontWeight: 600, color: "#126BFF" }}>
+                        {s.student_profile?.assigned_teacher_name || "Unassigned"}
+                      </td>
+                      <td style={{ padding: "14px 12px" }}>
+                        <span style={{ padding: "4px 12px", borderRadius: "12px", fontSize: "12px", fontWeight: 600, backgroundColor: s.is_active ? "#ECFDF5" : "#FEF2F2", color: s.is_active ? "#059669" : "#EF4444" }}>
+                          {s.is_active ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
@@ -623,7 +663,7 @@ const SystemAdminReportsPage: React.FC = () => {
               <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginTop: "12px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #E7EEF7", paddingBottom: "12px" }}>
                   <span style={{ color: "#5D78A3", fontSize: "14px", fontWeight: 600 }}>Total Configured Classes</span>
-                  <span style={{ color: "#0B1F3A", fontSize: "18px", fontWeight: 700 }}>{classes.length}</span>
+                  <span style={{ color: "#0B1F3A", fontSize: "18px", fontWeight: 700 }}>{activeClasses.length}</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #E7EEF7", paddingBottom: "12px" }}>
                   <span style={{ color: "#5D78A3", fontSize: "14px", fontWeight: 600 }}>Active Student Enrolments</span>
@@ -635,31 +675,33 @@ const SystemAdminReportsPage: React.FC = () => {
 
           <div className="teacher-card" style={{ padding: "24px 28px" }}>
             <h2 style={{ fontSize: "20px", fontWeight: 700, color: "#0B1F3A", margin: "0 0 16px 0" }}>Class Structure Directory</h2>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
-              <thead>
-                <tr style={{ borderBottom: "2px solid #E7EEF7" }}>
-                  <th style={{ padding: "12px", fontSize: "13px", color: "#5D78A3", fontWeight: 600 }}>Class Name</th>
-                  <th style={{ padding: "12px", fontSize: "13px", color: "#5D78A3", fontWeight: 600 }}>Enrolled Students</th>
-                  <th style={{ padding: "12px", fontSize: "13px", color: "#5D78A3", fontWeight: 600 }}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {classes.map((c) => {
-                  const classStudentsCount = students.filter((s) => s.student_profile?.class_name === c.name).length;
-                  return (
-                    <tr key={c.id} style={{ borderBottom: "1px solid #E7EEF7" }}>
-                      <td style={{ padding: "14px 12px", fontSize: "14px", fontWeight: 600, color: "#0B1F3A" }}>{c.name}</td>
-                      <td style={{ padding: "14px 12px", fontSize: "14px", fontWeight: 600, color: "#126BFF" }}>{classStudentsCount} students</td>
-                      <td style={{ padding: "14px 12px" }}>
-                        <span style={{ padding: "4px 12px", borderRadius: "12px", fontSize: "12px", fontWeight: 600, backgroundColor: "#ECFDF5", color: "#059669" }}>
-                          Active
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", minWidth: "500px" }}>
+                <thead>
+                  <tr style={{ borderBottom: "2px solid #E7EEF7" }}>
+                    <th style={{ padding: "12px", fontSize: "13px", color: "#5D78A3", fontWeight: 600 }}>Class Name</th>
+                    <th style={{ padding: "12px", fontSize: "13px", color: "#5D78A3", fontWeight: 600 }}>Enrolled Students</th>
+                    <th style={{ padding: "12px", fontSize: "13px", color: "#5D78A3", fontWeight: 600 }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activeClasses.map((c) => {
+                    const classStudentsCount = students.filter((s) => s.student_profile?.class_name === c.name).length;
+                    return (
+                      <tr key={c.id} style={{ borderBottom: "1px solid #E7EEF7" }}>
+                        <td style={{ padding: "14px 12px", fontSize: "14px", fontWeight: 600, color: "#0B1F3A" }}>{c.name}</td>
+                        <td style={{ padding: "14px 12px", fontSize: "14px", fontWeight: 600, color: "#126BFF" }}>{classStudentsCount} students</td>
+                        <td style={{ padding: "14px 12px" }}>
+                          <span style={{ padding: "4px 12px", borderRadius: "12px", fontSize: "12px", fontWeight: 600, backgroundColor: "#ECFDF5", color: "#059669" }}>
+                            Active
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

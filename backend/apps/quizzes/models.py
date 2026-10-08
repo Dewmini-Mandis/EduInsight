@@ -201,16 +201,28 @@ class Quiz(models.Model):
 	max_attempts = models.PositiveIntegerField(default=3)
 	is_deleted = models.BooleanField(default=False)
 
+	class Meta:
+		indexes = [
+			models.Index(fields=["created_by", "is_deleted", "status"], name="idx_quiz_cb_del_stat"),
+			models.Index(fields=["lesson", "quiz_level", "difficulty", "order"], name="idx_quiz_les_lvl_diff_ord"),
+			models.Index(fields=["status", "assigned_class"], name="idx_quiz_stat_class"),
+		]
+
 	def get_covered_skills(self):
+		if hasattr(self, "_cached_covered_skills"):
+			return self._cached_covered_skills
 		skills = set()
 		if self.skill_id:
 			skills.add(self.skill)
 		for s in self.skills.all():
 			skills.add(s)
-		qs_skill_ids = set(self.questions.exclude(skill_id=None).values_list("skill_id", flat=True))
-		if qs_skill_ids:
-			skills.update(Skill.objects.filter(id__in=qs_skill_ids))
-		return list(skills)
+		if not skills:
+			qs_skill_ids = set(self.questions.exclude(skill_id=None).values_list("skill_id", flat=True))
+			if qs_skill_ids:
+				skills.update(Skill.objects.filter(id__in=qs_skill_ids))
+		result = list(skills)
+		self._cached_covered_skills = result
+		return result
 
 	def __str__(self) -> str:
 		return self.title

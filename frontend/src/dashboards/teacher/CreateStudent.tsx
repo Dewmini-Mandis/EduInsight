@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { getToken, getUser } from "../../auth/authUtils";
 import { UserPlus, ArrowLeft, RefreshCw, UserCheck } from "lucide-react";
+import { queryClient } from "../../api/queryClient";
 
 // Reusable Components
 import ChartCard from "../../components/ChartCard";
@@ -226,6 +227,7 @@ const CreateStudent = () => {
       }
 
       setSuccessMessage("Student created successfully.");
+      queryClient.invalidateQueries(["teacher", "students"]);
       // Reset form fields
       setFirstName("");
       setLastName("");

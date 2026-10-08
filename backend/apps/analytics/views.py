@@ -13,14 +13,104 @@ class AnalyticsViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        qs = Analytics.objects.select_related("student__user").order_by("-id")
         if user.is_role(Role.ROLE_SYSTEM_ADMIN):
-            return Analytics.objects.all()
+            return qs
         if user.is_role(Role.ROLE_TEACHER):
-            return Analytics.objects.filter(student__registered_by=user)
+            return qs.filter(student__registered_by=user)
         if user.is_role(Role.ROLE_STUDENT):
-            student, _ = Student.objects.get_or_create(user=user)
-            return Analytics.objects.filter(student=student)
+            student = getattr(user, "student_profile", None)
+            if not student:
+                student, _ = Student.objects.get_or_create(user=user)
+            return qs.filter(student=student)
         return Analytics.objects.none()
+
+    @action(detail=False, methods=["get"], url_path="dashboard_summary")
+    def dashboard_summary(self, request):
+        user = request.user
+        if not user.is_role(Role.ROLE_TEACHER, Role.ROLE_SYSTEM_ADMIN):
+            return Response({"detail": "Permission denied"}, status=403)
+
+        from apps.classes.models import Student, SchoolClass
+        from apps.quizzes.models import Quiz, LearningMaterial, Lesson
+        from apps.attempts.models import QuizAttempt
+        from django.db.models import Count
+
+        if user.is_role(Role.ROLE_TEACHER):
+            total_students = Student.objects.filter(registered_by=user).count()
+            published_quizzes = Quiz.objects.filter(created_by=user, status="PUBLISHED", is_deleted=False).count()
+            total_materials = LearningMaterial.objects.filter(created_by=user).count()
+            active_lessons = Lesson.objects.filter(created_by=user, is_active=True).count()
+
+            classes_qs = SchoolClass.objects.filter(teacherclassroom__teacher=user)
+            class_performance = [
+                {"className": c.name, "avgScore": getattr(c, "average_score", 0)} for c in classes_qs
+            ]
+
+            risk_qs = RiskPrediction.objects.filter(student__registered_by=user).select_related("student__user", "student__class_room").order_by("-prediction_date")[:5]
+            risk_students = [
+                {
+                    "id": str(r.id),
+                    "name": r.student.user.get_full_name() or r.student.user.username,
+                    "className": r.student.class_room.name if r.student.class_room else "Class",
+                    "riskLevel": "High Risk" if r.risk_category in ["High Risk", "HIGH", "Critical"] else "Low Risk"
+                }
+                for r in risk_qs
+            ]
+
+            recent_quizzes_qs = list(Quiz.objects.filter(created_by=user, is_deleted=False).select_related("lesson", "assigned_class").order_by("-created_at")[:5])
+            recent_quiz_ids = [q.id for q in recent_quizzes_qs]
+            attempt_counts = dict(
+                QuizAttempt.objects.filter(quiz_id__in=recent_quiz_ids)
+                .values('quiz_id')
+                .annotate(cnt=Count('id'))
+                .values_list('quiz_id', 'cnt')
+            ) if recent_quiz_ids else {}
+
+            recent_quizzes = [
+                {
+                    "id": str(q.id),
+                    "title": q.title,
+                    "lesson": q.lesson.title if q.lesson else "",
+                    "assignedClass": q.assigned_class.name if q.assigned_class else "Assigned Class",
+                    "attempts": attempt_counts.get(q.id, 0),
+                    "status": "Active" if q.status == "PUBLISHED" else "Draft"
+                }
+                for q in recent_quizzes_qs
+            ]
+
+            recent_mats_qs = LearningMaterial.objects.filter(created_by=user).order_by("-created_at")[:5]
+            recent_materials = [
+                {
+                    "id": str(m.id),
+                    "title": m.title,
+                    "type": "Video" if m.material_type == "VIDEO" else "Note" if m.material_type == "TEXT" else "Attachment",
+                    "uploadDate": m.created_at.strftime("%Y-%m-%d") if m.created_at else "Recent"
+                }
+                for m in recent_mats_qs
+            ]
+        else:
+            total_students = Student.objects.count()
+            published_quizzes = Quiz.objects.filter(status="PUBLISHED", is_deleted=False).count()
+            total_materials = LearningMaterial.objects.count()
+            active_lessons = Lesson.objects.filter(is_active=True).count()
+            class_performance = []
+            risk_students = []
+            recent_quizzes = []
+            recent_materials = []
+
+        return Response({
+            "summary": {
+                "totalStudents": total_students,
+                "activeQuizzes": published_quizzes,
+                "learningMaterials": total_materials,
+                "lessonsManaged": active_lessons
+            },
+            "classPerformance": class_performance,
+            "riskStudents": risk_students,
+            "recentQuizzes": recent_quizzes,
+            "recentMaterials": recent_materials
+        })
 
 class RiskPredictionViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
@@ -28,13 +118,16 @@ class RiskPredictionViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        qs = RiskPrediction.objects.select_related("student__user", "student__class_room", "skill").order_by("-prediction_date")
         if user.is_role(Role.ROLE_SYSTEM_ADMIN):
-            return RiskPrediction.objects.all().order_by("-prediction_date")
+            return qs
         if user.is_role(Role.ROLE_TEACHER):
-            return RiskPrediction.objects.filter(student__registered_by=user).order_by("-prediction_date")
+            return qs.filter(student__registered_by=user)
         if user.is_role(Role.ROLE_STUDENT):
-            student, _ = Student.objects.get_or_create(user=user)
-            return RiskPrediction.objects.filter(student=student).order_by("-prediction_date")
+            student = getattr(user, "student_profile", None)
+            if not student:
+                student, _ = Student.objects.get_or_create(user=user)
+            return qs.filter(student=student)
         return RiskPrediction.objects.none()
 
     def perform_create(self, serializer):
@@ -64,13 +157,17 @@ class ProficiencyPredictionViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
+        qs = ProficiencyPrediction.objects.select_related("student__user").order_by("-prediction_date")
         if user.is_role(Role.ROLE_SYSTEM_ADMIN):
-            return ProficiencyPrediction.objects.all().order_by("-prediction_date")
+            return qs
         if user.is_role(Role.ROLE_TEACHER):
-            return ProficiencyPrediction.objects.filter(student__registered_by=user).order_by("-prediction_date")
+            student_ids = list(Student.objects.filter(registered_by=user).values_list("id", flat=True))
+            return qs.filter(student_id__in=student_ids)
         if user.is_role(Role.ROLE_STUDENT):
-            student, _ = Student.objects.get_or_create(user=user)
-            return ProficiencyPrediction.objects.filter(student=student).order_by("-prediction_date")
+            student = getattr(user, "student_profile", None)
+            if not student:
+                student, _ = Student.objects.get_or_create(user=user)
+            return qs.filter(student_id=student.id)
         return ProficiencyPrediction.objects.none()
         
     @action(detail=True, methods=['post'])

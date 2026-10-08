@@ -14,6 +14,8 @@ export interface UserItem {
     index_no?: string;
     grade?: string;
     class_name?: string;
+    assigned_teacher_name?: string;
+    assigned_teacher_email?: string;
   } | null;
   teacher_profile?: {
     subjects?: string[];
@@ -23,6 +25,11 @@ export interface UserItem {
 export interface ClassItem {
   id: number;
   name: string;
+  is_active?: boolean;
+  teachers?: {
+    id: number;
+    is_active?: boolean;
+  }[];
   school?: number | null;
 }
 
@@ -261,10 +268,14 @@ export const generateReportPdf = async (
       doc.setTextColor(11, 31, 58);
       doc.text("2. Overall System Statistics", 14, currentY);
 
+      const activeClassesList = data.classes.filter(
+        (c) => c.is_active !== false && Array.isArray(c.teachers) && c.teachers.some((t) => t.is_active !== false)
+      );
+
       const systemStatsData = [
         ["Total Active Teachers", String(teachers.filter((t) => t.is_active).length)],
         ["Total Active Students", String(students.filter((s) => s.is_active).length)],
-        ["Configured Classrooms", String(data.classes.length)],
+        ["Configured Classrooms", String(activeClassesList.length)],
         ["Syllabus Lessons", String(data.lessons.length)],
         ["Academic Terms", String(data.terms.length)],
       ];
@@ -450,12 +461,13 @@ export const generateReportPdf = async (
           `${s.first_name} ${s.last_name}`.trim() || s.username,
           s.student_profile?.index_no || "-",
           s.student_profile?.class_name || "Unassigned",
+          s.student_profile?.assigned_teacher_name || "Unassigned",
           s.is_active ? "Active" : "Inactive",
         ]);
 
         autoTable(doc, {
           startY: currentY + 4,
-          head: [["Student Name", "Index No", "Class Assignment", "Status"]],
+          head: [["Student Name", "Index No", "Class Assignment", "Teacher", "Status"]],
           body: tableBody,
           headStyles: { fillColor: [6, 28, 58], textColor: 255, fontStyle: "bold" },
           alternateRowStyles: { fillColor: [248, 250, 253] },
@@ -470,7 +482,11 @@ export const generateReportPdf = async (
       reportTitle = "Classroom Structure Report";
       fileName = `EduInsight_Class_Report_${getFileDateStr()}.pdf`;
 
-      const filteredClasses = data.classes.filter((c) => {
+      const activeClasses = data.classes.filter(
+        (c) => c.is_active !== false && Array.isArray(c.teachers) && c.teachers.some((t) => t.is_active !== false)
+      );
+
+      const filteredClasses = activeClasses.filter((c) => {
         if (filterClass !== "All" && c.name !== filterClass) return false;
         if (searchTerm && !c.name.toLowerCase().includes(searchTerm.toLowerCase())) return false;
         return true;

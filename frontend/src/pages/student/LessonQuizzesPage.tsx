@@ -6,6 +6,8 @@ import LessonProgressCard from "../../components/student/LessonProgressCard";
 import LessonQuizCard, { QuizItem } from "../../components/student/LessonQuizCard";
 import { getToken } from "../../auth/authUtils";
 import { sortQuizzesByProgression } from "../../utils/quizOrdering";
+import { queryClient } from "../../api/queryClient";
+import { CardSkeleton } from "../../components/common/Skeletons";
 
 const LessonQuizzesPage: React.FC = () => {
   const { termName: paramTerm, lessonId } = useParams<{ termName: string; lessonId: string }>();
@@ -35,184 +37,119 @@ const LessonQuizzesPage: React.FC = () => {
       try {
         const token = getToken();
         if (token && lessonId) {
-          const [lessonRes, quizzesRes, attemptsRes] = await Promise.allSettled([
-            fetch(`/api/quizzes/lessons/${lessonId}/`, {
-              headers: { Authorization: `Token ${token}` },
-            }),
-            fetch(`/api/quizzes/?lesson=${lessonId}`, {
-              headers: { Authorization: `Token ${token}` },
-            }),
-            fetch("/api/attempts/attempts/", {
-              headers: { Authorization: `Token ${token}` },
-            }),
-          ]);
+          const headers = { Authorization: `Token ${token}` };
+          const data = await queryClient.fetchQuery(
+            ["student", "lesson-progression", lessonId],
+            async () => {
+              const res = await fetch(`/api/quizzes/lessons/${lessonId}/student_quizzes/`, { headers });
+              return res.ok ? await res.json() : null;
+            },
+            { staleTime: 60000 }
+          );
 
-          if (lessonRes.status === "fulfilled" && lessonRes.value.ok) {
-            const lData = await lessonRes.value.json();
-            if (lData.title) setLessonTitle(lData.title);
-            if (lData.description) setLessonDescription(lData.description);
-          }
-
-          let quizListRaw: any[] = [];
-          if (quizzesRes.status === "fulfilled" && quizzesRes.value.ok) {
-            const qData = await quizzesRes.value.json();
-            quizListRaw = Array.isArray(qData) ? qData : qData.results || [];
-          }
-
-          let attemptsList: any[] = [];
-          if (attemptsRes.status === "fulfilled" && attemptsRes.value.ok) {
-            const attData = await attemptsRes.value.json();
-            attemptsList = Array.isArray(attData) ? attData : attData.results || [];
-          }
-
-          if (quizListRaw.length > 0) {
-            quizListRaw = sortQuizzesByProgression(quizListRaw);
-
-            // Fetch remediation status for each quiz in parallel
-            const remStatusPromises = quizListRaw.map((q) =>
-              fetch(`/api/attempts/attempts/remediation_status/?quiz=${q.id}`, {
-                headers: { Authorization: `Token ${token}` },
-              })
-                .then((res) => (res.ok ? res.json() : null))
-                .catch(() => null)
-            );
-            const remStatuses = await Promise.all(remStatusPromises);
-
-            // Determine status for each quiz
-            const processedQuizzes = quizListRaw.map((q, idx) => {
-              const passMark = q.pass_mark || 50;
-              const remData = remStatuses[idx];
-              const qAttempts = attemptsList.filter((att) => String(att.quiz) === String(q.id) || String(att.quiz?.id) === String(q.id));
-              const ordinarySubmitted = qAttempts.filter(
-                (att) => (att.attempt_type === "ORDINARY" || !att.attempt_type) && (att.status === "SUBMITTED" || att.status === "EXPIRED")
-              );
-              const inProgressAttempt = qAttempts.find((att) => att.status === "IN_PROGRESS");
-              const passedAttempt = qAttempts.find((att) => att.score !== null && att.score >= passMark);
-
-              const latestAtt = ordinarySubmitted[0] || qAttempts[0] || null;
-
-              return {
-                rawQuiz: q,
-                id: q.id,
-                title: q.title,
-                order: q.order || 1,
-                questionCount: q.questions ? q.questions.length : 10,
-                durationMinutes: q.estimated_time_minutes || 10,
-                passMark,
-                maxAttempts: q.max_attempts || 3,
-                attemptsUsed: remData ? remData.ordinary_attempts_used : ordinarySubmitted.length,
-                attemptsRemaining: remData ? remData.ordinary_attempts_remaining : Math.max(0, (q.max_attempts || 3) - ordinarySubmitted.length),
-                isPassed: remData ? remData.has_passed : !!passedAttempt,
-                hasInProgress: !!inProgressAttempt,
-                latestAttemptId: latestAtt ? latestAtt.id : null,
-                latestScore: latestAtt ? latestAtt.score : null,
-
-                remediationState: remData?.remediation_state || null,
-                requiredMaterials: remData?.required_materials || [],
-                allMaterialsCompleted: remData?.all_materials_completed || false,
-                reassessmentStatus: remData?.reassessment_status || "NOT_ELIGIBLE",
-                highRiskWarning: remData?.high_risk_warning || false,
-                highRiskDetails: remData?.high_risk_details || null,
-              };
-            });
-
-            // Find index of first unpassed quiz (active quiz step)
-            let firstUnpassedIdx = processedQuizzes.findIndex((pq) => !pq.isPassed);
-            if (firstUnpassedIdx === -1) {
-              firstUnpassedIdx = processedQuizzes.length;
+          if (data) {
+            if (data.lesson) {
+              if (data.lesson.title) setLessonTitle(data.lesson.title);
+              if (data.lesson.description) setLessonDescription(data.lesson.description);
             }
 
-            const passedCount = processedQuizzes.filter((pq) => pq.isPassed).length;
-            const totalCount = processedQuizzes.length;
-            const pct = Math.round((passedCount / totalCount) * 100);
+            const quizListRaw = data.quizzes || [];
+            if (quizListRaw.length > 0) {
+              const sortedQuizzes: any[] = sortQuizzesByProgression(quizListRaw);
 
-            const visibleQuizzesList: QuizItem[] = [];
-
-            for (let i = 0; i < processedQuizzes.length; i++) {
-              const pq = processedQuizzes[i];
-
-              if (i < firstUnpassedIdx) {
-                visibleQuizzesList.push({
-                  id: pq.id,
-                  title: pq.title,
-                  order: pq.order,
-                  questionCount: pq.questionCount,
-                  durationMinutes: pq.durationMinutes,
-                  passMark: pq.passMark,
-                  maxAttempts: pq.maxAttempts,
-                  attemptsUsed: pq.attemptsUsed,
-                  attemptsRemaining: pq.attemptsRemaining,
-                  status: "PASSED",
-                  latestAttemptId: pq.latestAttemptId,
-                  latestScore: pq.latestScore,
-                  remediationState: pq.remediationState,
-                  requiredMaterials: pq.requiredMaterials,
-                  allMaterialsCompleted: pq.allMaterialsCompleted,
-                  reassessmentStatus: pq.reassessmentStatus,
-                  highRiskWarning: pq.highRiskWarning,
-                  highRiskDetails: pq.highRiskDetails,
-                });
-              } else if (i === firstUnpassedIdx) {
-                let status: QuizItem["status"] = "AVAILABLE";
-                if (pq.hasInProgress) {
-                  status = "IN_PROGRESS";
-                } else if (pq.attemptsUsed >= pq.maxAttempts) {
-                  status = "FAILED_EXHAUSTED";
-                } else if (pq.attemptsUsed > 0) {
-                  status = "FAILED_RETRYABLE";
-                }
-
-                visibleQuizzesList.push({
-                  id: pq.id,
-                  title: pq.title,
-                  order: pq.order,
-                  questionCount: pq.questionCount,
-                  durationMinutes: pq.durationMinutes,
-                  passMark: pq.passMark,
-                  maxAttempts: pq.maxAttempts,
-                  attemptsUsed: pq.attemptsUsed,
-                  attemptsRemaining: pq.attemptsRemaining,
-                  status,
-                  latestAttemptId: pq.latestAttemptId,
-                  latestScore: pq.latestScore,
-                  remediationState: pq.remediationState,
-                  requiredMaterials: pq.requiredMaterials,
-                  allMaterialsCompleted: pq.allMaterialsCompleted,
-                  reassessmentStatus: pq.reassessmentStatus,
-                  highRiskWarning: pq.highRiskWarning,
-                  highRiskDetails: pq.highRiskDetails,
-                });
-              } else if (i === firstUnpassedIdx + 1) {
-                const prevPq = processedQuizzes[i - 1];
-                visibleQuizzesList.push({
-                  id: pq.id,
-                  title: pq.title,
-                  order: pq.order,
-                  questionCount: pq.questionCount,
-                  durationMinutes: pq.durationMinutes,
-                  passMark: pq.passMark,
-                  maxAttempts: pq.maxAttempts,
-                  attemptsUsed: pq.attemptsUsed,
-                  attemptsRemaining: pq.attemptsRemaining,
-                  status: "LOCKED",
-                  lockedReason: `Complete ${prevPq.title} and pass to unlock this quiz.`,
-                  previousQuizTitle: prevPq.title,
-                });
+              let firstUnpassedIdx = sortedQuizzes.findIndex((pq: any) => !pq.isPassed);
+              if (firstUnpassedIdx === -1) {
+                firstUnpassedIdx = sortedQuizzes.length;
               }
-            }
 
-            if (firstUnpassedIdx < processedQuizzes.length) {
-              setActiveSectionTitle(`Quiz ${firstUnpassedIdx + 1}`);
-            } else {
-              setActiveSectionTitle("All Quizzes Completed!");
-            }
+              const visibleQuizzesList: QuizItem[] = [];
 
-            setQuizzes(visibleQuizzesList);
-            setTotalQuizzesCount(totalCount);
-            setCompletedQuizzesCount(passedCount);
-            setOverallProgress(pct);
-            setLoading(false);
-            return;
+              for (let i = 0; i < sortedQuizzes.length; i++) {
+                const pq: any = sortedQuizzes[i];
+
+                if (i < firstUnpassedIdx) {
+                  visibleQuizzesList.push({
+                    id: pq.id,
+                    title: pq.title,
+                    order: pq.order,
+                    questionCount: pq.questionCount,
+                    durationMinutes: pq.durationMinutes,
+                    passMark: pq.passMark,
+                    maxAttempts: pq.maxAttempts,
+                    attemptsUsed: pq.attemptsUsed,
+                    attemptsRemaining: pq.attemptsRemaining,
+                    status: "PASSED",
+                    latestAttemptId: pq.latestAttemptId,
+                    latestScore: pq.latestScore,
+                    remediationState: pq.remediationState,
+                    requiredMaterials: pq.requiredMaterials,
+                    allMaterialsCompleted: pq.allMaterialsCompleted,
+                    reassessmentStatus: pq.reassessmentStatus,
+                    highRiskWarning: pq.highRiskWarning,
+                    highRiskDetails: pq.highRiskDetails,
+                  });
+                } else if (i === firstUnpassedIdx) {
+                  let status: QuizItem["status"] = "AVAILABLE";
+                  if (pq.hasInProgress) {
+                    status = "IN_PROGRESS";
+                  } else if (pq.attemptsUsed >= pq.maxAttempts) {
+                    status = "FAILED_EXHAUSTED";
+                  } else if (pq.attemptsUsed > 0) {
+                    status = "FAILED_RETRYABLE";
+                  }
+
+                  visibleQuizzesList.push({
+                    id: pq.id,
+                    title: pq.title,
+                    order: pq.order,
+                    questionCount: pq.questionCount,
+                    durationMinutes: pq.durationMinutes,
+                    passMark: pq.passMark,
+                    maxAttempts: pq.maxAttempts,
+                    attemptsUsed: pq.attemptsUsed,
+                    attemptsRemaining: pq.attemptsRemaining,
+                    status,
+                    latestAttemptId: pq.latestAttemptId,
+                    latestScore: pq.latestScore,
+                    remediationState: pq.remediationState,
+                    requiredMaterials: pq.requiredMaterials,
+                    allMaterialsCompleted: pq.allMaterialsCompleted,
+                    reassessmentStatus: pq.reassessmentStatus,
+                    highRiskWarning: pq.highRiskWarning,
+                    highRiskDetails: pq.highRiskDetails,
+                  });
+                } else if (i === firstUnpassedIdx + 1) {
+                  const prevPq: any = sortedQuizzes[i - 1];
+                  visibleQuizzesList.push({
+                    id: pq.id,
+                    title: pq.title,
+                    order: pq.order,
+                    questionCount: pq.questionCount,
+                    durationMinutes: pq.durationMinutes,
+                    passMark: pq.passMark,
+                    maxAttempts: pq.maxAttempts,
+                    attemptsUsed: pq.attemptsUsed,
+                    attemptsRemaining: pq.attemptsRemaining,
+                    status: "LOCKED",
+                    lockedReason: `Complete ${prevPq.title} and pass to unlock this quiz.`,
+                    previousQuizTitle: prevPq.title,
+                  });
+                }
+              }
+
+              if (firstUnpassedIdx < sortedQuizzes.length) {
+                setActiveSectionTitle(`Quiz ${firstUnpassedIdx + 1}`);
+              } else {
+                setActiveSectionTitle("All Quizzes Completed!");
+              }
+
+              setQuizzes(visibleQuizzesList);
+              setTotalQuizzesCount(data.total_quizzes_count ?? sortedQuizzes.length);
+              setCompletedQuizzesCount(data.completed_quizzes_count ?? sortedQuizzes.filter((pq: any) => pq.isPassed).length);
+              setOverallProgress(data.overall_progress_pct ?? 0);
+              setLoading(false);
+              return;
+            }
           }
         }
       } catch (err) {
@@ -280,7 +217,23 @@ const LessonQuizzesPage: React.FC = () => {
       navigate(
         `/student/quizzes/${quizItem.id}/results/${quizItem.latestAttemptId}?termName=${encodeURIComponent(
           termName
-        )}&lessonTitle=${encodeURIComponent(lessonTitle)}&lessonId=${lessonId}`
+        )}&lessonTitle=${encodeURIComponent(lessonTitle)}&lessonId=${lessonId}`,
+        {
+          state: {
+            quiz: quizItem,
+            resultSummary: {
+              attemptId: quizItem.latestAttemptId,
+              quizId: quizItem.id,
+              quizTitle: quizItem.title,
+              score: quizItem.latestScore,
+              passMark: quizItem.passMark,
+              status: quizItem.status,
+              isPassed: quizItem.status === "PASSED",
+              attemptsUsed: quizItem.attemptsUsed,
+              maxAttempts: quizItem.maxAttempts,
+            },
+          },
+        }
       );
     } else {
       handleStartQuiz(quizItem);
@@ -339,9 +292,7 @@ const LessonQuizzesPage: React.FC = () => {
         </p>
 
         {loading ? (
-          <div style={{ padding: "30px", textAlign: "center", color: "#5D78A3" }}>
-            Loading quizzes...
-          </div>
+          <CardSkeleton count={3} />
         ) : quizzes.length === 0 ? (
           <div style={{ padding: "30px", textAlign: "center", color: "#5D78A3" }}>
             No quizzes available for this lesson.

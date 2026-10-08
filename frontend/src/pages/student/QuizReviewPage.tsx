@@ -16,24 +16,44 @@ import Breadcrumbs from "../../components/student/Breadcrumbs";
 import { getToken } from "../../auth/authUtils";
 import "../../styles/student.css";
 
+import { useLocation } from "react-router-dom";
+import { CardSkeleton, TableSkeleton } from "../../components/common/Skeletons";
+
 const QuizReviewPage: React.FC = () => {
   const { quizId, attemptId } = useParams<{ quizId: string; attemptId: string }>();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const navigate = useNavigate();
 
   const termName = searchParams.get("termName") || "Term 1";
   const lessonTitleParam = searchParams.get("lessonTitle") || "Lesson";
   const lessonIdParam = searchParams.get("lessonId") || "";
 
-  const [quizTitle, setQuizTitle] = useState<string>("Quiz Review");
-  const [loading, setLoading] = useState<boolean>(true);
+  // Attempt state hydration from location.state if passed from QuizResultsPage
+  const initialAttempt = (location.state as any)?.attempt || null;
+  const initialQuiz = (location.state as any)?.quiz || null;
+
+  const initialQuestions = initialAttempt?.attempt_questions
+    ? initialAttempt.attempt_questions.map((aq: any) => aq.question_detail).filter(Boolean)
+    : initialQuiz?.questions || [];
+  const initialAnswers = initialAttempt?.answers || [];
+
+  const [quizTitle, setQuizTitle] = useState<string>(
+    initialAttempt?.quiz_title || initialQuiz?.title || "Quiz Review"
+  );
+  const [loading, setLoading] = useState<boolean>(!initialAttempt && initialQuestions.length === 0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const [questions, setQuestions] = useState<any[]>([]);
-  const [userAnswers, setUserAnswers] = useState<any[]>([]);
+  const [questions, setQuestions] = useState<any[]>(initialQuestions);
+  const [userAnswers, setUserAnswers] = useState<any[]>(initialAnswers);
 
   useEffect(() => {
     const fetchReviewData = async () => {
+      if (initialAttempt && initialQuestions.length > 0) {
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       setErrorMsg(null);
       const token = getToken();
@@ -66,14 +86,11 @@ const QuizReviewPage: React.FC = () => {
           quizObj = await quizRes.value.json();
         }
 
-        if (quizObj) {
-          if (quizObj.title) setQuizTitle(quizObj.title);
-        }
+        if (quizObj && quizObj.title) setQuizTitle(quizObj.title);
 
         if (attemptObj) {
           if (attemptObj.quiz_title) setQuizTitle(attemptObj.quiz_title);
 
-          // Extract questions and user answers
           const qList = attemptObj.attempt_questions
             ? attemptObj.attempt_questions.map((aq: any) => aq.question_detail).filter(Boolean)
             : quizObj?.questions || [];
@@ -133,8 +150,10 @@ const QuizReviewPage: React.FC = () => {
   if (loading) {
     return (
       <div className="student-full-page-container">
-        <div style={{ padding: "60px", textAlign: "center", color: "#5D78A3", fontSize: "16px" }}>
-          Loading review answers...
+        <Breadcrumbs items={breadcrumbsList} />
+        <div style={{ marginTop: "20px", display: "flex", flexDirection: "column", gap: "20px" }}>
+          <CardSkeleton count={1} />
+          <TableSkeleton rows={4} />
         </div>
       </div>
     );

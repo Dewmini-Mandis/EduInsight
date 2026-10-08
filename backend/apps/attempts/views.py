@@ -1,6 +1,7 @@
 import random
 import datetime
 from django.utils import timezone
+from django.db import models
 from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
@@ -13,7 +14,7 @@ from apps.attempts.models import (
     StudentRemediationState, TeacherIntervention
 )
 from apps.attempts.serializers import (
-    QuizAttemptSerializer, ManualMarkSerializer, TeacherOverrideSerializer,
+    QuizAttemptSerializer, QuizAttemptListSerializer, ManualMarkSerializer, TeacherOverrideSerializer,
     StudentLessonProgressSerializer, StudentContentProgressSerializer,
     StudentEngagementAnswerSerializer, StudentVideoAnswerSerializer, StudentRemediationStateSerializer,
     TeacherInterventionSerializer
@@ -87,7 +88,11 @@ def calculate_attempt_score(attempt):
 
 class QuizAttemptViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
-    serializer_class = QuizAttemptSerializer
+
+    def get_serializer_class(self):
+        if self.action == "list":
+            return QuizAttemptListSerializer
+        return QuizAttemptSerializer
 
     def get_queryset(self):
         user = self.request.user
@@ -98,19 +103,41 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
         elif user.is_role(Role.ROLE_TEACHER):
             queryset = QuizAttempt.objects.filter(student__registered_by=user)
         elif user.is_role(Role.ROLE_STUDENT):
-            student, _ = Student.objects.get_or_create(user=user)
-            if not student.registered_by_id:
-                queryset = QuizAttempt.objects.none()
-            else:
-                queryset = QuizAttempt.objects.filter(student=student, quiz__created_by_id=student.registered_by_id, quiz__is_deleted=False)
+            student = getattr(user, "student_profile", None)
+            if not student:
+                student, _ = Student.objects.get_or_create(user=user)
+            queryset = QuizAttempt.objects.filter(student=student, quiz__is_deleted=False)
 
         quiz_param = self.request.query_params.get("quiz")
         if quiz_param:
             queryset = queryset.filter(quiz_id=quiz_param)
 
-        return queryset.select_related(
+        qs = queryset.select_related(
             "quiz", "quiz__lesson", "quiz__skill", "quiz__lesson__term", "student__user"
-        ).prefetch_related("answers", "attempt_questions__question").order_by("-start_time", "-id")
+        )
+        if getattr(self, "action", None) != "list":
+            from django.db.models import Prefetch
+            from apps.attempts.models import AttemptQuestion, AttemptAnswer
+            qs = qs.prefetch_related(
+                Prefetch(
+                    "answers",
+                    queryset=AttemptAnswer.objects.select_related("question", "skill")
+                ),
+                "risk_predictions",
+                Prefetch(
+                    "attempt_questions",
+                    queryset=AttemptQuestion.objects.select_related(
+                        "question",
+                        "question__skill",
+                        "question__correct_answer",
+                    ).prefetch_related(
+                        "question__answers",
+                        "question__hints",
+                    )
+                ),
+            )
+
+        return qs.order_by("-start_time", "-id")
 
     def create(self, request, *args, **kwargs):
         user = request.user
@@ -816,54 +843,38 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
         return start_res
 
     @action(detail=False, methods=["get"], url_path="remediation_status")
-    def remediation_status(self, request):
-        user = request.user
-        if not user.is_authenticated:
-            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
-
-        quiz_id = request.query_params.get("quiz")
-        student_id = request.query_params.get("student")
-
-        if user.is_role(Role.ROLE_STUDENT):
-            student, _ = Student.objects.get_or_create(user=user)
-        elif student_id and user.is_role(Role.ROLE_TEACHER, Role.ROLE_SYSTEM_ADMIN):
-            try:
-                student = Student.objects.get(id=student_id)
-            except Student.DoesNotExist:
-                return Response({"detail": "Student not found."}, status=status.HTTP_404_NOT_FOUND)
-        else:
-            return Response({"detail": "Quiz ID and Student access required."}, status=status.HTTP_400_BAD_REQUEST)
-
-        if not quiz_id:
-            return Response({"detail": "Quiz ID is required."}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            quiz = Quiz.objects.get(id=quiz_id, is_deleted=False)
-        except Quiz.DoesNotExist:
-            return Response({"detail": "Quiz not found."}, status=status.HTTP_404_NOT_FOUND)
-
+    def _calculate_remediation_status(self, user, quiz, student):
         max_attempts = getattr(quiz, "max_attempts", 3) or 3
         pass_threshold = getattr(quiz, "pass_mark", 50) or 50
 
-        ordinary_attempts = QuizAttempt.objects.filter(
-            student=student, quiz=quiz, attempt_type=QuizAttempt.TYPE_ORDINARY, status=QuizAttempt.STATUS_SUBMITTED
-        ).order_by("-start_time")
-        ordinary_used = ordinary_attempts.count()
+        all_quiz_attempts = list(
+            QuizAttempt.objects.filter(student=student, quiz=quiz)
+            .prefetch_related("risk_predictions")
+            .order_by("-start_time")
+        )
+
+        ordinary_attempts = [
+            a for a in all_quiz_attempts
+            if (a.attempt_type == QuizAttempt.TYPE_ORDINARY or not a.attempt_type) and a.status == QuizAttempt.STATUS_SUBMITTED
+        ]
+        ordinary_used = len(ordinary_attempts)
         ordinary_remaining = max(0, max_attempts - ordinary_used)
 
-        reassessment_attempts = QuizAttempt.objects.filter(
-            student=student, quiz=quiz, attempt_type=QuizAttempt.TYPE_REASSESSMENT, status=QuizAttempt.STATUS_SUBMITTED
-        ).order_by("-start_time")
+        reassessment_attempts = [
+            a for a in all_quiz_attempts
+            if a.attempt_type == QuizAttempt.TYPE_REASSESSMENT and a.status == QuizAttempt.STATUS_SUBMITTED
+        ]
 
-        has_passed_ordinary = ordinary_attempts.filter(score__gte=pass_threshold).exists()
-        has_passed_reassessment = reassessment_attempts.filter(score__gte=pass_threshold).exists()
+        has_passed_ordinary = any(a.score is not None and a.score >= pass_threshold for a in ordinary_attempts)
+        has_passed_reassessment = any(a.score is not None and a.score >= pass_threshold for a in reassessment_attempts)
         has_passed = has_passed_ordinary or has_passed_reassessment
+        has_failed = any(a.score is not None and a.score < pass_threshold for a in all_quiz_attempts if a.status == QuizAttempt.STATUS_SUBMITTED)
 
         from apps.attempts.models import StudentRemediationState, TeacherIntervention
-        rem_state = StudentRemediationState.objects.filter(student=student, quiz=quiz).first()
+        rem_state = StudentRemediationState.objects.filter(student=student, quiz=quiz).prefetch_related("weak_skills", "required_materials").first()
 
         from apps.quizzes.services.question_pool_service import verify_remediation_completion
-        rem_check = verify_remediation_completion(student, quiz)
+        rem_check = verify_remediation_completion(student, quiz, rem_state=rem_state, rem_state_checked=True, has_failed=has_failed)
 
         if has_passed:
             attempt_status = "PASSED"
@@ -874,13 +885,14 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
         else:
             attempt_status = "FAILED_EXHAUSTED"
 
-        reassessment_in_progress = QuizAttempt.objects.filter(
-            student=student, quiz=quiz, attempt_type=QuizAttempt.TYPE_REASSESSMENT, status=QuizAttempt.STATUS_IN_PROGRESS
-        ).exists()
+        reassessment_in_progress = any(
+            a.attempt_type == QuizAttempt.TYPE_REASSESSMENT and a.status == QuizAttempt.STATUS_IN_PROGRESS
+            for a in all_quiz_attempts
+        )
 
         if has_passed_reassessment:
             reassessment_status = "PASSED"
-        elif reassessment_attempts.exists() and not has_passed_reassessment:
+        elif reassessment_attempts and not has_passed_reassessment:
             reassessment_status = "FAILED"
         elif reassessment_in_progress:
             reassessment_status = "IN_PROGRESS"
@@ -891,8 +903,13 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
         else:
             reassessment_status = "NOT_ELIGIBLE"
 
-        pending_intervention = TeacherIntervention.objects.filter(student=student, quiz=quiz, is_pending=True).first()
-        completed_intervention = TeacherIntervention.objects.filter(student=student, quiz=quiz, is_pending=False).first()
+        if ordinary_used >= max_attempts:
+            interventions = list(TeacherIntervention.objects.filter(student=student, quiz=quiz))
+            pending_intervention = next((ti for ti in interventions if ti.is_pending), None)
+            completed_intervention = next((ti for ti in interventions if not ti.is_pending), None)
+        else:
+            pending_intervention = None
+            completed_intervention = None
 
         if pending_intervention:
             teacher_escalation_status = "PENDING"
@@ -901,11 +918,12 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
         else:
             teacher_escalation_status = "NONE"
 
-        latest_attempt = QuizAttempt.objects.filter(student=student, quiz=quiz).order_by("-start_time").first()
+        latest_attempt = all_quiz_attempts[0] if all_quiz_attempts else None
         high_risk = False
         high_risk_details = None
         if latest_attempt:
-            latest_pred = latest_attempt.risk_predictions.order_by("-prediction_date", "-id").first()
+            preds = list(latest_attempt.risk_predictions.all())
+            latest_pred = preds[0] if preds else None
             if not latest_pred:
                 from apps.analytics.models import RiskPrediction
                 latest_pred = RiskPrediction.objects.filter(student=student).order_by("-prediction_date", "-id").first()
@@ -918,12 +936,14 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
                 }
 
         weak_skills_data = []
-        if rem_state and rem_state.weak_skills.exists():
-            weak_skills_data = [{"id": s.id, "name": s.name} for s in rem_state.weak_skills.all()]
-        elif rem_check.get("weak_skills"):
+        if rem_state:
+            skills_list = list(rem_state.weak_skills.all())
+            if skills_list:
+                weak_skills_data = [{"id": s.id, "name": s.name} for s in skills_list]
+        if not weak_skills_data and rem_check.get("weak_skills"):
             weak_skills_data = rem_check.get("weak_skills")
 
-        return Response({
+        return {
             "quiz_id": quiz.id,
             "quiz_title": quiz.title,
             "max_attempts": max_attempts,
@@ -942,6 +962,105 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
             "pending_teacher_intervention_id": pending_intervention.id if pending_intervention else None,
             "high_risk_warning": high_risk,
             "high_risk_details": high_risk_details,
+        }
+
+    @action(detail=False, methods=["get"], url_path="remediation_status")
+    def remediation_status(self, request):
+        user = request.user
+        if not user.is_authenticated:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        quiz_id = request.query_params.get("quiz")
+        student_id = request.query_params.get("student")
+
+        if user.is_role(Role.ROLE_STUDENT):
+            student = getattr(user, "student_profile", None)
+            if not student:
+                student, _ = Student.objects.get_or_create(user=user)
+        elif student_id and user.is_role(Role.ROLE_TEACHER, Role.ROLE_SYSTEM_ADMIN):
+            try:
+                student = Student.objects.get(id=student_id)
+            except Student.DoesNotExist:
+                return Response({"detail": "Student not found."}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            return Response({"detail": "Quiz ID and Student access required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not quiz_id:
+            return Response({"detail": "Quiz ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            quiz = Quiz.objects.select_related("lesson", "skill").prefetch_related("skills").get(id=quiz_id, is_deleted=False)
+        except Quiz.DoesNotExist:
+            return Response({"detail": "Quiz not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        data = self._calculate_remediation_status(user, quiz, student)
+        return Response(data, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=["get"], url_path="remediation_summary")
+    def remediation_summary(self, request):
+        user = request.user
+        if not user.is_authenticated:
+            return Response({"detail": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        quiz_id = request.query_params.get("quiz")
+        student_id = request.query_params.get("student")
+        if not quiz_id:
+            return Response({"detail": "Quiz ID is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        student = None
+        if user.is_role(Role.ROLE_STUDENT):
+            student = getattr(user, "student_profile", None)
+            if not student:
+                student, _ = Student.objects.get_or_create(user=user)
+        elif student_id and user.is_role(Role.ROLE_TEACHER, Role.ROLE_SYSTEM_ADMIN):
+            student = Student.objects.filter(id=student_id).first()
+
+        try:
+            quiz = Quiz.objects.select_related("lesson", "skill").prefetch_related("skills").get(id=quiz_id, is_deleted=False)
+        except Quiz.DoesNotExist:
+            return Response({"detail": "Quiz not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        rem_data = self._calculate_remediation_status(user, quiz, student) if student else {}
+
+        from apps.quizzes.serializers import LearningMaterialSerializer
+        from apps.quizzes.models import LearningMaterial
+
+        covered_skills = quiz.get_covered_skills()
+        covered_skill_ids = [s.id for s in covered_skills]
+
+        materials_qs = LearningMaterial.objects.filter(
+            models.Q(skill_id__in=covered_skill_ids) | models.Q(quiz=quiz)
+        ).select_related(
+            "created_by", "lesson", "topic", "skill", "quiz"
+        ).prefetch_related(
+            "engagement_questions", "video_questions", "attachments"
+        ).order_by("order", "created_at", "id")
+
+        materials_list = list(materials_qs)
+        serialized_materials = LearningMaterialSerializer(materials_list, many=True, context={"request": request}).data
+
+        answered_vq_ids = []
+        if student and materials_list:
+            from apps.attempts.models import StudentVideoAnswer
+            mat_ids = [m.id for m in materials_list]
+            answered_vq_ids = list(
+                StudentVideoAnswer.objects.filter(student=student, question__material_id__in=mat_ids, is_correct=True).values_list("question_id", flat=True)
+            )
+
+        return Response({
+            "quiz": {
+                "id": quiz.id,
+                "title": quiz.title,
+                "description": quiz.description,
+                "pass_mark": quiz.pass_mark,
+                "estimated_time_minutes": quiz.estimated_time_minutes,
+                "lesson_id": quiz.lesson_id,
+                "lesson_title": quiz.lesson.title if quiz.lesson else "",
+                "covered_skills": [{"id": s.id, "name": s.name} for s in covered_skills]
+            },
+            "remediation_status": rem_data,
+            "materials": serialized_materials,
+            "answered_video_question_ids": answered_vq_ids
         }, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=["get"], url_path="teacher_diagnostic")
@@ -1346,12 +1465,14 @@ class StudentVideoAnswerViewSet(viewsets.ModelViewSet):
             return StudentVideoAnswer.objects.filter(student__user=user)
         return StudentVideoAnswer.objects.none()
 
-    def perform_create(self, serializer):
-        user = self.request.user
+    def create(self, request, *args, **kwargs):
+        user = request.user
         student, _ = Student.objects.get_or_create(user=user)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
         question = serializer.validated_data.get("question")
         selected = serializer.validated_data.get("selected_answer")
-        
+
         is_correct = False
         if question and question.options:
             for opt in question.options:
@@ -1359,4 +1480,9 @@ class StudentVideoAnswerViewSet(viewsets.ModelViewSet):
                     is_correct = True
                     break
 
-        serializer.save(student=student, is_correct=is_correct)
+        ans_obj, _ = StudentVideoAnswer.objects.update_or_create(
+            student=student,
+            question=question,
+            defaults={"selected_answer": selected, "is_correct": is_correct}
+        )
+        return Response(StudentVideoAnswerSerializer(ans_obj).data, status=status.HTTP_201_CREATED)

@@ -1,0 +1,290 @@
+[
+  {
+    "name": "GET /api/accounts/me/ (Student)",
+    "status": 200,
+    "query_count": 2,
+    "response_time_ms": 204.7,
+    "db_time_ms": 171.0,
+    "payload_size_bytes": 590,
+    "success": true
+  },
+  {
+    "name": "GET /api/accounts/me/ (Teacher)",
+    "status": 200,
+    "query_count": 3,
+    "response_time_ms": 317.2,
+    "db_time_ms": 313.0,
+    "payload_size_bytes": 496,
+    "success": true
+  },
+  {
+    "name": "GET /api/accounts/me/ (Admin)",
+    "status": 200,
+    "query_count": 2,
+    "response_time_ms": 199.2,
+    "db_time_ms": 203.0,
+    "payload_size_bytes": 378,
+    "success": true
+  },
+  {
+    "name": "GET /api/accounts/users/ (All Users)",
+    "status": 200,
+    "query_count": 5,
+    "response_time_ms": 656.6,
+    "db_time_ms": 640.0,
+    "payload_size_bytes": 16922,
+    "success": true
+  },
+  {
+    "name": "GET /api/accounts/users/?role=TEACHER",
+    "status": 200,
+    "query_count": 4,
+    "response_time_ms": 471.9,
+    "db_time_ms": 454.0,
+    "payload_size_bytes": 2567,
+    "success": true
+  },
+  {
+    "name": "GET /api/accounts/users/?role=STUDENT",
+    "status": 200,
+    "query_count": 3,
+    "response_time_ms": 371.2,
+    "db_time_ms": 359.0,
+    "payload_size_bytes": 13255,
+    "success": true
+  },
+  {
+    "name": "GET /api/classes/classrooms/ (Teacher)",
+    "status": 200,
+    "query_count": 5,
+    "response_time_ms": 571.4,
+    "db_time_ms": 546.0,
+    "payload_size_bytes": 1824,
+    "success": true
+  },
+  {
+    "name": "GET /api/classes/teacher-assignments/ (Admin)",
+    "status": 200,
+    "query_count": 2,
+    "response_time_ms": 228.8,
+    "db_time_ms": 219.0,
+    "payload_size_bytes": 2694,
+    "success": true
+  },
+  {
+    "name": "GET /api/classes/access-requests/ (Admin)",
+    "status": 200,
+    "query_count": 1,
+    "response_time_ms": 96.3,
+    "db_time_ms": 93.0,
+    "payload_size_bytes": 52,
+    "success": true
+  },
+  {
+    "name": "GET /api/quizzes/terms/",
+    "status": 200,
+    "query_count": 1,
+    "response_time_ms": 121.9,
+    "db_time_ms": 125.0,
+    "payload_size_bytes": 157,
+    "success": true
+  },
+  {
+    "name": "GET /api/quizzes/lessons/ (Student)",
+    "status": 200,
+    "query_count": 4,
+    "response_time_ms": 409.3,
+    "db_time_ms": 391.0,
+    "payload_size_bytes": 2724,
+    "success": true
+  },
+  {
+    "name": "GET /api/quizzes/topics/",
+    "status": 200,
+    "query_count": 1,
+    "response_time_ms": 109.3,
+    "db_time_ms": 94.0,
+    "payload_size_bytes": 587,
+    "success": true
+  },
+  {
+    "name": "GET /api/quizzes/skills/",
+    "status": 200,
+    "query_count": 1,
+    "response_time_ms": 131.3,
+    "db_time_ms": 125.0,
+    "payload_size_bytes": 1144,
+    "success": true
+  },
+  {
+    "name": "GET /api/quizzes/levels/",
+    "status": 200,
+    "query_count": 1,
+    "response_time_ms": 98.7,
+    "db_time_ms": 93.0,
+    "payload_size_bytes": 116,
+    "success": true
+  },
+  {
+    "name": "GET /api/quizzes/difficulties/",
+    "status": 200,
+    "query_count": 1,
+    "response_time_ms": 88.7,
+    "db_time_ms": 94.0,
+    "payload_size_bytes": 102,
+    "success": true
+  },
+  {
+    "name": "GET /api/quizzes/ (Teacher List)",
+    "status": 200,
+    "query_count": 7,
+    "response_time_ms": 841.8,
+    "db_time_ms": 828.0,
+    "payload_size_bytes": 19692,
+    "success": true
+  },
+  {
+    "name": "GET /api/quizzes/ (Student List)",
+    "status": 200,
+    "query_count": 7,
+    "response_time_ms": 4817.1,
+    "db_time_ms": 4797.0,
+    "payload_size_bytes": 15565,
+    "success": true
+  },
+  {
+    "name": "GET /api/quizzes/materials/ (Teacher List)",
+    "status": 200,
+    "query_count": 5,
+    "response_time_ms": 664.8,
+    "db_time_ms": 657.0,
+    "payload_size_bytes": 6633,
+    "success": true
+  },
+  {
+    "name": "GET /api/quizzes/lessons/1/student_quizzes/",
+    "status": 200,
+    "query_count": 9,
+    "response_time_ms": 957.2,
+    "db_time_ms": 937.0,
+    "payload_size_bytes": 1548,
+    "success": true
+  },
+  {
+    "name": "GET /api/attempts/attempts/ (Student List)",
+    "status": 200,
+    "query_count": 2,
+    "response_time_ms": 283.9,
+    "db_time_ms": 282.0,
+    "payload_size_bytes": 13986,
+    "success": true
+  },
+  {
+    "name": "GET /api/attempts/attempts/ (Teacher List)",
+    "status": 200,
+    "query_count": 2,
+    "response_time_ms": 305.7,
+    "db_time_ms": 296.0,
+    "payload_size_bytes": 28744,
+    "success": true
+  },
+  {
+    "name": "GET /api/attempts/attempts/155/ (Detail)",
+    "status": 200,
+    "query_count": 16,
+    "response_time_ms": 1720.8,
+    "db_time_ms": 1719.0,
+    "payload_size_bytes": 2312,
+    "success": true
+  },
+  {
+    "name": "GET /api/attempts/attempts/remediation_status/?quiz=5",
+    "status": 200,
+    "query_count": 13,
+    "response_time_ms": 1418.6,
+    "db_time_ms": 1407.0,
+    "payload_size_bytes": 765,
+    "success": true
+  },
+  {
+    "name": "GET /api/attempts/attempts/remediation_summary/?quiz=5",
+    "status": 200,
+    "query_count": 17,
+    "response_time_ms": 1798.7,
+    "db_time_ms": 1782.0,
+    "payload_size_bytes": 3969,
+    "success": true
+  },
+  {
+    "name": "GET /api/attempts/lesson-progress/ (Student)",
+    "status": 200,
+    "query_count": 2,
+    "response_time_ms": 200.8,
+    "db_time_ms": 188.0,
+    "payload_size_bytes": 586,
+    "success": true
+  },
+  {
+    "name": "GET /api/attempts/content-progress/ (Student)",
+    "status": 200,
+    "query_count": 2,
+    "response_time_ms": 220.5,
+    "db_time_ms": 203.0,
+    "payload_size_bytes": 731,
+    "success": true
+  },
+  {
+    "name": "GET /api/analytics/overview/ (Teacher)",
+    "status": 200,
+    "query_count": 2,
+    "response_time_ms": 229.1,
+    "db_time_ms": 219.0,
+    "payload_size_bytes": 759,
+    "success": true
+  },
+  {
+    "name": "GET /api/analytics/risk/ (Teacher)",
+    "status": 200,
+    "query_count": 2,
+    "response_time_ms": 296.3,
+    "db_time_ms": 297.0,
+    "payload_size_bytes": 17169,
+    "success": true
+  },
+  {
+    "name": "GET /api/analytics/proficiency/ (Teacher)",
+    "status": 200,
+    "query_count": 2,
+    "response_time_ms": 4673.4,
+    "db_time_ms": 4671.0,
+    "payload_size_bytes": 938,
+    "success": true
+  },
+  {
+    "name": "GET /api/recommendations/recommendations/ (Student)",
+    "status": 200,
+    "query_count": 1,
+    "response_time_ms": 109.6,
+    "db_time_ms": 94.0,
+    "payload_size_bytes": 52,
+    "success": true
+  },
+  {
+    "name": "GET /api/recommendations/remediations/ (Student)",
+    "status": 200,
+    "query_count": 1,
+    "response_time_ms": 89.0,
+    "db_time_ms": 94.0,
+    "payload_size_bytes": 52,
+    "success": true
+  },
+  {
+    "name": "GET /api/audit/activities/ (Admin)",
+    "status": 200,
+    "query_count": 2,
+    "response_time_ms": 264.2,
+    "db_time_ms": 265.0,
+    "payload_size_bytes": 14539,
+    "success": true
+  }
+]

@@ -69,7 +69,6 @@ const CreateLesson = () => {
         if (!value) return "Term is required.";
         return "";
       case "description":
-        if (!value.trim()) return "Lesson description is required.";
         return "";
       default:
         return "";
@@ -167,10 +166,6 @@ const CreateLesson = () => {
     }
     if (errors.term) {
       termRef.current?.focus();
-      return;
-    }
-    if (errors.description) {
-      descriptionRef.current?.focus();
       return;
     }
 
@@ -318,12 +313,11 @@ const CreateLesson = () => {
         {/* Description */}
         <div className="teacher-form-group">
           <label className="teacher-form-label" htmlFor="lesson-description">
-            Lesson Description <span style={{ color: "#FF4054" }}>*</span>
+            Lesson Description
           </label>
           <textarea
             id="lesson-description"
             ref={descriptionRef}
-            aria-required="true"
             aria-invalid={Boolean(touched.description && fieldErrors.description)}
             aria-describedby={touched.description && fieldErrors.description ? "description-error" : undefined}
             className={`teacher-form-input ${touched.description && fieldErrors.description ? "is-invalid" : ""}`}
