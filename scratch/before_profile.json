@@ -1,0 +1,58 @@
+[
+  {
+    "endpoint": "/api/quizzes/quizzes/",
+    "response_time_ms": 617.04,
+    "db_query_count": 8,
+    "payload_size_kb": 19.23,
+    "record_count": 7,
+    "user_role": "TEACHER"
+  },
+  {
+    "endpoint": "/api/quizzes/materials/",
+    "response_time_ms": 326.7,
+    "db_query_count": 5,
+    "payload_size_kb": 6.48,
+    "record_count": 8,
+    "user_role": "TEACHER"
+  },
+  {
+    "endpoint": "/api/quizzes/lessons/",
+    "response_time_ms": 117.88,
+    "db_query_count": 2,
+    "payload_size_kb": 2.66,
+    "record_count": 10,
+    "user_role": "TEACHER"
+  },
+  {
+    "endpoint": "/api/attempts/attempts/",
+    "response_time_ms": 223.68,
+    "db_query_count": 2,
+    "payload_size_kb": 28.07,
+    "record_count": 50,
+    "user_role": "TEACHER"
+  },
+  {
+    "endpoint": "/api/classes/classes/",
+    "response_time_ms": 265.67,
+    "db_query_count": 4,
+    "payload_size_kb": 1.78,
+    "record_count": 3,
+    "user_role": "TEACHER"
+  },
+  {
+    "endpoint": "/api/attempts/attempts/",
+    "response_time_ms": 257.89,
+    "db_query_count": 4,
+    "payload_size_kb": 5.62,
+    "record_count": 10,
+    "user_role": "STUDENT"
+  },
+  {
+    "endpoint": "/api/attempts/content-progress/",
+    "response_time_ms": 131.48,
+    "db_query_count": 2,
+    "payload_size_kb": 0.71,
+    "record_count": 4,
+    "user_role": "STUDENT"
+  }
+]
